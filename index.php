@@ -14,7 +14,7 @@
 </head>
 
 <body>
-	<p>Great shit! You can read this.</p>
+	<svg id="turtleSVG"></svg>
 	
 	<script>ma.init()</script>
 </body>
