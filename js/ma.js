@@ -31,12 +31,14 @@ var keyPressed = { w:false, a:false, s:false, d:false }
 const keyMap = { d:68, s:83, e:69, f:70, g:71, "+":107, "-":109 }
 
 var svg
-var previewLine
 // r: 0 is North, -Math.PI/2 is West, ...
 var turtleContext = {x: 0, y:0, r:0}
 var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "stroke-linecap": "round"}
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
 var paintingG
+var previewLine
+var previewArc
+var tPath = []
 
 ma.init = function() {
 	svg = d3.select("#turtleSVG")
@@ -73,16 +75,27 @@ ma.init = function() {
 		var y = mouse[1]
 		if (keyPressed.d) {
 			previewLine.attr("x2", x).attr("y2", y)
+			var dx = x-turtleContext.x
+			var dy = y-turtleContext.y
+			var lineLength = Math.sqrt(dx*dx+dy*dy)
+			var alpha = Math.atan2(dy, dx)
+			if (alpha > Math.PI/2)
+				alpha -= Math.PI/2*3
+			else
+				alpha += Math.PI/2
+			
+			var arc = d3.svg.arc()
+				.innerRadius(0)
+				.outerRadius(Math.min(10, lineLength/2))
+				.startAngle(turtleContext.r)
+				.endAngle(alpha)
+			
+			previewArc.attr("d", arc)
 		}
     })
 	
 	svg.on("click", function (d, i) {
-		var mouse = d3.mouse(this)
-		var x = mouse[0]
-		var y = mouse[1]
-		if (keyPressed.d) {
-			previewLine.attr("x2", x).attr("y2", y)
-		}
+		
     })
 	
 	d3.select("body")
@@ -94,6 +107,17 @@ function updateKeyDownAndUp(keyCode, down) {
 	switch (keyCode) {
 		case keyMap.d:
 			if (down && !keyPressed.d) {
+				var arc = d3.svg.arc()
+					.innerRadius(0)
+					.outerRadius(10)
+					.startAngle(turtleContext.r)
+					.endAngle(1)
+				
+				previewArc = paintingG.append("path")
+					.attr("d", arc)
+					.attr("transform", "translate(0,0)")
+					.style({fill: "#000", "fill-opacity": 0.2})
+				
 				previewLine = paintingG.append("line")
 					.attr("x1", turtleContext.x).attr("y1", turtleContext.y)
 					.attr("x2", 0).attr("y2", 0)
@@ -101,6 +125,7 @@ function updateKeyDownAndUp(keyCode, down) {
 			}
 			if (!down && keyPressed.d) {
 				previewLine.remove()
+				previewArc.remove()
 			}
 			keyPressed.d = down
 			break
