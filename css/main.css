@@ -1,3 +1,13 @@
 #turtleSVG {
 	border: 1px grey solid;
 }
+.dragging {
+	fill: #f00 !important;
+	fill-opacity: 0.3 !important;
+}
+.selected {
+	stroke: #f00;
+	stroke-opacity: 1;
+	/*shape-rendering: crispEdges;*/
+	vector-effect: non-scaling-stroke;
+}
