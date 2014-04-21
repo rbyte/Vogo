@@ -39,6 +39,11 @@ var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "s
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
 var lineStyle = {stroke: "#000", "stroke-width": ".25", "stroke-linecap": "round"}
 var arcStyle = {fill: "#000", "fill-opacity": 0.1}
+var clockStyle = {fill: "none", stroke: "#777", "stroke-width": ".15"}
+var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
+var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
+const loopClockRadius = 1.3
+const rotationArcRadius = 6
 
 var paintingG
 var previewLine
@@ -46,19 +51,21 @@ var previewArc
 
 var functions = []
 var commands = [
-	rotate(1), move(10), loop(3, [rotate(-1), move(10)])
+	new Rotate(1), new Move(10), new Loop(3, [new Loop(3, [new Rotate(-0.5), new Move(7)])])
 ]
 
 var dragInProgress = false
 var turtleHomeCursor
 var turtleCursor
 // r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
-var state = {x: 0, y:0, r:0, addRadius: function(rr) {
+const homeX = 0, homeY = 0, homeR = 0
+var state = {x: homeX, y:homeY, r:homeR, addRadius: function(rr) {
 		if (rr > Math.PI || rr < -Math.PI)
 			console.log("Warning: addRadius: rr out of [-Pi, Pi]")
 		this.r += rr
 		this.r = correctRadius(this.r)
-	}
+	},
+	reset: function() { this.x = homeX; this.y = homeY; this.r = homeR }
 }
 
 function cloneS(state) {
@@ -93,8 +100,13 @@ var selection = {
 
 ma.init = function() {
 	setUpSVG()
-	
+	run()
+}
+
+function run() {
+	state.reset()
 	for (var i=0; i<commands.length; i++) {
+		commands[i].savedState = undefined
 		commands[i].exec()
 	}
 	updateTurtle()
@@ -179,10 +191,10 @@ function setUpSVG() {
 			var dy = y-state.y
 			var lineLength = Math.sqrt(dx*dx+dy*dy)
 			
-			var r = rotate(getAngleDeltaTo(dx, dy))
+			var r = new Rotate(getAngleDeltaTo(dx, dy))
 			commands.push(r)
 			r.exec()
-			var m = move(lineLength)
+			var m = new Move(lineLength)
 			commands.push(m)
 			m.exec()
 			
@@ -217,143 +229,225 @@ function updateTurtle() {
 	turtleCursor.attr("transform", "translate("+state.x+", "+state.y+") rotate("+(state.r/Math.PI*180)+")")
 }
 
-function move(length) {
-	var self = {}
+function Move(length) {
+	var self = this
 	self.length = length
-	self.line = undefined
-	self.label = undefined
-	self.shallowClone = function() {
-		return move(length)
-	}
-	self.exec = function() {
-		var x1 = state.x
-		var y1 = state.y
-		state.x += Math.sin(state.r) * self.length
-		state.y -= Math.cos(state.r) * self.length
-		var x2 = state.x
-		var y2 = state.y
-		if (self.line === undefined) {
-			self.line = paintingG.append("line").style(lineStyle)
-		}
-		self.line
-			.attr("x1", x1).attr("y1", y1)
-			.attr("x2", x2).attr("y2", y2)
-	}
-	return self
+	self.parent
+	self.line
+	self.label
 }
 
-function rotate(angle) {
-	var self = {}
+Move.prototype.shallowClone = function() {
+	var c = new Move(this.length)
+	c.parent = this
+	return c
+}
+
+Move.prototype.exec = function() {
+	var self = this
+	var x1 = state.x
+	var y1 = state.y
+	state.x += Math.sin(state.r) * self.length
+	state.y -= Math.cos(state.r) * self.length
+	var x2 = state.x
+	var y2 = state.y
+	if (self.line === undefined) {
+		self.line = paintingG.append("line").style(lineStyle)
+	}
+	self.line
+		.attr("x1", x1).attr("y1", y1)
+		.attr("x2", x2).attr("y2", y2)
+}
+
+
+
+
+function Rotate(angle) {
+	var self = this
 	self.angle = angle
-	self.arc = undefined
-	self.label = undefined
-	self.savedState = undefined
-	self.shallowClone = function() {
-		return rotate(angle)
-	}
-	self.exec = function() {
-		if (self.savedState === undefined) { // clone state
-			self.savedState = cloneS(state)
-		}
-		var arc = d3.svg.arc()
-			.innerRadius(0)
-			.outerRadius(7)
-			.startAngle(state.r)
-			.endAngle(state.r + angle)
-		state.addRadius(angle)
-		
-		if (self.arc === undefined) {
-			self.arc = paintingG.append("path").style(arcStyle)
-			self.arc.on("mouseenter", function (d, i) {
-				if (!dragInProgress)
-					self.arc.style({fill: "#f00"})
-			})
-			self.arc.on("mouseleave", function (d, i) {
-				self.arc.style(arcStyle)
-			})
-			self.arc.on("click", function (d, i) {
-				self.select()
-				// to prevent click on background
-				d3.event.stopPropagation()
-			})
-			self.arc.call(d3.behavior.drag()
-				.on("dragstart", function (d) {
-					dragInProgress = true
-					self.select()
-					d3.select(this).classed("dragging", true)
-					// to prevent drag on background
-					d3.event.sourceEvent.stopPropagation()
-				})
-				.on("drag", function (d) {
-					state = cloneS(self.savedState)
-					
-					var x = d3.event.x
-					var y = d3.event.y
-					var dx = x-state.x
-					var dy = y-state.y
-					var angleDelta = getAngleDeltaTo(dx, dy)
-					var arc = d3.svg.arc()
-						.innerRadius(0)
-						.outerRadius(7)
-						.startAngle(state.r)
-						.endAngle(state.r + angleDelta)
-					state.addRadius(angleDelta)
-					
-					self.arc.attr("d", arc)
-					// propagate change
-					for (var i=commands.indexOf(self)+1; i<commands.length; i++) {
-						commands[i].savedState = undefined
-						commands[i].exec()
-					}
-					updateTurtle()
-				})
-				.on("dragend", function (d) {
-					dragInProgress = false
-					d3.select(this).classed("dragging", false)
-				})
-			)
-		}
-		
-		self.arc
-			.attr("d", arc)
-			.attr("transform", "translate("+state.x+","+state.y+")")
-	}
-	self.select = function() {
-		selection.add(self)
-		self.arc.classed("selected", true)
-	}
-	self.deselect = function() {
-		self.arc.classed("selected", false)
-	}
-	self.remove = function() {
-		self.deselect()
-		// TODO
-	}
-	return self
+	self.parent
+	self.savedState
+	self.arc
+	self.label
+}
+// TODO "Command" Prototype
+Rotate.prototype.shallowClone = function() {
+	var c = new Rotate(this.angle)
+	c.parent = this
+	return c
 }
 
-function loop(numberOfRepetions, commands) {
-	var loop = {}
-	loop.numberOfRepetions = numberOfRepetions
-	loop.commandsInsideLoop = commands
-	loop.commandsAll = []
-	loop.savedState = undefined
-	loop.exec = function() {
-		if (loop.savedState === undefined) {
-			loop.savedState = cloneS(state)
+Rotate.prototype.getAngle = function() {
+	var c = new Rotate(this.angle)
+	c.parent = this
+	return c
+}
+
+Rotate.prototype.exec = function() {
+	var self = this
+	var root = self
+	while (root.parent !== undefined)
+		root = root.parent
+	if (self.savedState === undefined) { // clone state
+		self.savedState = cloneS(state)
+	}
+	var dragStartState
+	
+	var arc = d3.svg.arc()
+		.innerRadius(0)
+		.outerRadius(rotationArcRadius)
+		.startAngle(state.r)
+		.endAngle(state.r + root.angle)
+	state.addRadius(root.angle)
+	
+	if (self.arc === undefined) {
+		self.arc = paintingG.append("path").style(arcStyle)
+		self.arc.on("mouseenter", function (d, i) {
+			if (!dragInProgress)
+				self.arc.style({fill: "#f00"})
+		})
+		self.arc.on("mouseleave", function (d, i) {
+			self.arc.style(arcStyle)
+		})
+		self.arc.on("click", function (d, i) {
+			self.select()
+			// to prevent click on background
+			d3.event.stopPropagation()
+		})
+		self.arc.call(d3.behavior.drag()
+			.on("dragstart", function (d) {
+				dragInProgress = true
+				self.select()
+				dragStartState = cloneS(self.savedState)
+				d3.select(this).classed("dragging", true)
+				// to prevent drag on background
+				d3.event.sourceEvent.stopPropagation()
+			})
+			.on("drag", function (d) {
+//				state = cloneS(self.savedState)
+				
+				var x = d3.event.x
+				var y = d3.event.y
+				var dx = x-dragStartState.x
+				var dy = y-dragStartState.y
+				var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
+				root.angle = angleDelta
+				run()
+			})
+			.on("dragend", function (d) {
+				dragInProgress = false
+				d3.select(this).classed("dragging", false)
+			})
+		)
+	}
+	
+	if (self.label === undefined) {
+		self.label = paintingG.append("text").style(textStyle)
+	}
+	
+	var dir = correctRadius(state.r - root.angle/2)
+	var x = state.x + Math.sin(dir) * rotationArcRadius * .6
+	var y = state.y - Math.cos(dir) * rotationArcRadius * .6 + .5 // vertical alignment
+	
+	self.label
+		.text(Math.round(root.angle/Math.PI*180))
+		.attr("transform", "translate("+x+","+y+")")
+	self.arc
+		.attr("d", arc)
+		.attr("transform", "translate("+state.x+","+state.y+")")
+}
+
+Rotate.prototype.select = function() {
+	selection.add(this)
+	this.arc.classed("selected", true)
+}
+
+Rotate.prototype.deselect = function() {
+	this.arc.classed("selected", false)
+}
+
+Rotate.prototype.remove = function() {
+	this.deselect()
+	// TODO
+}
+
+
+
+
+
+function Loop(numberOfRepetitions, commands) {
+	var self = this
+	self.numberOfRepetitions = numberOfRepetitions
+	self.commandsInsideLoop = commands
+	self.parent
+	// "unfolded" loop
+	self.commandsAll = []
+	self.savedState
+	// for all repetitions
+	self.iconGs = []
+}
+
+Loop.prototype.shallowClone = function() {
+	var c = new Loop(this.numberOfRepetitions, this.commandsInsideLoop)
+	c.parent = this
+	return c
+}
+
+Loop.prototype.exec = function() {
+	var self = this
+	var root = self
+	var numberOfLoopParents = 0
+	while (root.parent !== undefined) {
+		root = root.parent
+		numberOfLoopParents++
+	}
+	// shrink inner loops radius
+	var loopClockRadiusUsed = loopClockRadius/(numberOfLoopParents+1)
+	
+	if (self.savedState === undefined) {
+		self.savedState = cloneS(state)
+	}
+	
+	for (var i=0; i<self.numberOfRepetitions; i++) {
+		if (self.iconGs.length <= i) {
+			var iconG = paintingG.append("g")
+			self.iconGs.push(iconG)
+			
+			var arc = d3.svg.arc()
+				.innerRadius(0)
+				.outerRadius(loopClockRadiusUsed)
+				.startAngle(0)
+				.endAngle(Math.PI*2/self.numberOfRepetitions*(i+1))
+			iconG.append("path")
+				.attr("d", arc)
+				.style(clockHandStyle)
+				
+			iconG.append("circle")
+				.attr("cx", 0).attr("cy", 0).attr("r", loopClockRadiusUsed)
+				.style(clockStyle)
+				
+			iconG.append("text").style(textStyle)
 		}
-		for (var i=0; i<loop.numberOfRepetions; i++) {
-			for (var k=0; k<loop.commandsInsideLoop.length; k++) {
-				if (loop.commandsAll.length <= i*loop.commandsInsideLoop.length + k)
-					loop.commandsAll.push(loop.commandsInsideLoop[k].shallowClone())
+		
+		// TODO consider line-in and -out diretion for angle
+		// place center away from current position in 90° angle to current heading
+		var dir = correctRadius(state.r + Math.PI/2)
+		var cx = state.x + Math.sin(dir) * loopClockRadius * 1.4
+		var cy = state.y - Math.cos(dir) * loopClockRadius * 1.4
+		self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
+		
+		for (var k=0; k<self.commandsInsideLoop.length; k++) {
+			var pos = i*self.commandsInsideLoop.length + k
+			if (self.commandsAll.length <= pos) {
+//				self.commandsInsideLoop[k].parent = self
+				self.commandsAll.push(self.commandsInsideLoop[k].shallowClone())
 			}
-		}
-		for (var i=0; i<loop.commandsAll.length; i++) {
-			loop.commandsAll[i].exec()
+			self.commandsAll[pos].exec()
 		}
 	}
-	return loop
 }
+
+
 
 function correctRadius(r) {
 	var isPositive = r > 0
