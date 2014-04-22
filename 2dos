@@ -1,3 +1,38 @@
-  shape-rendering: crispEdges;
-  vector-effect: non-scaling-stroke;
 
+side-bar dragger
+title-text-status-bar thing (for showing tips)
+hotkeys explanation
+functions side panel
+	scrolling in side-panel
+	layout (ul?)
+drawing/adding steps at arbitrary positions
+fix: rotation manipulation in loop mousepos wrong
+display svg in 2 places without duplication
+selection
+	move selection
+		move manipulation
+	loop selection
+	auto select all children
+	delete
+	multiple
+	z-order-handling
+undo
+parameterisation
+	text field manipulation
+	parser
+How can a function call be "inlined" into the current context (stepping down into its definition, maintaining context)?
+simplification of visual steps (with increased number of steps)
+Wie: Bedingungen
+
+UglifyJS2
+Collision-Free Text positioning
+
+snapping
+constraint solving
+
+How can the program flow be visualised (stepping through)?
+	Map a parameter to space (show multiple "shadow instances" of it)
+how is recursion handled? (max-depth?) (variable boundaries?)
+Logo output
+Bearbeitung von geschlossenen Pfaden (Füllung, ...)
+Create Github Project

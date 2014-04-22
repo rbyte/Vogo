@@ -20,12 +20,12 @@
 ma = function() { // spans everything - not indented
 var ma = {}
 
-var svgViewboxWidth = 100
-var svgViewboxHeight = 100
-var svgViewboxX = -svgViewboxWidth/2
-var svgViewboxY = -svgViewboxHeight/2
-var svgWidth = 800
-var svgHeight = 800
+var svgViewboxWidth
+var svgViewboxHeight = 100 // fix on startup
+var svgViewboxX
+var svgViewboxY
+var svgWidth
+var svgHeight
 const zoomFactor = 1.3
 
 // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
@@ -35,6 +35,7 @@ const mouseMap = { 0: "left", 1: "middle", 2: "right" }
 var mousePressed = { left: false, middle: false, right: false }
 
 var svg
+var paintingG
 var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "stroke-linecap": "round"}
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
 var lineStyle = {stroke: "#000", "stroke-width": ".25", "stroke-linecap": "round"}
@@ -44,10 +45,10 @@ var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
 const loopClockRadius = 1.3
 const rotationArcRadius = 6
+var functionPanelSizePercentOfBodyWidth = 0.2
 
-var paintingG
-var previewLine
-var previewArc
+var mousePos = [0,0]
+var mousePosPrevious = [0,0]
 
 var functions = []
 var commands = [
@@ -57,20 +58,35 @@ var commands = [
 var dragInProgress = false
 var turtleHomeCursor
 var turtleCursor
-// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
-const homeX = 0, homeY = 0, homeR = 0
-var state = {x: homeX, y:homeY, r:homeR, addRadius: function(rr) {
-		if (rr > Math.PI || rr < -Math.PI)
-			console.log("Warning: addRadius: rr out of [-Pi, Pi]")
-		this.r += rr
-		this.r = correctRadius(this.r)
-	},
-	reset: function() { this.x = homeX; this.y = homeY; this.r = homeR }
+function State() {
+	this.reset()
 }
 
-function cloneS(state) {
-	return {x: state.x, y: state.y, r: state.r, addRadius: state.addRadius}
+State.prototype.addRadius = function(rr) {
+	if (rr > Math.PI || rr < -Math.PI)
+		console.log("Warning: addRadius: rr out of [-Pi, Pi]")
+	this.r += rr
+	this.r = correctRadius(this.r)
 }
+
+State.prototype.reset = function() {
+	this.x = 0
+	this.y = 0
+	// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
+	this.r = 0
+}
+
+State.prototype.clone = function() {
+	var s = new State()
+	s.x = this.x
+	s.y = this.y
+	s.r = this.r
+	return s
+}
+
+var state = new State()
+
+
 
 var selection = {
 	e: undefined,
@@ -112,10 +128,68 @@ function run() {
 	updateTurtle()
 }
 
-function setUpSVG() {
-	svg = d3.select("#turtleSVG")
+function updateScreenElemsSize() {
+//	var winW = document.body.clientWidth
+//	var winH = window.innerHeight
+	
+	var bb = document.getElementById("turtleSVGcontainer").getBoundingClientRect()
+	svgWidth = bb.width
+	svgHeight = bb.height
+	
+	console.assert(svgViewboxHeight > 0 && svgWidth > 0 && svgHeight > 0)
+	// keep height stable and center (on startup to 0,0)
+	var svgViewboxWidthPrevious = svgViewboxWidth
+	svgViewboxWidth = svgViewboxHeight*svgWidth/svgHeight
+	if (svgViewboxWidthPrevious !== undefined)
+		svgViewboxX -= (svgViewboxWidth - svgViewboxWidthPrevious)/2
+	if (svgViewboxX === undefined)
+		svgViewboxX = -svgViewboxWidth/2
+	if (svgViewboxY === undefined)
+		svgViewboxY = -svgViewboxHeight/2
+	
 	svg.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
-		.attr("width", svgWidth).attr("height", svgHeight)
+}
+
+function updatePanelSize() {
+	d3.select("#border").style("left", functionPanelSizePercentOfBodyWidth*100+"%", "important")
+	d3.select("#functions").style("width", functionPanelSizePercentOfBodyWidth*100+"%", "important")
+	d3.select("#turtleSVGcontainer").style("width", (1-functionPanelSizePercentOfBodyWidth)*100+"%", "important")
+	window.onresize()
+}
+
+function createNewFunction(name) {
+	var ul_f = d3.select("#ul_f")
+	// TODO name checking
+	var li = ul_f.append("li").attr("id", "f_"+name)
+	li.append("div").attr("class", "f_name").text(name)
+	
+	var ul_args = li.append("ul").attr("class", "ul_args")
+	li
+		.append("div").attr("class", "fSVGcontainer")
+		.append("svg").attr("class", "fSVG")
+		.attr("xmlns", "http://www.w3.org/2000/svg")
+		.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+}
+
+function setUpSVG() {
+	var domSvg = document.getElementById("turtleSVG")
+	svg = d3.select("#turtleSVG")
+	svg.attr("xmlns", "http://www.w3.org/2000/svg")
+	
+	window.onresize = function(event) {
+		updateScreenElemsSize()
+	}
+//	updatePanelSize()
+	window.onresize()
+	
+	d3.select("#border").call(d3.behavior.drag()
+		.on("drag", function (d) {
+			functionPanelSizePercentOfBodyWidth = Math.max(0.1, Math.min(0.4, d3.event.x / document.body.clientWidth))
+			updatePanelSize()
+		})
+	)
+	
+	createNewFunction("main")
 	
 	paintingG = svg.append("g").attr("id", "paintingG")
 	
@@ -130,7 +204,7 @@ function setUpSVG() {
 		var wheelMovement = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)))
 		// ok, I cheated a bit ...
 		d3.event = event
-		var mouse = d3.mouse(document.getElementById("turtleSVG"))
+		var mouse = d3.mouse(domSvg)
 		
 		var xDelta = svgViewboxWidth * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
 		var yDelta = svgViewboxHeight * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
@@ -146,7 +220,6 @@ function setUpSVG() {
 		d3.event = null
 	}
 	
-	var domSvg = document.getElementById("turtleSVG")
 	// IE9, Chrome, Safari, Opera
 	domSvg.addEventListener("mousewheel", zoom, false)
 	// Firefox
@@ -162,45 +235,28 @@ function setUpSVG() {
 	svg.call(d3.behavior.drag()
 		.on("drag", function (d) {
 			if (mousePressed.middle) {
-				svgViewboxX -= toCanvasCoordsDX(d3.event.dx)
-				svgViewboxY -= toCanvasCoordsDY(d3.event.dy)
+				svgViewboxX -= d3.event.dx*(svgViewboxWidth/svgWidth)
+				svgViewboxY -= d3.event.dy*(svgViewboxHeight/svgHeight)
 				svg.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
 			}
 		})
 	)
 	
 	svg.on("mousemove", function (d, i) {
+		mousePosPrevious = mousePos
+		mousePos = d3.mouse(this)
 		if (keyPressed.d) {
-			var mouse = d3.mouse(this)
-			var x = mouse[0]
-			var y = mouse[1]
-			var dx = x-state.x
-			var dy = y-state.y
-			previewLine.attr("x2", x).attr("y2", y)
-			var lineLength = Math.sqrt(dx*dx+dy*dy)
-			updatePreviewAngle(dx, dy, lineLength)
+			updatePreviewLineDrawing()
 		}
     })
 	
 	svg.on("click", function (d, i) {
+//		mousePos = d3.mouse(this)
+		console.assert(d3.mouse(this)[0]-mousePos[0] === 0)
 		if (keyPressed.d) {
-			var mouse = d3.mouse(this)
-			var x = mouse[0]
-			var y = mouse[1]
-			var dx = x-state.x
-			var dy = y-state.y
-			var lineLength = Math.sqrt(dx*dx+dy*dy)
-			
-			var r = new Rotate(getAngleDeltaTo(dx, dy))
-			commands.push(r)
-			r.exec()
-			var m = new Move(lineLength)
-			commands.push(m)
-			m.exec()
-			
-			updatePreviewAngle(dx, dy, lineLength)
-			previewLine.attr("x1", state.x).attr("y1", state.y)
-			updateTurtle()
+			removePreviewLine()
+			drawLine()
+			drawPreviewLine()
 		} else {
 			selection.deselectAll()
 		}
@@ -211,18 +267,50 @@ function setUpSVG() {
 		.on("keyup", function() { updateKeyDownAndUp(d3.event.keyCode, false) })
 }
 
-function updatePreviewAngle(dx, dy, lineLength) {
-	var arc = d3.svg.arc()
-		.innerRadius(0)
-		.outerRadius(Math.min(7, lineLength/2))
-		.startAngle(state.r)
-		.endAngle(state.r + getAngleDeltaTo(dx, dy))
+function drawLine() {
+	var r = new Rotate(rotateAngleTo(mousePos))
+	commands.push(r)
+	r.exec()
+	var m = new Move(getLineLengthTo(mousePos))
+	commands.push(m)
+	m.exec()
+}
 
-	previewArc.attr("d", arc).attr("transform", "translate("+state.x+", "+state.y+")")
+function drawPreviewLine() {
+	commands.push(new Rotate(0))
+	commands.push(new Move(0))
+	updatePreviewLineDrawing()
+}
+
+function updatePreviewLineDrawing() {
+	var stateSave = state.clone()
+	commands[commands.length-2].angle = rotateAngleTo(mousePos)
+	commands[commands.length-2].exec()
+	commands[commands.length-1].length = getLineLengthTo(mousePos)
+	commands[commands.length-1].exec()
+	updateTurtle()
+	state = stateSave
+}
+
+function removePreviewLine() {
+	commands[commands.length-1].remove()
+	commands[commands.length-1].remove()
 }
 
 function getAngleDeltaTo(dx, dy, r) {
 	return correctRadius(Math.atan2(dy, dx) + Math.PI/2 - (r === undefined ? state.r : r))
+}
+
+function getLineLengthTo(mousePos) {
+	var dx = mousePos[0] - state.x
+	var dy = mousePos[1] - state.y
+	return Math.sqrt(dx*dx + dy*dy)
+}
+
+function rotateAngleTo(mousePos) {
+	var dx = mousePos[0] - state.x
+	var dy = mousePos[1] - state.y
+	return getAngleDeltaTo(dx, dy)
 }
 
 function updateTurtle() {
@@ -234,8 +322,9 @@ function Move(length) {
 	self.length = length
 	self.parent
 	self.line
-	self.label
 }
+
+//Move.prototype = new Command()
 
 Move.prototype.shallowClone = function() {
 	var c = new Move(this.length)
@@ -259,6 +348,10 @@ Move.prototype.exec = function() {
 		.attr("x2", x2).attr("y2", y2)
 }
 
+Move.prototype.remove = function() {
+	this.line.remove()
+	commands.splice(commands.indexOf(this), 1)
+}
 
 
 
@@ -289,7 +382,7 @@ Rotate.prototype.exec = function() {
 	while (root.parent !== undefined)
 		root = root.parent
 	if (self.savedState === undefined) { // clone state
-		self.savedState = cloneS(state)
+		self.savedState = state.clone()
 	}
 	var dragStartState
 	
@@ -318,14 +411,12 @@ Rotate.prototype.exec = function() {
 			.on("dragstart", function (d) {
 				dragInProgress = true
 				self.select()
-				dragStartState = cloneS(self.savedState)
+				dragStartState = self.savedState.clone()
 				d3.select(this).classed("dragging", true)
 				// to prevent drag on background
 				d3.event.sourceEvent.stopPropagation()
 			})
 			.on("drag", function (d) {
-//				state = cloneS(self.savedState)
-				
 				var x = d3.event.x
 				var y = d3.event.y
 				var dx = x-dragStartState.x
@@ -368,7 +459,9 @@ Rotate.prototype.deselect = function() {
 
 Rotate.prototype.remove = function() {
 	this.deselect()
-	// TODO
+	this.arc.remove()
+	this.label.remove()
+	commands.splice(commands.indexOf(this), 1)
 }
 
 
@@ -405,7 +498,7 @@ Loop.prototype.exec = function() {
 	var loopClockRadiusUsed = loopClockRadius/(numberOfLoopParents+1)
 	
 	if (self.savedState === undefined) {
-		self.savedState = cloneS(state)
+		self.savedState = state.clone()
 	}
 	
 	for (var i=0; i<self.numberOfRepetitions; i++) {
@@ -462,31 +555,27 @@ function correctRadius(r) {
 	return r
 }
 
-function toCanvasCoordsX(x) { return svgViewboxX+x*(svgViewboxWidth/svgWidth) }
-function toCanvasCoordsY(y) { return svgViewboxY+y*(svgViewboxHeight/svgHeight) }
-function toCanvasCoordsDX(x) { return x*(svgViewboxWidth/svgWidth) }
-function toCanvasCoordsDY(y) { return y*(svgViewboxHeight/svgHeight) }
+function openSVG() {
+	var svg = document.getElementById("turtleSVG")
+	window.open("data:image/svg+xml," + encodeURIComponent(
+	// http://stackoverflow.com/questions/1700870/how-do-i-do-outerhtml-in-firefox
+		svg.outerHTML || new XMLSerializer().serializeToString(svg)
+	))
+}
 
 function updateKeyDownAndUp(keyCode, down) {
 	switch (keyCode) {
 		case keyMap.d:
 			if (down && !keyPressed.d) {
-				previewArc = paintingG.append("path")
-					//.attr("d", arc) // TODO where do I get dy and dx from?
-					.attr("transform", "translate("+state.x+","+state.y+")")
-					.style(arcStyle)
-				
-				previewLine = paintingG.append("line")
-					.attr("x1", state.x).attr("y1", state.y)
-					.style(lineStyle)
+				drawPreviewLine()
 			}
 			if (!down && keyPressed.d) {
-				previewLine.remove()
-				previewArc.remove()
+				removePreviewLine()
+				updateTurtle()
 			}
 			keyPressed.d = down
 			break
-		case keyMap.s: keyPressed.s = down; break
+		case keyMap.s: keyPressed.s = down; openSVG(); break
 		case keyMap.e: keyPressed.e = down; break
 		case keyMap.f: keyPressed.f = down; break
 		case keyMap.g: keyPressed.g = down; break
