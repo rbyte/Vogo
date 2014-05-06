@@ -1,10 +1,10 @@
 
-side-bar dragger
-title-text-status-bar thing (for showing tips)
-hotkeys explanation
 functions side panel
+	updates/functionality
 	scrolling in side-panel
 	layout (ul?)
+allow functions as arguments?
+hotkeys explanation
 drawing/adding steps at arbitrary positions
 fix: rotation manipulation in loop mousepos wrong
 display svg in 2 places without duplication
@@ -23,6 +23,7 @@ parameterisation
 How can a function call be "inlined" into the current context (stepping down into its definition, maintaining context)?
 simplification of visual steps (with increased number of steps)
 Wie: Bedingungen
+reference functions not by name but by symbol! (choose from set of symbols, or just alpha, beta, ...)
 
 UglifyJS2
 Collision-Free Text positioning
@@ -34,5 +35,6 @@ How can the program flow be visualised (stepping through)?
 	Map a parameter to space (show multiple "shadow instances" of it)
 how is recursion handled? (max-depth?) (variable boundaries?)
 Logo output
+put svg styles in svg css (inkscape compatibility?)
 Bearbeitung von geschlossenen Pfaden (Füllung, ...)
 Create Github Project

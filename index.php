@@ -16,21 +16,18 @@
 <body>
 	<div id="functions">
 		<ul id="ul_f">
-<!--			<li id="f_main"><div>Main</div>
-				<ul id="ul_args">
-					<li>arg1:default</li>
-					<li>arg2:default</li>
-				</ul>
-				<div class="fSVGcontainer">
-					<svg id="mainSVG"></svg>
-				</div>
-			</li>-->
+			
 		</ul>
+		<div class="centerDiv">
+			<button id="f_addNew">+</button>
+		</div>
 	</div>
 	<div id="border"></div>
 	<div id="turtleSVGcontainer">
 		<svg id="turtleSVG"></svg>
+		<p id="notification" class="opacity0"></p>
 	</div>
+	
 	
 	<script>ma.init()</script>
 </body>

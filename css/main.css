@@ -1,6 +1,7 @@
 body {
 	margin: 0;
 	padding: 0;
+	font-family: "Open Sans", sans-serif;
 }
 #functions {
 	position: absolute;
@@ -27,14 +28,14 @@ body {
 	top: 0;
 	width: 80%;
 	height: 100%;
-	background-color: #fdd;
 }
 #turtleSVG {
 	width: 100%;
 	height: 100%;
 	/*border: 1px grey solid;*/
 	box-shadow: inset 0 0 120px rgba(0,0,0,0.07);
-	background-color: #fff;
+	/*background-color: #fff;*/
+    background: url("../images/cardboard_flat_030_200x200.png") repeat scroll 0 0 #FFF;
 }
 .dragging {
 	fill: #f00 !important;
@@ -46,24 +47,127 @@ body {
 	/*shape-rendering: crispEdges;*/
 	vector-effect: non-scaling-stroke;
 }
+
+
 #functions #ul_f {
 	list-style: none;
 	margin: 7%;
 	padding: 0;
-	background-color: #99a;
+	/*background-color: #ccf;*/
 	width: 86%;
 	/*left: 5%;*/
 }
 #functions #ul_f > li {
-	padding-bottom: 20px
+	padding-bottom: 7%;
+	border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 #functions .fSVGcontainer {
 	height: 180px;
 	width: 100%;
+	/*background-color: #99f;*/
 }
-#functions svg {
-/*	width: 100%;
-	height: 100%;*/
+#functions .fSVGcontainer svg {
+	width: 100%;
+	height: 100%;
 	background-color: #fff;
 }
+#functions .ul_args {
+	list-style: none;
+	padding-bottom: 3px;
+	padding-left: 15px;
+	font-size: 90%;
+}
+#functions .ul_args span {
+	color: #55f;
+	padding-left: 3px;
+}
+/*#functions .ul_examples {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}*/
+#functions .centerDiv {
+	padding-top: 3px;
+	width: 100%;
+	text-align: center;
+	/*background-color: #000;*/
+}
+#functions #f_addNew {
+	/*width: 20%;*/
+	/*margin-top: 1%;*/
+    padding: 0px 8px 2px 8px; /*top right bottom left*/
+    display: inline-block;
+    text-align: center;
+	/*font-weight: 100;*/
+	font-size: 150%;
+    color: #999;
+    background-color: #ddd;
+    border: 0 none;
+    border-radius: 20px;
+    box-shadow: 0 2px 1px rgba(0, 0, 0, 0.16), 0 0 1px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(255, 255, 255, 0.3) inset;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+	cursor: pointer;
+	transition: color 100ms ease-in-out, background-color 100ms ease-in-out;
+}
+#functions #f_addNew:hover {
+	color: #777;
+	background-color: #e3e3e3;
+}
+button::-moz-focus-inner {
+    border: none;
+}
+
+
+#functions .titleRow {
+	display: table;
+	width: 100%;
+}
+#functions .titleRowCell {
+	display: table-cell;
+}
+#functions .titleRowCell:first-child {
+	width: 100%;
+}
+#functions .f_name {
+	font-weight: bold;
+	border: 0 none;
+	/*background-color: #f00;*/
+	background-color: transparent;
+	width: 100%;
+	box-sizing: border-box; /*http://stackoverflow.com/questions/17175038/css-dynamic-length-text-input-field-and-submit-button-in-one-row*/
+}
+#functions .f_remove {
+	/*float: right;*/
+    padding: 0px 5px 2px 5px;
+	margin: 0;
+	font-weight: bold;
+	font-size: 100%;
+    color: #aaa;
+    background-color: transparent;
+    border: 0 none;
+    border-radius: 3px;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
+	cursor: pointer;
+	transition: color 200ms ease-in-out;
+}
+#functions .f_remove:hover {
+	color: #777;
+}
+
+
+#notification {
+	position: absolute;
+	width: 95%;
+	left: 15px;
+	bottom: 7px;
+	margin: 0;
+	color: rgba(170, 170, 170, 1);
+	/*transition: opacity 200ms ease-in-out;*/
+	z-index: 2;
+	transition: opacity 200ms ease-in-out;
+}
+.opacity0 { opacity: 0 }
+/*input { transition: color 50ms ease-in-out; }*/
+.inputInEditState { color: #777 }
+.inputInWrongState { color: #f55 !important }
