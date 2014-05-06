@@ -20,10 +20,6 @@
 ma = function() { // spans everything - not indented
 var ma = {}
 
-var svgViewboxWidth
-var svgViewboxHeight = 100 // fix on startup
-var svgViewboxX
-var svgViewboxY
 var svgWidth
 var svgHeight
 const zoomFactor = 1.3
@@ -137,18 +133,16 @@ function updateScreenElemsSize() {
 	svgWidth = bb.width
 	svgHeight = bb.height
 	
-	console.assert(svgViewboxHeight > 0 && svgWidth > 0 && svgHeight > 0)
-	// keep height stable and center (on startup to 0,0)
-	var svgViewboxWidthPrevious = svgViewboxWidth
-	svgViewboxWidth = svgViewboxHeight*svgWidth/svgHeight
-	if (svgViewboxWidthPrevious !== undefined)
-		svgViewboxX -= (svgViewboxWidth - svgViewboxWidthPrevious)/2
-	if (svgViewboxX === undefined)
-		svgViewboxX = -svgViewboxWidth/2
-	if (svgViewboxY === undefined)
-		svgViewboxY = -svgViewboxHeight/2
-	
-	svg.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+	for (var i=0; i<functions.length; i++)
+		functions[i].updateViewbox()
+	updateMainViewbox()
+}
+
+function updateMainViewbox() {
+	console.assert(!isNaN(F_.svgViewboxX) && !isNaN(F_.svgViewboxY) && F_.svgViewboxWidth > 0 && F_.svgViewboxHeight > 0)
+	var arr = [svg, F_.svg]
+	for (var e in arr)
+		arr[e].attr("viewBox", F_.svgViewboxX+" "+F_.svgViewboxY+" "+F_.svgViewboxWidth+" "+F_.svgViewboxHeight)
 }
 
 function updatePanelSize() {
@@ -162,6 +156,14 @@ function Function(name) {
 	// TODO name checking
 	var self = this
 	self.state = new State()
+	
+	self.svgViewboxWidth
+	self.svgViewboxHeight = 100 // fix on startup
+	self.svgViewboxX
+	self.svgViewboxY
+	self.svgWidth
+	self.svgHeight
+	
 	self.li_f = d3.select("#ul_f").append("li").attr("id", "f_"+name)
 	// this complicated wrapping is sadly necessary
 	// http://stackoverflow.com/questions/17175038/css-dynamic-length-text-input-field-and-submit-button-in-one-row
@@ -190,6 +192,11 @@ function Function(name) {
 			if (functions.length > 1) {
 				self.li_f.remove()
 				functions.splice(functions.indexOf(self), 1)
+				// TODO last used
+				if (F_ === self) {
+					F_ = functions[functions.length-1]
+					F_.svgContainer.classed("fSVGselected", true)
+				}
 			} else {
 				updateNotification("There has to be at least one function.")
 			}
@@ -200,11 +207,10 @@ function Function(name) {
 	self.args = {}
 	self.ul_args = self.li_f.append("ul").attr("class", "ul_args")
 	
-	self.fSVG = self.li_f.append("div").attr("class", "fSVGcontainer")
-		.append("svg").attr("class", "fSVG")
+	self.svgContainer = self.li_f.append("div").attr("class", "fSVGcontainer")
+	self.svg = self.svgContainer.append("svg").attr("class", "fSVG")
 		.attr("xmlns", "http://www.w3.org/2000/svg")
-		.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
-	
+	self.svg.append("rect").attr("x", 0).attr("y", 0).attr("width", 10).attr("height", 10)
 }
 
 Function.prototype.checkName = function(newName) {
@@ -253,8 +259,46 @@ Function.prototype.exec = function() {
 		this.commands[i].exec()
 }
 
+Function.prototype.updateViewbox = function() {
+	var f = this
+		// [0][0] gets the dom element
+	// the preview svg aspect ratio is coupled to the main svg
+	f.svgWidth = f.svgContainer[0][0].getBoundingClientRect().width
+	f.svgHeight = f.svgWidth * svgHeight/svgWidth
+	f.svgContainer.style({height: f.svgHeight+"px"})
+	
+	console.assert(f.svgWidth > 0 && f.svgViewboxHeight > 0 && svgWidth > 0 && svgHeight > 0)
+	// keep height stable and center (on startup to 0,0)
+	var svgViewboxWidthPrevious = f.svgViewboxWidth
+	f.svgViewboxWidth = f.svgViewboxHeight * svgWidth/svgHeight
+	if (svgViewboxWidthPrevious !== undefined)
+		f.svgViewboxX -= (f.svgViewboxWidth - svgViewboxWidthPrevious)/2
+	if (f.svgViewboxX === undefined)
+		f.svgViewboxX = -f.svgViewboxWidth/2
+	if (f.svgViewboxY === undefined)
+		f.svgViewboxY = -f.svgViewboxHeight/2
+	f.svg.attr("viewBox", f.svgViewboxX+" "+f.svgViewboxY+" "+f.svgViewboxWidth+" "+f.svgViewboxHeight)
+}
 
 function setUpSVG() {
+	F_ = new Function("main")
+	functions.push(F_)
+	F_.svgContainer.classed("fSVGselected", true)
+	F_.addArgument("someArg", 5)
+	
+	F_.commands = [
+	//	new Rotate(1), new Move(10), new Loop(3, [new Loop(3, [new Rotate(-0.5), new Move(7)])])
+		new Rotate(1), new Move(10), new Loop(3, [new Rotate(-0.5), new Move(7)])
+	]
+	
+	d3.select("#f_addNew").on("click", function() {
+		F_.svgContainer.classed("fSVGselected", false)
+		F_ = new Function("defaultName")
+		functions.push(F_)
+		F_.updateViewbox()
+		F_.svgContainer.classed("fSVGselected", true)
+	})
+	
 	var domSvg = document.getElementById("turtleSVG")
 	svg = d3.select("#turtleSVG")
 	svg.attr("xmlns", "http://www.w3.org/2000/svg")
@@ -273,20 +317,6 @@ function setUpSVG() {
 		})
 	)
 	
-	F_ = new Function("main")
-	functions.push(F_)
-	F_.addArgument("someArg", 5)
-	
-	F_.commands = [
-	//	new Rotate(1), new Move(10), new Loop(3, [new Loop(3, [new Rotate(-0.5), new Move(7)])])
-		new Rotate(1), new Move(10), new Loop(3, [new Rotate(-0.5), new Move(7)])
-	]
-	
-	d3.select("#f_addNew").on("click", function() {
-		F_ = new Function("defaultName")
-		functions.push(F_)
-	})
-	
 	paintingG = svg.append("g").attr("id", "paintingG")
 	
 	turtleHomeCursor = svg.append("g").attr("id", "turtleHomeCursor")
@@ -302,17 +332,17 @@ function setUpSVG() {
 		d3.event = event
 		var mouse = d3.mouse(domSvg)
 		
-		var xDelta = svgViewboxWidth * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
-		var yDelta = svgViewboxHeight * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
+		var xDelta = F_.svgViewboxWidth * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
+		var yDelta = F_.svgViewboxHeight * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
 		// zoom towards the current mouse position
-		var relX = (mouse[0]-svgViewboxX)/svgViewboxWidth // in [0,1]
-		var relY = (mouse[1]-svgViewboxY)/svgViewboxHeight // in [0,1]
-		svgViewboxX -= xDelta * relX
-		svgViewboxY -= yDelta * relY
-		svgViewboxWidth += xDelta
-		svgViewboxHeight += yDelta
+		var relX = (mouse[0]-F_.svgViewboxX)/F_.svgViewboxWidth // in [0,1]
+		var relY = (mouse[1]-F_.svgViewboxY)/F_.svgViewboxHeight // in [0,1]
+		F_.svgViewboxX -= xDelta * relX
+		F_.svgViewboxY -= yDelta * relY
+		F_.svgViewboxWidth += xDelta
+		F_.svgViewboxHeight += yDelta
 		
-		svg.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+		updateMainViewbox()
 		d3.event = null
 	}
 	
@@ -332,9 +362,9 @@ function setUpSVG() {
 	svg.call(d3.behavior.drag()
 		.on("drag", function (d) {
 			if (mousePressed.middle) {
-				svgViewboxX -= d3.event.dx*(svgViewboxWidth/svgWidth)
-				svgViewboxY -= d3.event.dy*(svgViewboxHeight/svgHeight)
-				svg.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+				F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/svgWidth)
+				F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/svgHeight)
+				updateMainViewbox()
 			}
 		})
 	)

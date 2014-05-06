@@ -51,7 +51,7 @@ body {
 
 #functions #ul_f {
 	list-style: none;
-	margin: 7%;
+	margin: 7% 7% 3% 7%;
 	padding: 0;
 	/*background-color: #ccf;*/
 	width: 86%;
@@ -59,18 +59,25 @@ body {
 }
 #functions #ul_f > li {
 	padding-bottom: 7%;
-	border: 1px solid rgba(0, 0, 0, 0.1);
+	/*border: 1px solid rgba(0, 0, 0, 0.1);*/
 }
 
 #functions .fSVGcontainer {
-	height: 180px;
+/*	height: 180px;*/
 	width: 100%;
-	/*background-color: #99f;*/
+	border: 1px solid #aaa;
+	box-shadow: 1px 0px 5px rgba(0, 0, 0, 0.1);
+	background-color: #e3e3e3;
+}
+.fSVGselected {
+	background-color: #fff !important;
+	border: 1px solid #555 !important;
+	box-shadow: 1px 0px 5px rgba(0, 0, 0, 0.3) !important;
 }
 #functions .fSVGcontainer svg {
 	width: 100%;
 	height: 100%;
-	background-color: #fff;
+	/*background-color: #ddd;*/
 }
 #functions .ul_args {
 	list-style: none;
@@ -95,7 +102,7 @@ body {
 }
 #functions #f_addNew {
 	/*width: 20%;*/
-	/*margin-top: 1%;*/
+	margin-bottom: 10%;
     padding: 0px 8px 2px 8px; /*top right bottom left*/
     display: inline-block;
     text-align: center;
