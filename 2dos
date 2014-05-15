@@ -24,6 +24,7 @@ How can a function call be "inlined" into the current context (stepping down int
 simplification of visual steps (with increased number of steps)
 Wie: Bedingungen
 reference functions not by name but by symbol! (choose from set of symbols, or just alpha, beta, ...)
+round dom numbers
 
 UglifyJS2
 Collision-Free Text positioning

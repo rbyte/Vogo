@@ -17,67 +17,65 @@
 	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-ma = function() { // spans everything - not indented
+var ma = function() {// spans everything - not indented
+"use strict";
 var ma = {}
 
-var mainSVG
-var svgWidth
-var svgHeight
-const zoomFactor = 1.3
+// CONSTANTS (const not supported in strict mode)
+var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "stroke-linecap": "round"}
+var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
+var lineStyle = {stroke: "#000", "stroke-width": ".25", "stroke-linecap": "round"}
+var arcStyle = {fill: "#000", "fill-opacity": 0.1}
+var clockStyle = {fill: "none", stroke: "#777", "stroke-width": ".05"}
+var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
+var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
 
+var zoomFactor = 1.3
+var loopClockRadius = 1.3
+var rotationArcRadius = 6
+var drawLoopInPreview = false
+var drawRotationInPreview = false
+
+var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
-const keyMap = { d:68, s:83, e:69, f:70, g:71, "+":107, "-":109, p:80, del: 46 }
-var keyPressed = { d:false, s:false, e:false, f:false, g:false, "+":false, "-":false, p:false, del: false }
-const mouseMap = { 0: "left", 1: "middle", 2: "right" }
-var mousePressed = { left: false, middle: false, right: false }
+var keyMap = { 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r", 107: "+", 109: "-", 80: "p", 46: "del", 27: "esc" }
+var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
-const turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "stroke-linecap": "round"}
-const turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
-const lineStyle = {stroke: "#000", "stroke-width": ".25", "stroke-linecap": "round"}
-const arcStyle = {fill: "#000", "fill-opacity": 0.1}
-const clockStyle = {fill: "none", stroke: "#777", "stroke-width": ".15"}
-const clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
-const textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
+// VARIABLES
+var onKeyDown = {}
+var onKeyUp = {}
+var keyPressed = {}
+for (var k in keyMap)
+	keyPressed[keyMap[k]] = false
+var mousePressed = {}
+for (var m in mouseMap)
+	mousePressed[mouseMap[m]] = false
+function updateKeyDownAndUp(keyCode, down) {
+	var key = keyMap[keyCode]
+	if (key) {
+		var currentDown = keyPressed[key]
+		keyPressed[key] = down
+		if (down && !currentDown && onKeyDown[key])
+			onKeyDown[key]()
+		if (!down && currentDown && onKeyUp[key])
+			onKeyUp[key]()
+	} else {
+		console.log(keyCode+" not in keymap.")
+	}
+}
 
-const loopClockRadius = 1.3
-const rotationArcRadius = 6
-var functionPanelSizePercentOfBodyWidth = 0.2
-var lastNotificationUpdateTime
-
-var mousePos = [0,0]
-var mousePosPrevious = [0,0]
-
+var mainSVG
 var functions = []
 // the function that is currently selected
 var F_
 
+var functionPanelSizePercentOfBodyWidth = 0.2
+var lastNotificationUpdateTime
 var dragInProgress = false
+var mousePos = [0,0]
+var mousePosPrevious = [0,0]
 
-function State() {
-	this.reset()
-}
 
-State.prototype.addRadius = function(rr) {
-	if (rr > Math.PI || rr < -Math.PI)
-		console.log("Warning: addRadius: rr out of [-Pi, Pi]")
-	this.r += rr
-	this.r = correctRadius(this.r)
-}
-
-State.prototype.reset = function() {
-	this.x = 0
-	this.y = 0
-	// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
-	this.r = 0
-}
-
-State.prototype.clone = function() {
-	var s = new State()
-	s.x = this.x
-	s.y = this.y
-	s.r = this.r
-	return s
-}
 
 var selection = {
 	e: undefined,
@@ -109,33 +107,68 @@ var selection = {
 ma.init = function() {
 	mainSVG = new MainSVG()
 	
-	F_ = new Function("main")
+	F_ = new Function()
 	functions.push(F_)
 	F_.svgContainer.classed("fSVGselected", true)
-	F_.addArgument("someArg", 5)
+//	F_.addArgument("someArg", 5)
+//	F_.setCommands([])
 	
-	F_.commands = [
-	//	new Rotate(1), new Move(10), new Loop(3, [new Loop(3, [new Rotate(-0.5), new Move(7)])])
-		new Rotate(1), new Move(10), new Loop(3, [new Rotate(-0.5), new Move(7)])
-	]
+//	F_.setCommands([
+//		new Rotate(1),
+//		new Move(10),
+//		new Loop(2, [
+//			new Loop(2, [
+//				new Loop(2, [
+//					new Rotate(-0.5),
+//					new Move(7)
+//				])
+//			])
+//		])
+//	])
+	F_.setCommands([
+		new Rotate(1),
+		new Move(10),
+		new Loop(3, [
+			new Rotate(-0.5),
+			new Move(7)
+		])
+	])
 	
 	d3.select("#f_addNew").on("click", function() {
-		new Function("defaultName").switchTo()
+		var f = new Function()
+		functions.push(f)
+		f.switchTo()
 	})
 	
 	setup()
 	run()
+	
+//	var f = new Function()
+//	functions.push(f)
+//	f.setCommands([
+//		new Rotate(1),
+//		new Move(10),
+//		new FunctionCall(functions[0])
+//	])
+//	f.switchTo()
+	
 }
 
 function run() {
 	F_.state.reset()
-	// TODO for all functions
 	for (var i=0; i<F_.commands.length; i++) {
 		F_.commands[i].savedState = undefined
 		F_.commands[i].exec(F_)
 	}
 	F_.updateTurtle()
 	mainSVG.updateTurtle()
+	
+	for (var fi=0; fi<functions.length; fi++) {
+		if (functions[fi] !== F_) {
+			functions[fi].state.reset()
+			functions[fi].exec()
+		}
+	}
 }
 
 function updateScreenElemsSize() {
@@ -143,8 +176,8 @@ function updateScreenElemsSize() {
 //	var winH = window.innerHeight
 	
 	var bb = document.getElementById("turtleSVGcontainer").getBoundingClientRect()
-	svgWidth = bb.width
-	svgHeight = bb.height
+	mainSVG.svgWidth = bb.width
+	mainSVG.svgHeight = bb.height
 	
 	for (var i=0; i<functions.length; i++)
 		functions[i].updateViewbox()
@@ -163,6 +196,8 @@ function updatePanelSize() {
 
 function MainSVG() {
 	var self = this
+	self.svgWidth
+	self.svgHeight
 	self.svg = d3.select("#turtleSVG").attr("xmlns", "http://www.w3.org/2000/svg")
 	self.svgInit()
 }
@@ -220,8 +255,8 @@ function setup() {
 	mainSVG.svg.call(d3.behavior.drag()
 		.on("drag", function (d) {
 			if (mousePressed.middle) {
-				F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/svgWidth)
-				F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/svgHeight)
+				F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/mainSVG.svgWidth)
+				F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/mainSVG.svgHeight)
 				F_.updateViewbox()
 				mainSVG.updateViewbox()
 			}
@@ -232,18 +267,27 @@ function setup() {
 		// TODO needed?
 		mousePosPrevious = mousePos
 		mousePos = d3.mouse(this)
-		if (keyPressed.d) {
-			updatePreviewLineDrawing()
-		}
+		if (manipulation.isCreatingCheck(Move))
+			manipulation.update(Move)
+		if (manipulation.isCreatingCheck(Rotate))
+			manipulation.update(Rotate)
     })
 	
 	mainSVG.svg.on("click", function (d, i) {
 //		mousePos = d3.mouse(this)
 		console.assert(d3.mouse(this)[0]-mousePos[0] === 0)
-		if (keyPressed.d) {
-			removePreviewLine()
-			drawLine()
-			drawPreviewLine()
+		if (manipulation.isCreatingCheck(Move)) {
+			if (keyPressed.d) {
+				manipulation.create(Move)
+			} else {
+				manipulation.finish(Move)
+			}
+		} else if (manipulation.isCreatingCheck(Rotate)) {
+			if (keyPressed.r) {
+				manipulation.create(Rotate)
+			} else {
+				manipulation.finish(Rotate)
+			}
 		} else {
 			selection.deselectAll()
 		}
@@ -252,6 +296,32 @@ function setup() {
 	d3.select("body")
 		.on("keydown", function() { updateKeyDownAndUp(d3.event.keyCode, true) })
 		.on("keyup", function() { updateKeyDownAndUp(d3.event.keyCode, false) })
+}
+
+function State() {
+	this.reset()
+}
+
+State.prototype.addRadius = function(rr) {
+	if (rr > Math.PI || rr < -Math.PI)
+		console.log("Warning: addRadius: rr out of [-Pi, Pi]")
+	this.r += rr
+	this.r = correctRadius(this.r)
+}
+
+State.prototype.reset = function() {
+	this.x = 0
+	this.y = 0
+	// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
+	this.r = 0
+}
+
+State.prototype.clone = function() {
+	var s = new State()
+	s.x = this.x
+	s.y = this.y
+	s.r = this.r
+	return s
 }
 
 function Function(name) {
@@ -265,7 +335,10 @@ function Function(name) {
 	self.svgWidth
 	self.svgHeight
 	
-	self.li_f = d3.select("#ul_f").append("li").attr("id", "f_"+name)
+	self.commands = []
+	self.args = {}
+	
+	self.li_f = d3.select("#ul_f").append("li")//.attr("id", "f_"+self.name)
 	// this complicated wrapping is sadly necessary
 	// http://stackoverflow.com/questions/17175038/css-dynamic-length-text-input-field-and-submit-button-in-one-row
 	var titleRow = self.li_f.append("div").attr("class", "titleRow")
@@ -285,28 +358,18 @@ function Function(name) {
 			self.nameInput.classed({"inputInEditState": true})
 			self.checkName(this.value)
 		})
+	self.setName(name)
 	
 	titleRow.append("div").attr("class", "titleRowCell")
 		.append("button").attr("class", "f_remove").text("x")
 		.on("click", function() {
 			// TODO dependency check
 			if (functions.length > 1) {
-				self.li_f.remove()
-				functions.splice(functions.indexOf(self), 1)
-				// TODO last used
-				if (F_ === self) {
-					F_ = functions[functions.length-1]
-					F_.svgContainer.classed("fSVGselected", true)
-				}
+				self.remove()
 			} else {
 				updateNotification("There has to be at least one function.")
 			}
 		})
-	
-	// TODO if check failed?
-	self.setName(name)
-	self.commands = []
-	self.args = {}
 	self.ul_args = self.li_f.append("ul").attr("class", "ul_args")
 	
 	self.svgContainer = self.li_f.append("div").attr("class", "fSVGcontainer")
@@ -317,7 +380,6 @@ function Function(name) {
 	})
 	
 	self.svgInit()
-	
 	return self
 }
 
@@ -325,12 +387,10 @@ MainSVG.prototype.svgInit = Function.prototype.svgInit = function() {
 	var self = this
 	self.paintingG = self.svg.append("g").attr("class", "paintingG")
 	
-	const turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 	self.turtleHomeCursor = self.svg.append("g").attr("class", "turtleHome")
 	self.turtleHomeCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleHomeStyle)
 	
 	self.turtleCursor = self.svg.append("g").attr("class", "turtle")
-//	self.updateTurtle()
 	self.turtleCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleStyle)
 }
 
@@ -356,13 +416,13 @@ Function.prototype.updateViewbox = function() {
 		// [0][0] gets the dom element
 	// the preview svg aspect ratio is coupled to the main svg
 	self.svgWidth = self.svgContainer[0][0].getBoundingClientRect().width
-	self.svgHeight = self.svgWidth * svgHeight/svgWidth
+	self.svgHeight = self.svgWidth * mainSVG.svgHeight/mainSVG.svgWidth
 	self.svgContainer.style({height: self.svgHeight+"px"})
 	
-	console.assert(self.svgWidth > 0 && self.svgViewboxHeight > 0 && svgWidth > 0 && svgHeight > 0)
+	console.assert(self.svgWidth > 0 && self.svgViewboxHeight > 0 && mainSVG.svgWidth > 0 && mainSVG.svgHeight > 0)
 	// keep height stable and center (on startup to 0,0)
 	var svgViewboxWidthPrevious = self.svgViewboxWidth
-	self.svgViewboxWidth = self.svgViewboxHeight * svgWidth/svgHeight
+	self.svgViewboxWidth = self.svgViewboxHeight * mainSVG.svgWidth/mainSVG.svgHeight
 	if (svgViewboxWidthPrevious !== undefined)
 		self.svgViewboxX -= (self.svgViewboxWidth - svgViewboxWidthPrevious)/2
 	if (self.svgViewboxX === undefined)
@@ -373,7 +433,7 @@ Function.prototype.updateViewbox = function() {
 }
 
 Function.prototype.checkName = function(newName) {
-	var regEx = /^[a-zA-Z][a-zA-Z0-9]*$/
+	var regEx = /^[a-zA-Zα-ω][a-zA-Zα-ω0-9]*$/
 	if (!newName.match(regEx)) {
 		this.nameInput.classed({"inputInWrongState": true})
 		updateNotification("The function name has to be alphanumeric and start with a letter: "+regEx)
@@ -393,11 +453,27 @@ Function.prototype.checkName = function(newName) {
 }
 
 Function.prototype.setName = function(newName) {
-	var r = this.checkName(newName)
+	var self = this
+	function search(s, depth) {
+		if (depth === 0)
+			return (self.checkName(s) ? s : false)
+		for (var i=0; i<26; i++) {
+			// greek alphabet: 945 is α
+			var r = search(s + String.fromCharCode(945+i), depth-1)
+			if (r !== false)
+				return r
+		}
+		return search(s, depth+1)
+	}
+	if (newName === undefined) {
+		newName = search("", 1)
+	}
+	
+	var r = self.checkName(newName)
 	if (r)
-		this.name = newName
-	this.nameInput.property("value", this.name)
-	this.nameInput.classed({"inputInEditState": false, "inputInWrongState": false})
+		self.name = newName
+	self.nameInput.property("value", self.name)
+	self.nameInput.classed({"inputInEditState": false, "inputInWrongState": false})
 	hideNotification()
 	return r
 }
@@ -413,6 +489,15 @@ Function.prototype.addArgument = function(argName, defaultValue) {
 	this.ul_args.append("li").text(argName).append("span").text(":"+defaultValue)
 }
 
+Function.prototype.setCommands = function(commands) {
+	console.assert(commands instanceof Array)
+	var self = this
+	self.commands = commands
+	for (var i=0; i<self.commands.length; i++)
+		self.commands[i].scope = self
+	return self
+}
+
 Function.prototype.exec = function() {
 	var self = this
 	for (var i=0; i<self.commands.length; i++)
@@ -421,60 +506,165 @@ Function.prototype.exec = function() {
 }
 
 Function.prototype.switchTo = function() {
+	var self = this
 	if (F_ !== undefined) {
+		self.previousF_ = F_
 		F_.svgContainer.classed("fSVGselected", false)
 		for (var i=0; i<F_.commands.length; i++)
 			F_.commands[i].removeFromMainSVG()
 	}
-	F_ = this
-	functions.push(F_)
+	F_ = self
 	F_.svgContainer.classed("fSVGselected", true)
 	F_.updateViewbox()
 	mainSVG.updateViewbox()
 	run()
 }
 
-
-
-
-function drawLine() {
-	var r = new Rotate(rotateAngleTo(mousePos))
-	F_.commands.push(r)
-	r.exec(F_)
-	var m = new Move(getLineLengthTo(mousePos))
-	F_.commands.push(m)
-	m.exec(F_)
+Function.prototype.remove = function() {
+	var self = this
+	
+	functions.splice(functions.indexOf(self), 1)
+	if (F_ === self) {
+		if (self.previousF_ !== undefined && functions.indexOf(self.previousF_) !== -1)
+			F_ = self.previousF_
+		else
+			F_ = functions[functions.length-1]
+		F_.switchTo()
+	}
+	
+	for (var i=0; i<self.commands.length; i++)
+		self.commands[i].remove()
+	for (var i=self.commands.length-1; i>=0; i--)
+		delete self.commands[i]
+	
+	// contains everything
+	self.li_f.remove()
+	delete self.svg
+	delete self.nameInput
+	delete self.ul_args
+	delete self.svgContainer
+	delete self.li_f
+	delete self.previousF_
 }
 
-function drawPreviewLine() {
-	F_.commands.push(new Rotate(0))
-	F_.commands.push(new Move(0))
-	updatePreviewLineDrawing()
-}
-
-function updatePreviewLineDrawing() {
-	if (F_.commands.length < 2) {
-		// this happens when update is called before draw, when body is not selected
-		// because update is called, but key press is supressed
-		drawPreviewLine()
+Function.prototype.setStateTo = function(idx) {
+	var self = this
+	// if idx is negative, counts backwards from last element
+	// idx = 0 -> first element
+	// idx = -1 -> last element
+	if ((idx >= 0 && idx >= self.commands.length) || (idx < 0 && -idx > self.commands.length)) {
+		self.state.reset()
 	} else {
-		var stateSave = F_.state.clone()
-		F_.commands[F_.commands.length-2].angle = rotateAngleTo(mousePos)
-		F_.commands[F_.commands.length-2].exec(F_)
-		F_.commands[F_.commands.length-1].length = getLineLengthTo(mousePos)
-		F_.commands[F_.commands.length-1].exec(F_)
-		F_.updateTurtle()
-		mainSVG.updateTurtle()
-		F_.state = stateSave
+		var s = self.commands[(idx < 0 ? self.commands.length + idx : idx)].savedState
+		if (s)
+			self.state = s.clone()
+		else
+			console.log("setStateTo: savedState not set. doing nothing.")
 	}
 }
 
-function removePreviewLine() {
-	F_.commands[F_.commands.length-1].remove()
-	F_.commands.splice(F_.commands.length-1, 1)
-	F_.commands[F_.commands.length-1].remove()
-	F_.commands.splice(F_.commands.length-1, 1)
+
+var manipulation = {
+	isCreatingMove: false,
+	isCreatingRotation: false
 }
+
+manipulation.isCreating = function(cmdType, value) {
+	if (cmdType === Move)
+		this.isCreatingMove = value
+	if (cmdType === Rotate)
+		this.isCreatingRotation = value
+}
+
+manipulation.isCreatingCheck = function(cmdType) {
+	return (
+			(cmdType === undefined && (this.isCreatingMove || this.isCreatingRotation))
+		||	(cmdType === Move && this.isCreatingMove)
+		||	(cmdType === Rotate && this.isCreatingRotation)
+	)
+}
+
+manipulation.create = function(cmdType) {
+	if (this.isCreatingCheck(cmdType)) {
+		this.finish(cmdType)
+		this.createPreview(cmdType)
+	} else {
+		this.createPreview(cmdType)
+		this.finish(cmdType)
+	}
+}
+
+manipulation.createPreview = function(cmdType) {
+	console.assert(!this.isCreatingCheck(cmdType))
+	this.isCreating(cmdType, true)
+	if (selection.isEmpty()) {
+		this.insertedCommand = new cmdType()
+		this.insertedCommand.scope = F_
+		this.savedState = F_.state.clone()
+		F_.commands.push(this.insertedCommand)
+	} else {
+		var sScope = selection.e.root.scope
+//		console.assert(sScope === F_)
+		var cmdSelIdx = sScope.commands.indexOf(selection.e.root)
+		console.assert(cmdSelIdx != -1)
+//		this.savedState = sScope.commands[cmdSelIdx].savedState.clone()
+		this.savedState = selection.e.savedState.clone()
+		this.insertedCommand = new cmdType()
+		this.insertedCommand.scope = sScope
+		console.assert(sScope instanceof Loop)
+		sScope.commands.splice(cmdSelIdx, 0, this.insertedCommand)
+	}
+	this.update(cmdType)
+}
+
+manipulation.update = function(cmdType) {
+	if (this.isCreatingCheck(cmdType)) {
+		F_.state = this.savedState.clone()
+		if (cmdType === Move)
+			this.insertedCommand.lineLength = getLineLengthTo(mousePos)
+		else if (cmdType === Rotate)
+			this.insertedCommand.angle = rotateAngleTo(mousePos)
+		else
+			console.assert(false)
+		
+		if (selection.isEmpty()) {
+			this.insertedCommand.exec(F_)
+			F_.updateTurtle()
+			mainSVG.updateTurtle()
+		} else {
+			run()
+		}
+	} else {
+		// this happens when update is called before draw, when body is not selected
+		// because update is called, but key press is supressed
+		this.createPreview(cmdType)
+		console.log("manipulation.update: warning: no preview exists yet")
+	}
+}
+
+manipulation.finish = function(cmdType) {
+	console.assert(this.isCreatingCheck(cmdType))
+	this.update(cmdType)
+	this.isCreating(cmdType, false)
+}
+
+manipulation.remove = function(cmdType) {
+	console.assert(this.isCreatingCheck(cmdType))
+	this.isCreating(cmdType, false)
+//	F_.state = this.savedState.clone()
+	
+	var idx = this.insertedCommand.scope.commands.indexOf(this.insertedCommand)
+	this.insertedCommand.scope.commands.splice(idx, 1)
+	this.insertedCommand.remove()
+	if (selection.isEmpty()) {
+		F_.updateTurtle()
+		mainSVG.updateTurtle()
+	} else {
+		run()
+	}
+}
+
+
 
 function getAngleDeltaTo(dx, dy, r) {
 	return correctRadius(Math.atan2(dy, dx) + Math.PI/2 - (r === undefined ? F_.state.r : r))
@@ -509,41 +699,150 @@ function updateNotification(text, displayTime) {
 	d3.select("#notification").text(text)
 }
 
-
-
-
-function Move(length) {
-	var self = this
-	self.length = length
-	self.parent
-	self.line
-	self.lineMainSVG
+function correctRadius(r) {
+	var isPositive = r > 0
+	var divIsUneven = Math.floor(Math.abs(r / Math.PI)) % 2 === 1
+	// into bounds
+	r = r % Math.PI
+	
+	// it overshot into the opposite 180°
+	if (divIsUneven)
+		r = (isPositive ? -1 : 1)* Math.PI + r
+	console.assert(r >= -Math.PI && r <= Math.PI)
+	return r
 }
 
-//Move.prototype = new Command()
+function openSVG() {
+	var svg = document.getElementById("turtleSVG")
+	window.open("data:image/svg+xml," + encodeURIComponent(
+	// http://stackoverflow.com/questions/1700870/how-do-i-do-outerhtml-in-firefox
+		svg.outerHTML || new XMLSerializer().serializeToString(svg)
+	))
+}
 
-Move.prototype.shallowClone = function() {
-	var c = new Move(this.length)
-	c.parent = this
+function bodyIsSelected() {
+	return document.activeElement.nodeName === "BODY"
+}
+
+onKeyDown.d = function() {
+	if (bodyIsSelected())
+		manipulation.createPreview(Move)
+}
+
+onKeyDown.r = function() {
+	if (bodyIsSelected())
+		manipulation.createPreview(Rotate)
+}
+
+onKeyDown.s = function() {
+	if (bodyIsSelected())
+		openSVG()
+}
+
+onKeyDown.del = function() {
+	if (bodyIsSelected())
+		selection.removeAll()
+}
+
+onKeyDown.esc = function() {
+	if (manipulation.isCreatingCheck(Move))
+		manipulation.remove(Move)
+	if (manipulation.isCreatingCheck(Rotate))
+		manipulation.remove(Rotate)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+function Command() {}
+
+Command.prototype.setUpReferences = function(constructor) {
+	var self = this
+	self.root = self
+	self.scope
+	self.scopeDepth = 0
+	self.refDepthOfSameType = 0
+	self.myConstructor = constructor
+	self.savedState
+}
+
+Command.prototype.shallowClone = function(scope) {
+	var self = this
+	// this should be the same, but breaks ... I dont know why
+//	var c = Object.create(self)
+	var c = new self.myConstructor()
+	// it is important to understand that there is a difference between the
+	// initiator of the clone (scope) and self (the context that called)
+	c.root = self.root
+	c.scope = scope
+	c.scopeDepth = scope.scopeDepth + 1
+	c.refDepthOfSameType = scope.refDepthOfSameType + (scope instanceof self.myConstructor ? 1 : 0)
+	if (c.scopeDepth > 100) {
+		console.error("shallowClone scopeDepth to high. endless loop? aborting exec.")
+		c.exec = function() {}
+	}
+	
 	return c
 }
 
-Move.prototype.exec = function(f) {
+function Move(lineLength) {
 	var self = this
-	var x1 = f.state.x
-	var y1 = f.state.y
-	f.state.x += Math.sin(f.state.r) * self.length
-	f.state.y -= Math.cos(f.state.r) * self.length
-	var x2 = f.state.x
-	var y2 = f.state.y
+	self.setUpReferences(Move)
+	self.lineLength = lineLength
+	self.line
+	self.lineMainSVG
+}
+Move.prototype = new Command()
+
+Move.prototype.exec = function(callerF) {
+	var self = this
+	console.assert(self.root.lineLength)
+	if (self.savedState === undefined)
+		self.savedState = callerF.state.clone()
+	var x1 = callerF.state.x
+	var y1 = callerF.state.y
+	callerF.state.x += Math.sin(callerF.state.r) * self.root.lineLength
+	callerF.state.y -= Math.cos(callerF.state.r) * self.root.lineLength
+	var x2 = callerF.state.x
+	var y2 = callerF.state.y
 	if (self.line === undefined) {
-		self.line = f.paintingG.append("line").style(lineStyle)
+		self.line = callerF.paintingG.append("line").style(lineStyle)
 	}
-	if (self.lineMainSVG === undefined && f === F_) {
+	if (self.lineMainSVG === undefined && callerF === F_) {
 		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
+		self.lineMainSVG.on("click", function(d, i) {
+			self.select()
+			// to prevent click on background
+			d3.event.stopPropagation()
+		})
 	}
 	var lines = [self.line]
-	if (f === F_)
+	if (callerF === F_)
 		lines.push(self.lineMainSVG)
 	for (var l in lines)
 		lines[l]
@@ -551,16 +850,31 @@ Move.prototype.exec = function(f) {
 			.attr("x2", x2).attr("y2", y2)
 }
 
+Move.prototype.select = function() {
+	var self = this
+	selection.add(self)
+	if (self.lineMainSVG !== undefined)
+		self.lineMainSVG.classed("lineSelected", true)
+}
+
+Move.prototype.deselect = function() {
+	var self = this
+	if (self.lineMainSVG !== undefined)
+		self.lineMainSVG.classed("lineSelected", false)
+}
+
 Move.prototype.remove = function() {
 	var self = this
-	self.line.remove()
+	if (self.line !== undefined)
+		self.line.remove()
 	self.line = undefined
 	self.removeFromMainSVG()
 }
 
 Move.prototype.removeFromMainSVG = function() {
 	var self = this
-	self.lineMainSVG.remove()
+	if (self.lineMainSVG !== undefined)
+		self.lineMainSVG.remove()
 	self.lineMainSVG = undefined
 }
 
@@ -568,48 +882,33 @@ Move.prototype.removeFromMainSVG = function() {
 
 function Rotate(angle) {
 	var self = this
+	self.setUpReferences(Rotate)
 	self.angle = angle
-	self.parent
-	self.savedState
 	self.arc
 	self.label
 	self.arcMainSVG
 	self.labelMainSVG
 }
-// TODO "Command" Prototype
-Rotate.prototype.shallowClone = function() {
-	var c = new Rotate(this.angle)
-	c.parent = this
-	return c
-}
+Rotate.prototype = new Command()
 
-Rotate.prototype.getAngle = function() {
-	var c = new Rotate(this.angle)
-	c.parent = this
-	return c
-}
-
-Rotate.prototype.exec = function(f) {
+Rotate.prototype.exec = function(callerF) {
 	var self = this
-	var root = self
-	while (root.parent !== undefined)
-		root = root.parent
-	if (self.savedState === undefined) { // clone state
-		self.savedState = f.state.clone()
-	}
+	console.assert(self.root.angle)
+	if (self.savedState === undefined)
+		self.savedState = callerF.state.clone()
 	var dragStartState
 	
 	var arc = d3.svg.arc()
 		.innerRadius(0)
 		.outerRadius(rotationArcRadius)
-		.startAngle(f.state.r)
-		.endAngle(f.state.r + root.angle)
-	f.state.addRadius(root.angle)
+		.startAngle(callerF.state.r)
+		.endAngle(callerF.state.r + self.root.angle)
+	callerF.state.addRadius(self.root.angle)
 	
-	if (self.arcMainSVG === undefined && f === F_) {
+	if (self.arcMainSVG === undefined && callerF === F_) {
 		self.arcMainSVG = mainSVG.paintingG.append("path").style(arcStyle)
 		self.arcMainSVG.on("mouseenter", function (d, i) {
-			if (!dragInProgress)
+			if (!dragInProgress && !manipulation.isCreatingCheck(Rotate))
 				self.arcMainSVG.style({fill: "#f00"})
 		})
 		self.arcMainSVG.on("mouseleave", function (d, i) {
@@ -635,7 +934,7 @@ Rotate.prototype.exec = function(f) {
 				var dx = x-dragStartState.x
 				var dy = y-dragStartState.y
 				var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
-				root.angle = angleDelta
+				self.root.angle = angleDelta
 				run()
 			})
 			.on("dragend", function (d) {
@@ -644,56 +943,68 @@ Rotate.prototype.exec = function(f) {
 			})
 		)
 	}
-	if (self.arc === undefined)
-		self.arc = f.paintingG.append("path").style(arcStyle)
-	if (self.label === undefined)
-		self.label = f.paintingG.append("text").style(textStyle)
-	if (self.labelMainSVG === undefined && f === F_)
+	if (self.arc === undefined && drawRotationInPreview)
+		self.arc = callerF.paintingG.append("path").style(arcStyle)
+	if (self.label === undefined && drawRotationInPreview)
+		self.label = callerF.paintingG.append("text").style(textStyle)
+	if (self.labelMainSVG === undefined && callerF === F_)
 		self.labelMainSVG = mainSVG.paintingG.append("text").style(textStyle)
 	
-	var dir = correctRadius(f.state.r - root.angle/2)
-	var x = f.state.x + Math.sin(dir) * rotationArcRadius * .6
-	var y = f.state.y - Math.cos(dir) * rotationArcRadius * .6 + .5 // vertical alignment
+	var dir = correctRadius(callerF.state.r - self.root.angle/2)
+	var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * .6
+	var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * .6 + .5 // vertical alignment
 	
-	var arcs = [self.arc]
-	var labels = [self.label]
-	if (f === F_) {
+	var arcs = []
+	var labels = []
+	if (drawRotationInPreview) {
+		arcs.push(self.arc)
+		labels.push(self.label)
+	}
+	if (callerF === F_) {
 		arcs.push(self.arcMainSVG)
 		labels.push(self.labelMainSVG)
 	}
 	
 	for (var lN in labels)
-		labels[lN].text(Math.round(root.angle/Math.PI*180))
+		labels[lN].text(Math.round(self.root.angle/Math.PI*180))
 			.attr("transform", "translate("+x+","+y+")")
 	for (var aN in arcs)
 		arcs[aN].attr("d", arc)
-			.attr("transform", "translate("+f.state.x+","+f.state.y+")")
+			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
 }
 
 Rotate.prototype.select = function() {
-	selection.add(this)
-	this.arcMainSVG.classed("selected", true)
+	var self = this
+	selection.add(self)
+	if (self.arcMainSVG !== undefined)
+		self.arcMainSVG.classed("selected", true)
 }
 
 Rotate.prototype.deselect = function() {
-	this.arcMainSVG.classed("selected", false)
+	var self = this
+	if (self.arcMainSVG !== undefined)
+		self.arcMainSVG.classed("selected", false)
 }
 
 Rotate.prototype.remove = function() {
 	var self = this
 	self.deselect()
-	self.arc.remove()
+	if (self.arc !== undefined)
+		self.arc.remove()
 	self.arc = undefined
-	self.label.remove()
+	if (self.label !== undefined)
+		self.label.remove()
 	self.label = undefined
 	self.removeFromMainSVG()
 }
 
 Rotate.prototype.removeFromMainSVG = function() {
 	var self = this
-	self.arcMainSVG.remove()
+	if (self.arcMainSVG !== undefined)
+		self.arcMainSVG.remove()
 	self.arcMainSVG = undefined
-	self.labelMainSVG.remove()
+	if (self.labelMainSVG !== undefined)
+		self.labelMainSVG.remove()
 	self.labelMainSVG = undefined
 }
 
@@ -702,62 +1013,61 @@ Rotate.prototype.removeFromMainSVG = function() {
 
 function Loop(numberOfRepetitions, commands) {
 	var self = this
+	self.setUpReferences(Loop)
 	self.numberOfRepetitions = numberOfRepetitions
-	self.commandsInsideLoop = commands
-	self.parent
+	self.commands = commands
+	for (var i=0; i<self.commands.length; i++)
+		self.commands[i].scope = self
 	// "unfolded" loop
 	self.commandsAll = []
-	self.savedState
 	// for all repetitions
 	self.iconGs = []
 	self.iconGsMainSVG = []
 }
+Loop.prototype = new Command()
 
-Loop.prototype.shallowClone = function() {
-	var c = new Loop(this.numberOfRepetitions, this.commandsInsideLoop)
-	c.parent = this
-	return c
-}
-
-Loop.prototype.exec = function(f) {
+Loop.prototype.exec = function(callerF) {
 	var self = this
-	var root = self
-	var numberOfLoopParents = 0
-	while (root.parent !== undefined) {
-		root = root.parent
-		numberOfLoopParents++
-	}
 	// shrink inner loops radius
-	var loopClockRadiusUsed = loopClockRadius/(numberOfLoopParents+1)
+	var loopClockRadiusUsed = loopClockRadius*Math.pow(0.7, self.refDepthOfSameType+1)
+	if (self.savedState === undefined)
+		self.savedState = callerF.state.clone()
 	
-	if (self.savedState === undefined) {
-		self.savedState = f.state.clone()
-	}
-	
-	for (var i=0; i<self.numberOfRepetitions; i++) {
-		function createIcon(iconG) {
-			var arc = d3.svg.arc()
-				.innerRadius(0)
-				.outerRadius(loopClockRadiusUsed)
-				.startAngle(0)
-				.endAngle(Math.PI*2/self.numberOfRepetitions*(i+1))
-			iconG.append("path")
-				.attr("d", arc)
-				.style(clockHandStyle)
-
-			iconG.append("circle")
-				.attr("cx", 0).attr("cy", 0).attr("r", loopClockRadiusUsed)
-				.style(clockStyle)
-
-			iconG.append("text").style(textStyle)
+	function createIcon(iconG) {
+		if (i === 0) {
+			iconG.append("text").style(textStyle).text(self.root.numberOfRepetitions)
+				.attr("transform", "translate("+0+","+(-loopClockRadiusUsed*1.3)+")")
 		}
 		
-		if (self.iconGs.length <= i) {
-			var iconG = f.paintingG.append("g")
+		var arc = d3.svg.arc()
+			.innerRadius(0)
+			.outerRadius(loopClockRadiusUsed)
+			.startAngle(0)
+			.endAngle(Math.PI*2/self.root.numberOfRepetitions*(i+1))
+		iconG.append("path")
+			.attr("d", arc)
+			.style(clockHandStyle)
+
+		iconG.append("circle")
+			.attr("cx", 0).attr("cy", 0).attr("r", loopClockRadiusUsed)
+			.style(clockStyle)
+	}
+	
+	var rebuild = self.commandsAll.length !== self.root.numberOfRepetitions * self.root.commands.length
+	if (rebuild) {
+		for (var k=0; k<self.commandsAll.length; k++)
+			self.commandsAll[k].remove()
+		self.commandsAll = []
+	}
+	
+	for (var i=0; i<self.root.numberOfRepetitions; i++) {
+		if (self.iconGs.length <= i && drawLoopInPreview) {
+			var iconG = callerF.paintingG.append("g")
 			self.iconGs.push(iconG)
 			createIcon(iconG)
 		}
-		if (self.iconGsMainSVG.length <= i && f === F_) {
+		
+		if (self.iconGsMainSVG.length <= i && callerF === F_) {
 			var iconG = mainSVG.paintingG.append("g")
 			self.iconGsMainSVG.push(iconG)
 			createIcon(iconG)
@@ -765,22 +1075,28 @@ Loop.prototype.exec = function(f) {
 		
 		// TODO consider line-in and -out diretion for angle
 		// place center away from current position in 90° angle to current heading
-		var dir = correctRadius(f.state.r + Math.PI/2)
-		var cx = f.state.x + Math.sin(dir) * loopClockRadius * 1.4
-		var cy = f.state.y - Math.cos(dir) * loopClockRadius * 1.4
-		var iconGsL = [self.iconGs[i]]
-		if (f === F_)
+		var dir = correctRadius(callerF.state.r + Math.PI/2)
+		var cx = callerF.state.x + Math.sin(dir) * loopClockRadius * 1.4
+		var cy = callerF.state.y - Math.cos(dir) * loopClockRadius * 1.4
+		var iconGsL = []
+		if (drawLoopInPreview)
+			iconGsL.push(self.iconGs[i])
+		if (callerF === F_)
 			iconGsL.push(self.iconGsMainSVG[i])
 		for (var iL in iconGsL)
 			iconGsL[iL].attr("transform", "translate("+cx+","+cy+")")
 		
-		for (var k=0; k<self.commandsInsideLoop.length; k++) {
-			var pos = i*self.commandsInsideLoop.length + k
-			if (self.commandsAll.length <= pos) {
-//				self.commandsInsideLoop[k].parent = self
-				self.commandsAll.push(self.commandsInsideLoop[k].shallowClone())
-			}
-			self.commandsAll[pos].exec(f)
+		for (var k=0; k<self.root.commands.length; k++) {
+			var pos = i*self.root.commands.length + k
+			if (rebuild)
+				self.commandsAll[pos] = self.root.commands[k].shallowClone(self)
+			
+//			if (self.commandsAll.length <= pos) {
+//				self.commandsAll.push(
+//					self.root.commands[k].shallowClone(self)
+//				)
+//			}
+			self.commandsAll[pos].exec(callerF)
 		}
 	}
 }
@@ -806,74 +1122,76 @@ Loop.prototype.removeFromMainSVG = function() {
 	var self = this
 	for (var i=0; i<self.commandsAll.length; i++)
 		self.commandsAll[i].removeFromMainSVG()
-	for (var i=0; i<self.iconGs.length; i++)
+	for (var i=0; i<self.iconGsMainSVG.length; i++)
 		self.iconGsMainSVG[i].remove()
 	self.iconGsMainSVG = []
 }
 
 
 
+function FunctionCall(func) {
+	var self = this
+	self.setUpReferences(FunctionCall)
+	self.f = func
+	console.assert(self.f !== undefined)
+	self.commands = []
+	self.icon
+	self.iconMainSVG
+}
+FunctionCall.prototype = new Command()
 
-
-function correctRadius(r) {
-	var isPositive = r > 0
-	var divIsUneven = Math.floor(Math.abs(r / Math.PI)) % 2 === 1
-	// into bounds
-	r = r % Math.PI
+FunctionCall.prototype.exec = function(callerF) {
+	var self = this
+	if (self.savedState === undefined)
+		self.savedState = callerF.state.clone()
+	console.assert(self.root.f !== undefined && functions.indexOf(self.root.f) !== -1)
+	if (self.commands.length === 0) {
+		for (var i=0; i<self.root.f.commands.length; i++) {
+			self.commands.push(self.root.f.commands[i].shallowClone(self))
+		}
+	}
+	if (self.icon === undefined) {
+		// is not displayed in the preview
+	}
+	if (self.iconMainSVG === undefined && callerF === F_) {
+		self.iconMainSVG = mainSVG.paintingG.append("text")
+			.style(textStyle).text("ƒ"+self.root.f.name)
+			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
+	}
 	
-	// it overshot into the opposite 180°
-	if (divIsUneven)
-		r = (isPositive ? -1 : 1)* Math.PI + r
-	console.assert(r >= -Math.PI && r <= Math.PI)
-	return r
-}
-
-function openSVG() {
-	var svg = document.getElementById("turtleSVG")
-	window.open("data:image/svg+xml," + encodeURIComponent(
-	// http://stackoverflow.com/questions/1700870/how-do-i-do-outerhtml-in-firefox
-		svg.outerHTML || new XMLSerializer().serializeToString(svg)
-	))
-}
-
-function updateKeyDownAndUp(keyCode, down) {
-	var bodySelected = document.activeElement.nodeName === "BODY"
-	switch (keyCode) {
-		case keyMap.d:
-			if (bodySelected) {
-				if (down && !keyPressed.d) {
-					drawPreviewLine()
-				}
-				if (!down && keyPressed.d) {
-					removePreviewLine()
-					F_.updateTurtle()
-					mainSVG.updateTurtle()
-				}
-			}
-			keyPressed.d = down
-			break
-		case keyMap.s:
-			keyPressed.s = down
-			if (bodySelected)
-				openSVG()
-			break
-		case keyMap.e: keyPressed.e = down; break
-		case keyMap.f: keyPressed.f = down; break
-		case keyMap.g: keyPressed.g = down; break
-		case keyMap["+"]: keyPressed["+"] = down; break
-		case keyMap["-"]: keyPressed["-"] = down; break
-		case keyMap.p: keyPressed.p = down; break
-		case keyMap.del:
-			if (bodySelected)
-				if (down && !keyPressed.del)
-					selection.removeAll()
-			keyPressed.del = down
-			break
-		default:
-//			console.log("key fell through: "+keyCode)
-			break
+	for (var i=0; i<self.commands.length; i++) {
+		self.commands[i].exec(callerF)
 	}
 }
+
+FunctionCall.prototype.select = function() {
+}
+
+FunctionCall.prototype.deselect = function() {
+}
+
+FunctionCall.prototype.remove = function() {
+	var self = this
+	for (var i=0; i<self.commands.length; i++)
+		self.commands[i].remove()
+	if (self.icon !== undefined)
+		self.icon.remove()
+	self.icon = undefined
+	self.removeFromMainSVG()
+}
+
+FunctionCall.prototype.removeFromMainSVG = function() {
+	var self = this
+	for (var i=0; i<self.commands.length; i++)
+		self.commands[i].removeFromMainSVG()
+	if (self.iconMainSVG !== undefined)
+		self.iconMainSVG.remove()
+	self.iconMainSVG = undefined
+}
+
+
+
+
 
 return ma
 }()
