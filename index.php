@@ -24,7 +24,13 @@
 	</div>
 	<div id="border"></div>
 	<div id="turtleSVGcontainer">
-		<svg id="turtleSVG"></svg>
+		<svg id="turtleSVG">
+<!--		    <foreignObject x="0" y="0" width="100" height="50" transform="translate(-5,-5) scale(0.1)">
+				<body xmlns="http://www.w3.org/1999/xhtml">
+					<input type="text"/>
+				</body>
+			</foreignObject>-->
+		</svg>
 		<p id="notification" class="opacity0"></p>
 	</div>
 	

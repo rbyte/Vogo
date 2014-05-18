@@ -181,3 +181,19 @@ button::-moz-focus-inner {
 /*input { transition: color 50ms ease-in-out; }*/
 .inputInEditState { color: #777 }
 .inputInWrongState { color: #f55 !important }
+.hide { display: none;}
+svg {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+foreignObject {
+	border: 1px solid #f00;
+}
+foreignObject input {
+	border: 0 none;
+	background-color: rgba(0,0,0,0.1);
+}

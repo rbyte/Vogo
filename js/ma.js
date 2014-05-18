@@ -33,8 +33,8 @@ var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px",
 var zoomFactor = 1.3
 var loopClockRadius = 1.3
 var rotationArcRadius = 6
+// TODO delete
 var drawLoopInPreview = false
-var drawRotationInPreview = false
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
@@ -51,16 +51,18 @@ var mousePressed = {}
 for (var m in mouseMap)
 	mousePressed[mouseMap[m]] = false
 function updateKeyDownAndUp(keyCode, down) {
-	var key = keyMap[keyCode]
-	if (key) {
-		var currentDown = keyPressed[key]
-		keyPressed[key] = down
-		if (down && !currentDown && onKeyDown[key])
-			onKeyDown[key]()
-		if (!down && currentDown && onKeyUp[key])
-			onKeyUp[key]()
-	} else {
-		console.log(keyCode+" not in keymap.")
+	if (document.activeElement.nodeName !== "INPUT") {
+		var key = keyMap[keyCode]
+		if (key) {
+			var currentDown = keyPressed[key]
+			keyPressed[key] = down
+			if (down && !currentDown && onKeyDown[key])
+				onKeyDown[key]()
+			if (!down && currentDown && onKeyUp[key])
+				onKeyUp[key]()
+		} else {
+			console.log(keyCode+" not in keymap.")
+		}
 	}
 }
 
@@ -267,22 +269,22 @@ function setup() {
 		// TODO needed?
 		mousePosPrevious = mousePos
 		mousePos = d3.mouse(this)
-		if (manipulation.isCreatingCheck(Move))
+		if (manipulation.isCreating(Move))
 			manipulation.update(Move)
-		if (manipulation.isCreatingCheck(Rotate))
+		if (manipulation.isCreating(Rotate))
 			manipulation.update(Rotate)
     })
 	
 	mainSVG.svg.on("click", function (d, i) {
 //		mousePos = d3.mouse(this)
 		console.assert(d3.mouse(this)[0]-mousePos[0] === 0)
-		if (manipulation.isCreatingCheck(Move)) {
+		if (manipulation.isCreating(Move)) {
 			if (keyPressed.d) {
 				manipulation.create(Move)
 			} else {
 				manipulation.finish(Move)
 			}
-		} else if (manipulation.isCreatingCheck(Rotate)) {
+		} else if (manipulation.isCreating(Rotate)) {
 			if (keyPressed.r) {
 				manipulation.create(Rotate)
 			} else {
@@ -565,27 +567,17 @@ Function.prototype.setStateTo = function(idx) {
 
 
 var manipulation = {
-	isCreatingMove: false,
-	isCreatingRotation: false
+	insertedCommand: false
 }
 
-manipulation.isCreating = function(cmdType, value) {
-	if (cmdType === Move)
-		this.isCreatingMove = value
-	if (cmdType === Rotate)
-		this.isCreatingRotation = value
-}
-
-manipulation.isCreatingCheck = function(cmdType) {
-	return (
-			(cmdType === undefined && (this.isCreatingMove || this.isCreatingRotation))
-		||	(cmdType === Move && this.isCreatingMove)
-		||	(cmdType === Rotate && this.isCreatingRotation)
-	)
+manipulation.isCreating = function(cmdType) {
+	return cmdType === undefined
+		? this.insertedCommand !== false
+		: this.insertedCommand instanceof cmdType
 }
 
 manipulation.create = function(cmdType) {
-	if (this.isCreatingCheck(cmdType)) {
+	if (this.isCreating(cmdType)) {
 		this.finish(cmdType)
 		this.createPreview(cmdType)
 	} else {
@@ -595,8 +587,7 @@ manipulation.create = function(cmdType) {
 }
 
 manipulation.createPreview = function(cmdType) {
-	console.assert(!this.isCreatingCheck(cmdType))
-	this.isCreating(cmdType, true)
+	console.assert(!this.isCreating(cmdType))
 	if (selection.isEmpty()) {
 		this.insertedCommand = new cmdType()
 		this.insertedCommand.scope = F_
@@ -618,10 +609,10 @@ manipulation.createPreview = function(cmdType) {
 }
 
 manipulation.update = function(cmdType) {
-	if (this.isCreatingCheck(cmdType)) {
+	if (this.isCreating(cmdType)) {
 		F_.state = this.savedState.clone()
 		if (cmdType === Move)
-			this.insertedCommand.lineLength = getLineLengthTo(mousePos)
+			this.insertedCommand.lineLength = getLineLengthToWithoutChangingDirection(mousePos)
 		else if (cmdType === Rotate)
 			this.insertedCommand.angle = rotateAngleTo(mousePos)
 		else
@@ -643,20 +634,20 @@ manipulation.update = function(cmdType) {
 }
 
 manipulation.finish = function(cmdType) {
-	console.assert(this.isCreatingCheck(cmdType))
+	console.assert(this.isCreating(cmdType))
 	this.update(cmdType)
-	this.isCreating(cmdType, false)
+	this.insertedCommand = false
 }
 
 manipulation.remove = function(cmdType) {
-	console.assert(this.isCreatingCheck(cmdType))
-	this.isCreating(cmdType, false)
-//	F_.state = this.savedState.clone()
+	console.assert(this.isCreating(cmdType))
 	
 	var idx = this.insertedCommand.scope.commands.indexOf(this.insertedCommand)
 	this.insertedCommand.scope.commands.splice(idx, 1)
 	this.insertedCommand.remove()
+	this.insertedCommand = false
 	if (selection.isEmpty()) {
+		F_.state = this.savedState.clone()
 		F_.updateTurtle()
 		mainSVG.updateTurtle()
 	} else {
@@ -665,6 +656,12 @@ manipulation.remove = function(cmdType) {
 }
 
 
+
+function rotateAngleTo(mousePos) {
+	var dx = mousePos[0] - F_.state.x
+	var dy = mousePos[1] - F_.state.y
+	return getAngleDeltaTo(dx, dy)
+}
 
 function getAngleDeltaTo(dx, dy, r) {
 	return correctRadius(Math.atan2(dy, dx) + Math.PI/2 - (r === undefined ? F_.state.r : r))
@@ -676,10 +673,22 @@ function getLineLengthTo(mousePos) {
 	return Math.sqrt(dx*dx + dy*dy)
 }
 
-function rotateAngleTo(mousePos) {
-	var dx = mousePos[0] - F_.state.x
-	var dy = mousePos[1] - F_.state.y
-	return getAngleDeltaTo(dx, dy)
+function getLineLengthToWithoutChangingDirection(mousePos) {
+	var ra = rotateAngleTo(mousePos)
+	return (ra > Math.PI/2 || ra < Math.PI/2 ? 1 : -1) * Math.cos(ra) * getLineLengthTo(mousePos)
+}
+
+function correctRadius(r) {
+	var isPositive = r > 0
+	var divIsUneven = Math.floor(Math.abs(r / Math.PI)) % 2 === 1
+	// into bounds
+	r = r % Math.PI
+	
+	// it overshot into the opposite 180°
+	if (divIsUneven)
+		r = (isPositive ? -1 : 1)* Math.PI + r
+	console.assert(r >= -Math.PI && r <= Math.PI)
+	return r
 }
 
 function hideNotification() {
@@ -699,19 +708,6 @@ function updateNotification(text, displayTime) {
 	d3.select("#notification").text(text)
 }
 
-function correctRadius(r) {
-	var isPositive = r > 0
-	var divIsUneven = Math.floor(Math.abs(r / Math.PI)) % 2 === 1
-	// into bounds
-	r = r % Math.PI
-	
-	// it overshot into the opposite 180°
-	if (divIsUneven)
-		r = (isPositive ? -1 : 1)* Math.PI + r
-	console.assert(r >= -Math.PI && r <= Math.PI)
-	return r
-}
-
 function openSVG() {
 	var svg = document.getElementById("turtleSVG")
 	window.open("data:image/svg+xml," + encodeURIComponent(
@@ -720,17 +716,22 @@ function openSVG() {
 	))
 }
 
+function isRegularNumber(n) {
+	// typeof n == "number" not needed
+	return !isNaN(n) && isFinite(n)
+}
+
 function bodyIsSelected() {
 	return document.activeElement.nodeName === "BODY"
 }
 
 onKeyDown.d = function() {
-	if (bodyIsSelected())
+	if (bodyIsSelected() && !manipulation.isCreating())
 		manipulation.createPreview(Move)
 }
 
 onKeyDown.r = function() {
-	if (bodyIsSelected())
+	if (bodyIsSelected() && !manipulation.isCreating())
 		manipulation.createPreview(Rotate)
 }
 
@@ -745,9 +746,9 @@ onKeyDown.del = function() {
 }
 
 onKeyDown.esc = function() {
-	if (manipulation.isCreatingCheck(Move))
+	if (manipulation.isCreating(Move))
 		manipulation.remove(Move)
-	if (manipulation.isCreatingCheck(Rotate))
+	if (manipulation.isCreating(Rotate))
 		manipulation.remove(Rotate)
 }
 
@@ -821,9 +822,8 @@ Move.prototype = new Command()
 
 Move.prototype.exec = function(callerF) {
 	var self = this
-	console.assert(self.root.lineLength)
-	if (self.savedState === undefined)
-		self.savedState = callerF.state.clone()
+	console.assert(isRegularNumber(self.root.lineLength))
+	self.savedState = callerF.state.clone()
 	var x1 = callerF.state.x
 	var y1 = callerF.state.y
 	callerF.state.x += Math.sin(callerF.state.r) * self.root.lineLength
@@ -884,18 +884,17 @@ function Rotate(angle) {
 	var self = this
 	self.setUpReferences(Rotate)
 	self.angle = angle
+	// both are just in the mainSVG
+	// -> Rotate is not explicitly visualised in the preview
 	self.arc
 	self.label
-	self.arcMainSVG
-	self.labelMainSVG
 }
 Rotate.prototype = new Command()
 
 Rotate.prototype.exec = function(callerF) {
 	var self = this
-	console.assert(self.root.angle)
-	if (self.savedState === undefined)
-		self.savedState = callerF.state.clone()
+	console.assert(isRegularNumber(self.root.angle))
+	self.savedState = callerF.state.clone()
 	var dragStartState
 	
 	var arc = d3.svg.arc()
@@ -905,21 +904,21 @@ Rotate.prototype.exec = function(callerF) {
 		.endAngle(callerF.state.r + self.root.angle)
 	callerF.state.addRadius(self.root.angle)
 	
-	if (self.arcMainSVG === undefined && callerF === F_) {
-		self.arcMainSVG = mainSVG.paintingG.append("path").style(arcStyle)
-		self.arcMainSVG.on("mouseenter", function (d, i) {
-			if (!dragInProgress && !manipulation.isCreatingCheck(Rotate))
-				self.arcMainSVG.style({fill: "#f00"})
+	if (self.arc === undefined && callerF === F_) {
+		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
+		self.arc.on("mouseenter", function (d, i) {
+			if (!dragInProgress && !manipulation.isCreating(Rotate))
+				self.arc.style({fill: "#f00"})
 		})
-		self.arcMainSVG.on("mouseleave", function (d, i) {
-			self.arcMainSVG.style(arcStyle)
+		self.arc.on("mouseleave", function (d, i) {
+			self.arc.style(arcStyle)
 		})
-		self.arcMainSVG.on("click", function (d, i) {
+		self.arc.on("click", function (d, i) {
 			self.select()
 			// to prevent click on background
 			d3.event.stopPropagation()
 		})
-		self.arcMainSVG.call(d3.behavior.drag()
+		self.arc.call(d3.behavior.drag()
 			.on("dragstart", function (d) {
 				dragInProgress = true
 				self.select()
@@ -943,50 +942,61 @@ Rotate.prototype.exec = function(callerF) {
 			})
 		)
 	}
-	if (self.arc === undefined && drawRotationInPreview)
-		self.arc = callerF.paintingG.append("path").style(arcStyle)
-	if (self.label === undefined && drawRotationInPreview)
-		self.label = callerF.paintingG.append("text").style(textStyle)
-	if (self.labelMainSVG === undefined && callerF === F_)
-		self.labelMainSVG = mainSVG.paintingG.append("text").style(textStyle)
 	
-	var dir = correctRadius(callerF.state.r - self.root.angle/2)
-	var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * .6
-	var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * .6 + .5 // vertical alignment
-	
-	var arcs = []
-	var labels = []
-	if (drawRotationInPreview) {
-		arcs.push(self.arc)
-		labels.push(self.label)
+	if (self.label === undefined) {
+		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
+		self.label = mainSVG.paintingG.append("foreignObject")
+			.attr("width", 200).attr("height", 25).attr("x", 0).attr("y", 0)
+		self.labelinput = self.label
+			.append("xhtml:body")
+			.append("xhtml:input").attr("type", "text").attr("value", "text")
+		self.label.on("click", function() {
+			console.log("hi!: "+document.activeElement.nodeName === "INPUT")
+			d3.event.stopPropagation()
+		})
 	}
+	
+	self.label.classed("hide", selection.e !== self
+		&& manipulation.insertedCommand !== self.root)
+	
 	if (callerF === F_) {
-		arcs.push(self.arcMainSVG)
-		labels.push(self.labelMainSVG)
-	}
-	
-	for (var lN in labels)
-		labels[lN].text(Math.round(self.root.angle/Math.PI*180))
-			.attr("transform", "translate("+x+","+y+")")
-	for (var aN in arcs)
-		arcs[aN].attr("d", arc)
+		var dir = correctRadius(callerF.state.r - self.root.angle/2)
+		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
+		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 + .5 // vertical alignment
+		var labelText = Math.round(self.root.angle/Math.PI*180)+"°"
+		// .text(labelText)
+		self.label
+			.attr("transform", "translate("+x+","+y+") scale(0.1)")
+		self.labelinput.property("value", labelText)
+
+		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
+	}
 }
 
 Rotate.prototype.select = function() {
 	var self = this
 	selection.add(self)
-	if (self.arcMainSVG !== undefined)
-		self.arcMainSVG.classed("selected", true)
+	if (self.label !== undefined)
+		self.label.classed("hide", false)
+	if (self.arc !== undefined)
+		self.arc.classed("selected", true)
 }
 
 Rotate.prototype.deselect = function() {
 	var self = this
-	if (self.arcMainSVG !== undefined)
-		self.arcMainSVG.classed("selected", false)
+	if (self.label !== undefined)
+		self.label.classed("hide", true)
+	if (self.arc !== undefined)
+		self.arc.classed("selected", false)
 }
 
 Rotate.prototype.remove = function() {
+	var self = this
+	self.removeFromMainSVG()
+}
+
+Rotate.prototype.removeFromMainSVG = function() {
 	var self = this
 	self.deselect()
 	if (self.arc !== undefined)
@@ -995,17 +1005,6 @@ Rotate.prototype.remove = function() {
 	if (self.label !== undefined)
 		self.label.remove()
 	self.label = undefined
-	self.removeFromMainSVG()
-}
-
-Rotate.prototype.removeFromMainSVG = function() {
-	var self = this
-	if (self.arcMainSVG !== undefined)
-		self.arcMainSVG.remove()
-	self.arcMainSVG = undefined
-	if (self.labelMainSVG !== undefined)
-		self.labelMainSVG.remove()
-	self.labelMainSVG = undefined
 }
 
 
@@ -1028,10 +1027,9 @@ Loop.prototype = new Command()
 
 Loop.prototype.exec = function(callerF) {
 	var self = this
+	self.savedState = callerF.state.clone()
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius*Math.pow(0.7, self.refDepthOfSameType+1)
-	if (self.savedState === undefined)
-		self.savedState = callerF.state.clone()
 	
 	function createIcon(iconG) {
 		if (i === 0) {
@@ -1090,12 +1088,6 @@ Loop.prototype.exec = function(callerF) {
 			var pos = i*self.root.commands.length + k
 			if (rebuild)
 				self.commandsAll[pos] = self.root.commands[k].shallowClone(self)
-			
-//			if (self.commandsAll.length <= pos) {
-//				self.commandsAll.push(
-//					self.root.commands[k].shallowClone(self)
-//				)
-//			}
 			self.commandsAll[pos].exec(callerF)
 		}
 	}
@@ -1142,8 +1134,7 @@ FunctionCall.prototype = new Command()
 
 FunctionCall.prototype.exec = function(callerF) {
 	var self = this
-	if (self.savedState === undefined)
-		self.savedState = callerF.state.clone()
+	self.savedState = callerF.state.clone()
 	console.assert(self.root.f !== undefined && functions.indexOf(self.root.f) !== -1)
 	if (self.commands.length === 0) {
 		for (var i=0; i<self.root.f.commands.length; i++) {
