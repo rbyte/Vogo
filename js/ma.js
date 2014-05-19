@@ -31,6 +31,7 @@ var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
 
 var zoomFactor = 1.3
+var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 6
 // TODO delete
@@ -38,7 +39,7 @@ var drawLoopInPreview = false
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
-var keyMap = { 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r", 107: "+", 109: "-", 80: "p", 46: "del", 27: "esc" }
+var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r", 107: "+", 109: "-", 80: "p", 46: "del", 27: "esc" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -112,7 +113,8 @@ ma.init = function() {
 	F_ = new Function()
 	functions.push(F_)
 	F_.svgContainer.classed("fSVGselected", true)
-//	F_.addArgument("someArg", 5)
+	F_.addArgument(5)
+	
 //	F_.setCommands([])
 	
 //	F_.setCommands([
@@ -129,7 +131,7 @@ ma.init = function() {
 //	])
 	F_.setCommands([
 		new Rotate(1),
-		new Move(10),
+		new Move("a*2"),
 		new Loop(3, [
 			new Rotate(-0.5),
 			new Move(7)
@@ -237,8 +239,8 @@ function setup() {
 		F_.svgViewboxWidth += xDelta
 		F_.svgViewboxHeight += yDelta
 		
-		F_.updateViewbox()
-		mainSVG.updateViewbox()
+		F_.updateViewbox("afterZoom")
+		mainSVG.updateViewbox("afterZoom")
 		d3.event = null
 	}
 	
@@ -406,14 +408,20 @@ Function.prototype.updateTurtle = function() {
 	self.turtleCursor.attr("transform", "translate("+self.state.x+", "+self.state.y+") rotate("+(self.state.r/Math.PI*180)+")")
 }
 
-MainSVG.prototype.updateViewbox = function() {
-	console.assert(F_ !== undefined && !isNaN(F_.svgViewboxX) && !isNaN(F_.svgViewboxY)
-		&& F_.svgViewboxWidth > 0 && F_.svgViewboxHeight > 0)
-	this.svg.attr("viewBox", F_.svgViewboxX+" "+F_.svgViewboxY+" "
-		+F_.svgViewboxWidth+" "+F_.svgViewboxHeight)
+function updateViewboxFor(obj, ref, afterZoom) {
+	console.assert(ref !== undefined && !isNaN(ref.svgViewboxX) && !isNaN(ref.svgViewboxY)
+		&& ref.svgViewboxWidth > 0 && ref.svgViewboxHeight > 0)
+	function applyTransition() {
+		return afterZoom === undefined ? obj : obj.transition().duration(zoomTransitionDuration)
+	}
+	applyTransition(obj).attr("viewBox", ref.svgViewboxX+" "+ref.svgViewboxY+" "+ref.svgViewboxWidth+" "+ref.svgViewboxHeight)
 }
 
-Function.prototype.updateViewbox = function() {
+MainSVG.prototype.updateViewbox = function(afterZoom) {
+	updateViewboxFor(this.svg, F_, afterZoom)
+}
+
+Function.prototype.updateViewbox = function(afterZoom) {
 	var self = this
 		// [0][0] gets the dom element
 	// the preview svg aspect ratio is coupled to the main svg
@@ -431,7 +439,8 @@ Function.prototype.updateViewbox = function() {
 		self.svgViewboxX = -self.svgViewboxWidth/2
 	if (self.svgViewboxY === undefined)
 		self.svgViewboxY = -self.svgViewboxHeight/2
-	self.svg.attr("viewBox", self.svgViewboxX+" "+self.svgViewboxY+" "+self.svgViewboxWidth+" "+self.svgViewboxHeight)
+	
+	updateViewboxFor(self.svg, self, afterZoom)
 }
 
 Function.prototype.checkName = function(newName) {
@@ -454,21 +463,21 @@ Function.prototype.checkName = function(newName) {
 	return true
 }
 
+Function.prototype.searchForName = function(charCodeStart, range, checkFunction, s, depth) {
+	if (depth === 0)
+		return (checkFunction(s) ? s : false)
+	for (var i=0; i<range; i++) {
+		var r = this.searchForName(charCodeStart, range, checkFunction, s + String.fromCharCode(charCodeStart+i), depth-1)
+		if (r !== false)
+			return r
+	}
+	return this.searchForName(charCodeStart, range, checkFunction, s, depth+1)
+}
+
 Function.prototype.setName = function(newName) {
 	var self = this
-	function search(s, depth) {
-		if (depth === 0)
-			return (self.checkName(s) ? s : false)
-		for (var i=0; i<26; i++) {
-			// greek alphabet: 945 is α
-			var r = search(s + String.fromCharCode(945+i), depth-1)
-			if (r !== false)
-				return r
-		}
-		return search(s, depth+1)
-	}
 	if (newName === undefined) {
-		newName = search("", 1)
+		newName = self.searchForName(945/*=α*/, 26/*=ω*/, function (s) { return self.checkName(s) }, "", 1)
 	}
 	
 	var r = self.checkName(newName)
@@ -480,15 +489,52 @@ Function.prototype.setName = function(newName) {
 	return r
 }
 
-Function.prototype.addArgument = function(argName, defaultValue) {
-	for (var name in this.args)
-		if (name === argName) {
+Function.prototype.checkArgumentName = function(newName) {
+	var regEx = /^[a-zA-Z][a-zA-Z0-9]*$/
+	if (!newName.match(regEx)) {
+		updateNotification("The argument name has to be alphanumeric and start with a letter: "+regEx)
+		return false
+	}
+	// check for duplicates
+	for (var name in this.args) {
+		if (name === newName) {
 			updateNotification("Argument name duplication.")
-			return
+			return false
 		}
+	}
+	hideNotification()
+	return true
+}
+
+Function.prototype.addArgument = function(defaultValue, argName) {
+	var self = this
+	if (argName === undefined)
+		argName = self.searchForName(97/*=a*/, 26/*=z*/, function (s) { return self.checkArgumentName(s) }, "", 1)
 	
-	this.args[argName] = defaultValue
-	this.ul_args.append("li").text(argName).append("span").text(":"+defaultValue)
+	var r = self.checkArgumentName(argName)
+	if (r)
+		this.args[argName] = defaultValue
+	this.ul_args.append("li").text(argName+"=")//.append("span").text("="+defaultValue)
+		.append("input")
+		.attr("class", "f_name")
+		.attr("type", "text")
+		.on("blur", function() {
+			self.args[argName] = this.value
+			run()
+		})
+		.on("keypress", function() {
+			if (d3.event.keyCode === /*enter*/ 13) {
+				self.args[argName] = this.value
+				run()
+			}
+		})
+		.on("input", function() {
+			
+		})
+		.property("value", defaultValue)
+	
+	
+	return r ? argName : false
 }
 
 Function.prototype.setCommands = function(commands) {
@@ -612,9 +658,9 @@ manipulation.update = function(cmdType) {
 	if (this.isCreating(cmdType)) {
 		F_.state = this.savedState.clone()
 		if (cmdType === Move)
-			this.insertedCommand.lineLength = getLineLengthToWithoutChangingDirection(mousePos)
+			this.insertedCommand.setMainParameter(getLineLengthToWithoutChangingDirection(mousePos))
 		else if (cmdType === Rotate)
-			this.insertedCommand.angle = rotateAngleTo(mousePos)
+			this.insertedCommand.setMainParameter(rotateAngleTo(mousePos))
 		else
 			console.assert(false)
 		
@@ -752,7 +798,61 @@ onKeyDown.esc = function() {
 		manipulation.remove(Rotate)
 }
 
+onKeyDown.a = function() {
+	if (!selection.isEmpty()) {
+		var argName = F_.addArgument(selection.e.getMainParameter())
+		selection.e.setMainParameter(argName)
+		run()
+	}
+}
 
+function ArithmeticExpression(exp) {
+	this.set(exp)
+}
+
+ArithmeticExpression.prototype.set = function(exp) {
+	this.exp = exp
+}
+
+ArithmeticExpression.prototype.get = function() {
+	return this.exp
+}
+
+ArithmeticExpression.prototype.eval = function(functionContext) {
+	var self = this
+	// TODO speed up further. caching? but what if the fContext changes?
+	if (typeof self.exp == "number")
+		return self.exp
+	console.assert(self.exp !== undefined, "ArithmeticExpression eval: Warning: exp is undefined!")
+	console.assert(functionContext !== undefined, "ArithmeticExpression eval: Warning: functionContext is undefined!")
+	var shortCut = functionContext.args[self.exp]
+	if (shortCut !== undefined) // if exp is just a variable
+		return shortCut
+	
+	// construct function that has all the arguments for expression eval
+	var selfXuwforgjd6 = self
+	var func = "(function("
+	var argsCount = 0
+	for (var arg in functionContext.args)
+		argsCount++
+	var i = 0
+	for (var arg in functionContext.args)
+		func += arg+(++i < argsCount ? ", " : "")
+	func +=") { return eval(selfXuwforgjd6.exp) })("
+	i = 0
+	for (var arg in functionContext.args)
+		func += "functionContext.args[\""+arg+"\"]"+(++i < argsCount ? ", " : "")
+	func +=")"
+	
+//	console.log(func)
+	
+	try {
+		return eval(func)
+	} catch(e) {
+		console.log(e)
+		return 1
+	}
+}
 
 
 
@@ -792,6 +892,21 @@ Command.prototype.setUpReferences = function(constructor) {
 	self.savedState
 }
 
+Command.prototype.setMainParameter = function(x) {
+	var self = this
+	self.root.mainParameter = new ArithmeticExpression(x)
+}
+
+Command.prototype.getMainParameter = function(callerF) {
+	var self = this
+	if (callerF === undefined)
+		callerF = self.scope
+	console.assert(self.root.mainParameter instanceof ArithmeticExpression)
+	var mainParameter = self.root.mainParameter.eval(callerF)
+	console.assert(isRegularNumber(mainParameter))
+	return mainParameter
+}
+
 Command.prototype.shallowClone = function(scope) {
 	var self = this
 	// this should be the same, but breaks ... I dont know why
@@ -814,7 +929,7 @@ Command.prototype.shallowClone = function(scope) {
 function Move(lineLength) {
 	var self = this
 	self.setUpReferences(Move)
-	self.lineLength = lineLength
+	self.setMainParameter(lineLength)
 	self.line
 	self.lineMainSVG
 }
@@ -822,12 +937,13 @@ Move.prototype = new Command()
 
 Move.prototype.exec = function(callerF) {
 	var self = this
-	console.assert(isRegularNumber(self.root.lineLength))
+	var lineLength = self.getMainParameter(callerF)
+	
 	self.savedState = callerF.state.clone()
 	var x1 = callerF.state.x
 	var y1 = callerF.state.y
-	callerF.state.x += Math.sin(callerF.state.r) * self.root.lineLength
-	callerF.state.y -= Math.cos(callerF.state.r) * self.root.lineLength
+	callerF.state.x += Math.sin(callerF.state.r) * lineLength
+	callerF.state.y -= Math.cos(callerF.state.r) * lineLength
 	var x2 = callerF.state.x
 	var y2 = callerF.state.y
 	if (self.line === undefined) {
@@ -883,7 +999,7 @@ Move.prototype.removeFromMainSVG = function() {
 function Rotate(angle) {
 	var self = this
 	self.setUpReferences(Rotate)
-	self.angle = angle
+	self.setMainParameter(angle)
 	// both are just in the mainSVG
 	// -> Rotate is not explicitly visualised in the preview
 	self.arc
@@ -893,7 +1009,7 @@ Rotate.prototype = new Command()
 
 Rotate.prototype.exec = function(callerF) {
 	var self = this
-	console.assert(isRegularNumber(self.root.angle))
+	var angle = self.getMainParameter(callerF)
 	self.savedState = callerF.state.clone()
 	var dragStartState
 	
@@ -901,8 +1017,8 @@ Rotate.prototype.exec = function(callerF) {
 		.innerRadius(0)
 		.outerRadius(rotationArcRadius)
 		.startAngle(callerF.state.r)
-		.endAngle(callerF.state.r + self.root.angle)
-	callerF.state.addRadius(self.root.angle)
+		.endAngle(callerF.state.r + angle)
+	callerF.state.addRadius(angle)
 	
 	if (self.arc === undefined && callerF === F_) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
@@ -933,7 +1049,7 @@ Rotate.prototype.exec = function(callerF) {
 				var dx = x-dragStartState.x
 				var dy = y-dragStartState.y
 				var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
-				self.root.angle = angleDelta
+				self.setMainParameter(angleDelta)
 				run()
 			})
 			.on("dragend", function (d) {
@@ -947,27 +1063,41 @@ Rotate.prototype.exec = function(callerF) {
 		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
 		self.label = mainSVG.paintingG.append("foreignObject")
 			.attr("width", 200).attr("height", 25).attr("x", 0).attr("y", 0)
-		self.labelinput = self.label
+		self.labelInput = self.label
 			.append("xhtml:body")
 			.append("xhtml:input").attr("type", "text").attr("value", "text")
 		self.label.on("click", function() {
-			console.log("hi!: "+document.activeElement.nodeName === "INPUT")
 			d3.event.stopPropagation()
 		})
+//		self.labelInput.on("blur", function() {
+//			self.setName(this.value)
+//		})
+		self.labelInput.on("keypress", function() {
+			if (d3.event.keyCode === /*enter*/ 13) {
+				// TODO
+				self.setMainParameter(this.value)
+				run()
+			}
+		})
+//		self.labelInput.on("input", function() {
+//			self.nameInput.classed({"inputInEditState": true})
+//			self.checkName(this.value)
+//		})
+		
 	}
 	
 	self.label.classed("hide", selection.e !== self
 		&& manipulation.insertedCommand !== self.root)
 	
 	if (callerF === F_) {
-		var dir = correctRadius(callerF.state.r - self.root.angle/2)
+		var dir = correctRadius(callerF.state.r - angle/2)
 		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
 		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 + .5 // vertical alignment
-		var labelText = Math.round(self.root.angle/Math.PI*180)+"°"
+		var labelText = self.root.mainParameter.get()+"="+Math.round(angle/Math.PI*180)+"°"
 		// .text(labelText)
 		self.label
 			.attr("transform", "translate("+x+","+y+") scale(0.1)")
-		self.labelinput.property("value", labelText)
+		self.labelInput.property("value", labelText)
 
 		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
@@ -1013,7 +1143,7 @@ Rotate.prototype.removeFromMainSVG = function() {
 function Loop(numberOfRepetitions, commands) {
 	var self = this
 	self.setUpReferences(Loop)
-	self.numberOfRepetitions = numberOfRepetitions
+	self.setMainParameter(numberOfRepetitions)
 	self.commands = commands
 	for (var i=0; i<self.commands.length; i++)
 		self.commands[i].scope = self
@@ -1027,13 +1157,14 @@ Loop.prototype = new Command()
 
 Loop.prototype.exec = function(callerF) {
 	var self = this
+	var numberOfRepetitions = self.getMainParameter(callerF)
 	self.savedState = callerF.state.clone()
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius*Math.pow(0.7, self.refDepthOfSameType+1)
 	
 	function createIcon(iconG) {
 		if (i === 0) {
-			iconG.append("text").style(textStyle).text(self.root.numberOfRepetitions)
+			iconG.append("text").style(textStyle).text(numberOfRepetitions)
 				.attr("transform", "translate("+0+","+(-loopClockRadiusUsed*1.3)+")")
 		}
 		
@@ -1041,7 +1172,7 @@ Loop.prototype.exec = function(callerF) {
 			.innerRadius(0)
 			.outerRadius(loopClockRadiusUsed)
 			.startAngle(0)
-			.endAngle(Math.PI*2/self.root.numberOfRepetitions*(i+1))
+			.endAngle(Math.PI*2/numberOfRepetitions*(i+1))
 		iconG.append("path")
 			.attr("d", arc)
 			.style(clockHandStyle)
@@ -1051,14 +1182,14 @@ Loop.prototype.exec = function(callerF) {
 			.style(clockStyle)
 	}
 	
-	var rebuild = self.commandsAll.length !== self.root.numberOfRepetitions * self.root.commands.length
+	var rebuild = self.commandsAll.length !== numberOfRepetitions * self.root.commands.length
 	if (rebuild) {
 		for (var k=0; k<self.commandsAll.length; k++)
 			self.commandsAll[k].remove()
 		self.commandsAll = []
 	}
 	
-	for (var i=0; i<self.root.numberOfRepetitions; i++) {
+	for (var i=0; i<numberOfRepetitions; i++) {
 		if (self.iconGs.length <= i && drawLoopInPreview) {
 			var iconG = callerF.paintingG.append("g")
 			self.iconGs.push(iconG)

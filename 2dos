@@ -32,6 +32,7 @@ Collision-Free Text positioning
 snapping
 constraint solving
 
+pointer to hand for dragging canvas
 How can the program flow be visualised (stepping through)?
 	Map a parameter to space (show multiple "shadow instances" of it)
 how is recursion handled? (max-depth?) (variable boundaries?)
