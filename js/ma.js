@@ -513,25 +513,98 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 	
 	var r = self.checkArgumentName(argName)
 	if (r)
-		this.args[argName] = defaultValue
-	this.ul_args.append("li").text(argName+"=")//.append("span").text("="+defaultValue)
+		self.args[argName] = defaultValue
+	
+	function onChange(value) {
+		console.assert(typeof value == "string")
+		if (value === "") {
+			// delete argument
+		}
+		
+		var regEx = /^([a-zA-Z][a-zA-Z0-9]*)=(.+)$/
+		var match = regEx.exec(value)
+		if (match !== null) { // match success
+			var newArgName = match[1]
+			var newValue = match[2]
+			if (argName !== newArgName) {
+				// rename all occurences
+				argName = newArgName
+			}
+			
+			if (isRegularNumber(newValue)) {
+				self.args[newArgName] = parseFloat(newValue)
+				run()
+			} else {
+				// eval
+				// e.g. for arrays
+				// did the type change? dependencies?
+			}
+			
+		} else {
+			
+			// restore field
+		}
+		
+	}
+	
+	var dragStartMouseX
+	var numberOfDigitsAfterComma
+	var originalValue
+	
+	var inputField = this.ul_args.append("li")
 		.append("input")
 		.attr("class", "f_name")
 		.attr("type", "text")
 		.on("blur", function() {
-			self.args[argName] = this.value
-			run()
+			onChange(this.value)
 		})
 		.on("keypress", function() {
 			if (d3.event.keyCode === /*enter*/ 13) {
-				self.args[argName] = this.value
-				run()
+				onChange(this.value)
 			}
 		})
 		.on("input", function() {
 			
 		})
-		.property("value", defaultValue)
+		.call(d3.behavior.drag()
+			.on("dragstart", function (d) {
+				dragStartMouseX = d3.mouse(this)[0]
+				originalValue = self.args[argName]
+				this.blur()
+				if (isRegularNumber(self.args[argName])) {
+					var match = /^-?([0-9]*)\.?([0-9]*)$/.exec(self.args[argName].toString())
+					// match[0] is original string, [1] is part before comma and [2] after
+					if (match !== null) {
+						numberOfDigitsAfterComma = match[2].length
+						if (numberOfDigitsAfterComma === 0)
+							numberOfDigitsAfterComma = -match[1].length+1
+					} else {
+						console.log("drag: warning: args value does not match regex for number")
+					}
+				} else {
+					// could be an array
+				}
+			})
+			.on("drag", function (d) {
+				if (isRegularNumber(self.args[argName])) {
+					var mouseDiff = dragStartMouseX - d3.mouse(this)[0]
+					// the number of digits after the comma influenced how much the number changes on drag
+					// 20.01 will only change slightly, whereas 100 will change rapidly
+					mouseDiff /= 10 /*feels good value*/ * Math.pow(10, numberOfDigitsAfterComma)
+
+					mouseDiff = parseFloat(mouseDiff.toFixed(Math.max(0,numberOfDigitsAfterComma)))
+					if (self.args[argName] !== originalValue+mouseDiff) {
+						self.args[argName] = originalValue+mouseDiff
+						inputField.property("value", argName+"="+self.args[argName].toFixed(Math.max(0,numberOfDigitsAfterComma)))
+						run()
+					}
+				}
+			})
+			.on("dragend", function (d) {
+				
+			})
+		)
+		.property("value", argName+"="+defaultValue)
 	
 	
 	return r ? argName : false
@@ -763,8 +836,9 @@ function openSVG() {
 }
 
 function isRegularNumber(n) {
+	// http://stackoverflow.com/questions/18082/validate-decimal-numbers-in-javascript-isnumeric
 	// typeof n == "number" not needed
-	return !isNaN(n) && isFinite(n)
+	return !isNaN(parseFloat(n)) && isFinite(n)
 }
 
 function bodyIsSelected() {
