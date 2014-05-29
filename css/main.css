@@ -47,11 +47,9 @@ body {
 	/*shape-rendering: crispEdges;*/
 	vector-effect: non-scaling-stroke;
 }
-.lineSelected {
+.lineSelected, .loopSelected {
 	stroke: #f00 !important;
 }
-
-
 #functions #ul_f {
 	list-style: none;
 	margin: 7% 7% 3% 7%;
@@ -147,6 +145,11 @@ button::-moz-focus-inner {
 	width: 100%;
 	box-sizing: border-box; /*http://stackoverflow.com/questions/17175038/css-dynamic-length-text-input-field-and-submit-button-in-one-row*/
 }
+#functions .f_argument {
+	border: 0 none;
+	background-color: transparent;
+	width: 100%;
+}
 #functions .f_remove {
 	/*float: right;*/
     padding: 0px 5px 2px 5px;
@@ -190,10 +193,13 @@ svg {
 	-ms-user-select: none;
 	user-select: none;
 }
-foreignObject {
-	border: 1px solid #f00;
-}
-foreignObject input {
+/*foreignObject input -> does not work. no idea why.*/
+svg input {
 	border: 0 none;
-	background-color: rgba(0,0,0,0.1);
+	background-color: rgba(0,0,0,0.05);
+	border-radius: 4px;
+	transition: background-color 300ms ease-in-out;
+}
+svg input:focus {
+	background-color: rgba(255,0,0,0.1);
 }

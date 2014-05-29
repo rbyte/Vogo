@@ -26,7 +26,7 @@ var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "s
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
 var lineStyle = {stroke: "#000", "stroke-width": ".25", "stroke-linecap": "round"}
 var arcStyle = {fill: "#000", "fill-opacity": 0.1}
-var clockStyle = {fill: "none", stroke: "#777", "stroke-width": ".05"}
+var clockStyle = {fill: "#fff", "fill-opacity": 0.01 /*for clickability*/, stroke: "#777", "stroke-width": ".05"}
 var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
 
@@ -34,12 +34,10 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 6
-// TODO delete
-var drawLoopInPreview = false
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
-var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r", 107: "+", 109: "-", 80: "p", 46: "del", 27: "esc" }
+var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r", 107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -100,9 +98,10 @@ var selection = {
 	removeAll: function() {
 		if (!selection.isEmpty()) {
 			selection.e.deselect()
-			// TODO splice from commands (what is its f?)
 			selection.e.removeFromMainSVG()
+			selection.e.removeCommand()
 			selection.e = undefined
+			run()
 		}
 	}
 }
@@ -548,12 +547,12 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 	}
 	
 	var dragStartMouseX
-	var numberOfDigitsAfterComma
+	var dragPrecision
 	var originalValue
 	
 	var inputField = this.ul_args.append("li")
 		.append("input")
-		.attr("class", "f_name")
+		.attr("class", "f_argument")
 		.attr("type", "text")
 		.on("blur", function() {
 			onChange(this.value)
@@ -572,30 +571,23 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 				originalValue = self.args[argName]
 				this.blur()
 				if (isRegularNumber(self.args[argName])) {
-					var match = /^-?([0-9]*)\.?([0-9]*)$/.exec(self.args[argName].toString())
-					// match[0] is original string, [1] is part before comma and [2] after
-					if (match !== null) {
-						numberOfDigitsAfterComma = match[2].length
-						if (numberOfDigitsAfterComma === 0)
-							numberOfDigitsAfterComma = -match[1].length+1
-					} else {
-						console.log("drag: warning: args value does not match regex for number")
-					}
+					dragPrecision = getPrecision(self.args[argName])
 				} else {
 					// could be an array
 				}
 			})
 			.on("drag", function (d) {
 				if (isRegularNumber(self.args[argName])) {
-					var mouseDiff = dragStartMouseX - d3.mouse(this)[0]
-					// the number of digits after the comma influenced how much the number changes on drag
+					var mouseDiff = d3.mouse(this)[0] - dragStartMouseX
+					// the number of digits after the comma influences how much the number changes on drag
 					// 20.01 will only change slightly, whereas 100 will change rapidly
-					mouseDiff /= 10 /*feels good value*/ * Math.pow(10, numberOfDigitsAfterComma)
-
-					mouseDiff = parseFloat(mouseDiff.toFixed(Math.max(0,numberOfDigitsAfterComma)))
+					mouseDiff *= .1 /*feels good value*/ * Math.pow(10, dragPrecision)
+					// small Bug: the order of magnitude changes unexpectedly in the next drag,
+					// if the value is left of ending with .xy0, because the 0 is forgotten
+					mouseDiff = parseFloat(mouseDiff.toFixed(Math.max(0, -dragPrecision)))
 					if (self.args[argName] !== originalValue+mouseDiff) {
 						self.args[argName] = originalValue+mouseDiff
-						inputField.property("value", argName+"="+self.args[argName].toFixed(Math.max(0,numberOfDigitsAfterComma)))
+						inputField.property("value", argName+"="+self.args[argName].toFixed(Math.max(0, -dragPrecision)))
 						run()
 					}
 				}
@@ -714,15 +706,15 @@ manipulation.createPreview = function(cmdType) {
 		F_.commands.push(this.insertedCommand)
 	} else {
 		var sScope = selection.e.root.scope
-//		console.assert(sScope === F_)
-		var cmdSelIdx = sScope.commands.indexOf(selection.e.root)
-		console.assert(cmdSelIdx != -1)
+//		console.assert(sScope instanceof Function)
+		var cmdsRef = sScope instanceof Loop ? sScope.commandsInLoop : sScope.commands
+		var cmdSelIdx = cmdsRef.indexOf(selection.e.root)
+		console.assert(cmdSelIdx !== -1)
 //		this.savedState = sScope.commands[cmdSelIdx].savedState.clone()
 		this.savedState = selection.e.savedState.clone()
 		this.insertedCommand = new cmdType()
 		this.insertedCommand.scope = sScope
-		console.assert(sScope instanceof Loop)
-		sScope.commands.splice(cmdSelIdx, 0, this.insertedCommand)
+		cmdsRef.splice(cmdSelIdx, 0, this.insertedCommand)
 	}
 	this.update(cmdType)
 }
@@ -731,9 +723,9 @@ manipulation.update = function(cmdType) {
 	if (this.isCreating(cmdType)) {
 		F_.state = this.savedState.clone()
 		if (cmdType === Move)
-			this.insertedCommand.setMainParameter(getLineLengthToWithoutChangingDirection(mousePos))
+			this.insertedCommand.setMainParameter(parseFloat(getLineLengthToWithoutChangingDirection(mousePos).toFixed(2)))
 		else if (cmdType === Rotate)
-			this.insertedCommand.setMainParameter(rotateAngleTo(mousePos))
+			this.insertedCommand.setMainParameter(parseFloat(rotateAngleTo(mousePos).toFixed(3)))
 		else
 			console.assert(false)
 		
@@ -841,8 +833,39 @@ function isRegularNumber(n) {
 	return !isNaN(parseFloat(n)) && isFinite(n)
 }
 
+// this is used to determine the precision of the interactive drag-adjustment for numbers
+// this is similar to "get order of magnitude"
+// getPrecision(100) === 2
+// getPrecision(.01) === -2
+// BUT: getPrecision(100.01) === -2 (intended output)
+function getPrecision(n) {
+	var match = /^-?([0-9]*)\.?([0-9]*)$/.exec(n.toString())
+	if (match !== null) {
+		// match[0] is original string, [1] is part before comma and [2] after
+		var precision = -match[2].length
+		if (precision === 0)
+			precision = match[1].length-1
+		return precision
+	} else {
+		console.log("getPrecision: warning: value does not match regex for number")
+	}
+}
+
 function bodyIsSelected() {
 	return document.activeElement.nodeName === "BODY"
+}
+
+function setTextOfInput(input, containingForeignObject, text) {
+	if (text === undefined)
+		text = input.property("value")
+	else
+		input.property("value", text)
+	input.attr("size", Math.max(1, text.toString().length))
+	if (!containingForeignObject.classed("hide")) {
+		var newWidth = input[0][0].offsetWidth
+		console.assert(newWidth > 0)
+		containingForeignObject.attr("width", newWidth+5)
+	}
 }
 
 onKeyDown.d = function() {
@@ -880,6 +903,20 @@ onKeyDown.a = function() {
 	}
 }
 
+onKeyDown.l = function() {
+	if (!selection.isEmpty()) {
+		var sScope = selection.e.root.scope
+		var cmdsRef = sScope instanceof Loop ? sScope.commandsInLoop : sScope.commands
+		var cmdSelIdx = cmdsRef.indexOf(selection.e.root)
+		console.assert(cmdSelIdx !== -1)
+		selection.e.root.removeCommand()
+		var loop = new Loop(2, [selection.e.root])
+		loop.scope = sScope
+		cmdsRef.splice(cmdSelIdx, 0, loop)
+		run()
+	}
+}
+
 function ArithmeticExpression(exp) {
 	this.set(exp)
 }
@@ -892,12 +929,16 @@ ArithmeticExpression.prototype.get = function() {
 	return this.exp
 }
 
+ArithmeticExpression.prototype.isConst = function() {
+	return typeof this.exp == "number"
+}
+
 ArithmeticExpression.prototype.eval = function(functionContext) {
 	var self = this
-	// TODO speed up further. caching? but what if the fContext changes?
-	if (typeof self.exp == "number")
-		return self.exp
 	console.assert(self.exp !== undefined, "ArithmeticExpression eval: Warning: exp is undefined!")
+	// TODO speed up further. caching? but what if the fContext changes?
+	if (self.isConst())
+		return self.exp
 	console.assert(functionContext !== undefined, "ArithmeticExpression eval: Warning: functionContext is undefined!")
 	var shortCut = functionContext.args[self.exp]
 	if (shortCut !== undefined) // if exp is just a variable
@@ -959,6 +1000,8 @@ function Command() {}
 Command.prototype.setUpReferences = function(constructor) {
 	var self = this
 	self.root = self
+	// each shallowCopy is a proxy (child) to the root
+	self.proxies
 	self.scope
 	self.scopeDepth = 0
 	self.refDepthOfSameType = 0
@@ -981,6 +1024,10 @@ Command.prototype.getMainParameter = function(callerF) {
 	return mainParameter
 }
 
+Command.prototype.getMainParameterExpression = function(callerF) {
+	// TODO
+}
+
 Command.prototype.shallowClone = function(scope) {
 	var self = this
 	// this should be the same, but breaks ... I dont know why
@@ -989,6 +1036,9 @@ Command.prototype.shallowClone = function(scope) {
 	// it is important to understand that there is a difference between the
 	// initiator of the clone (scope) and self (the context that called)
 	c.root = self.root
+	if (self.root.proxies === undefined)
+		self.root.proxies = []
+	self.root.proxies.push(c)
 	c.scope = scope
 	c.scopeDepth = scope.scopeDepth + 1
 	c.refDepthOfSameType = scope.refDepthOfSameType + (scope instanceof self.myConstructor ? 1 : 0)
@@ -996,9 +1046,46 @@ Command.prototype.shallowClone = function(scope) {
 		console.error("shallowClone scopeDepth to high. endless loop? aborting exec.")
 		c.exec = function() {}
 	}
-	
 	return c
 }
+
+Function.prototype.fromRemove = Command.prototype.fromRemove = function(cmd) {
+	var self = this
+	// self has to be able to contain commands
+	console.assert(self.commands !== undefined)
+	console.assert(cmd.scope === self)
+	console.assert(cmd.proxies === undefined)
+	for (var k=0; k<self.commands.length; k++) {
+		if (self.commands[k] === cmd) {
+			self.commands.splice(k, 1)
+			return // can only exist once
+		}
+	}
+	console.assert(self instanceof Loop)
+	for (var k=0; k<self.commandsInLoop.length; k++) {
+		if (self.commandsInLoop[k] === cmd) {
+			self.commandsInLoop.splice(k, 1)
+			// TODO if (self.commandsInLoop.length === 0) ...
+			return // can only exist once
+		}
+	}
+	console.assert(false, "removeFrom is expected to find cmd. "+self.commandsInLoop+", "+cmd)
+}
+
+Command.prototype.removeCommand = function() {
+	var root = this.root
+	if (root.proxies !== undefined) {
+		// "self" is in proxies
+		for (var i=0; i<root.proxies.length; i++) {
+			root.proxies[i].scope.fromRemove(root.proxies[i])
+			root.proxies[i].remove()
+		}
+		root.proxies = undefined
+	}
+	root.scope.fromRemove(root)
+	root.remove()
+}
+
 
 function Move(lineLength) {
 	var self = this
@@ -1006,6 +1093,7 @@ function Move(lineLength) {
 	self.setMainParameter(lineLength)
 	self.line
 	self.lineMainSVG
+	self.label
 }
 Move.prototype = new Command()
 
@@ -1031,9 +1119,45 @@ Move.prototype.exec = function(callerF) {
 			d3.event.stopPropagation()
 		})
 	}
+	if (self.label === undefined && callerF === F_) {
+		self.label = mainSVG.paintingG.append("foreignObject")
+			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
+			.on("click", function() {
+				d3.event.stopPropagation()
+			})
+		self.labelInput = self.label
+			.append("xhtml:body")
+			.append("xhtml:input")
+			.attr("type", "text")
+			.on("blur", function() {
+				
+			})
+			.on("keypress", function() {
+				if (d3.event.keyCode === /*enter*/ 13) {
+					// TODO
+					self.setMainParameter(this.value)
+					run()
+				}
+			})
+			.on("input", function() {
+				setTextOfInput(self.labelInput, self.label)
+			})
+	}
+	
+	
 	var lines = [self.line]
-	if (callerF === F_)
+	if (callerF === F_) {
 		lines.push(self.lineMainSVG)
+		self.label.classed("hide", selection.e !== self
+			&& manipulation.insertedCommand !== self.root
+			&& self.root.mainParameter.isConst())
+		
+		var dir = correctRadius(callerF.state.r)
+		var x = callerF.state.x + Math.sin(dir) * lineLength * -0.5
+		var y = callerF.state.y - Math.cos(dir) * lineLength * -0.5
+		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
+		setTextOfInput(self.labelInput, self.label, self.root.mainParameter.get())
+	}
 	for (var l in lines)
 		lines[l]
 			.attr("x1", x1).attr("y1", y1)
@@ -1045,12 +1169,18 @@ Move.prototype.select = function() {
 	selection.add(self)
 	if (self.lineMainSVG !== undefined)
 		self.lineMainSVG.classed("lineSelected", true)
+	if (self.label !== undefined) {
+		self.label.classed("hide", false)
+		setTextOfInput(self.labelInput, self.label)
+	}
 }
 
 Move.prototype.deselect = function() {
 	var self = this
 	if (self.lineMainSVG !== undefined)
 		self.lineMainSVG.classed("lineSelected", false)
+	if (self.label !== undefined)
+		self.label.classed("hide", true)
 }
 
 Move.prototype.remove = function() {
@@ -1065,6 +1195,9 @@ Move.prototype.removeFromMainSVG = function() {
 	var self = this
 	if (self.lineMainSVG !== undefined)
 		self.lineMainSVG.remove()
+	if (self.label !== undefined)
+		self.label.remove()
+	self.label = undefined
 	self.lineMainSVG = undefined
 }
 
@@ -1096,83 +1229,80 @@ Rotate.prototype.exec = function(callerF) {
 	
 	if (self.arc === undefined && callerF === F_) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
-		self.arc.on("mouseenter", function (d, i) {
-			if (!dragInProgress && !manipulation.isCreating(Rotate))
-				self.arc.style({fill: "#f00"})
-		})
-		self.arc.on("mouseleave", function (d, i) {
-			self.arc.style(arcStyle)
-		})
-		self.arc.on("click", function (d, i) {
-			self.select()
-			// to prevent click on background
-			d3.event.stopPropagation()
-		})
-		self.arc.call(d3.behavior.drag()
-			.on("dragstart", function (d) {
-				dragInProgress = true
+			.on("mouseenter", function (d, i) {
+				if (!dragInProgress && !manipulation.isCreating(Rotate))
+					self.arc.style({fill: "#f00"})
+			})
+			.on("mouseleave", function (d, i) {
+				self.arc.style(arcStyle)
+			})
+			.on("click", function (d, i) {
 				self.select()
-				dragStartState = self.savedState.clone()
-				d3.select(this).classed("dragging", true)
-				// to prevent drag on background
-				d3.event.sourceEvent.stopPropagation()
+				// to prevent click on background
+				d3.event.stopPropagation()
 			})
-			.on("drag", function (d) {
-				var x = d3.event.x
-				var y = d3.event.y
-				var dx = x-dragStartState.x
-				var dy = y-dragStartState.y
-				var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
-				self.setMainParameter(angleDelta)
-				run()
-			})
-			.on("dragend", function (d) {
-				dragInProgress = false
-				d3.select(this).classed("dragging", false)
-			})
+			.call(d3.behavior.drag()
+				.on("dragstart", function (d) {
+					dragInProgress = true
+					self.select()
+					dragStartState = self.savedState.clone()
+					d3.select(this).classed("dragging", true)
+					// to prevent drag on background
+					d3.event.sourceEvent.stopPropagation()
+				})
+				.on("drag", function (d) {
+					var x = d3.event.x
+					var y = d3.event.y
+					var dx = x-dragStartState.x
+					var dy = y-dragStartState.y
+					var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
+					self.setMainParameter(parseFloat(angleDelta.toFixed(3)))
+					run()
+				})
+				.on("dragend", function (d) {
+					dragInProgress = false
+					d3.select(this).classed("dragging", false)
+				})
 		)
 	}
 	
-	if (self.label === undefined) {
+	if (self.label === undefined && callerF === F_) {
 		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
 		self.label = mainSVG.paintingG.append("foreignObject")
-			.attr("width", 200).attr("height", 25).attr("x", 0).attr("y", 0)
+			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
+			.on("click", function() {
+				d3.event.stopPropagation()
+			})
 		self.labelInput = self.label
 			.append("xhtml:body")
-			.append("xhtml:input").attr("type", "text").attr("value", "text")
-		self.label.on("click", function() {
-			d3.event.stopPropagation()
-		})
-//		self.labelInput.on("blur", function() {
-//			self.setName(this.value)
-//		})
-		self.labelInput.on("keypress", function() {
-			if (d3.event.keyCode === /*enter*/ 13) {
-				// TODO
-				self.setMainParameter(this.value)
-				run()
-			}
-		})
-//		self.labelInput.on("input", function() {
-//			self.nameInput.classed({"inputInEditState": true})
-//			self.checkName(this.value)
-//		})
-		
+			.append("xhtml:input")
+			.attr("type", "text")
+			.on("blur", function() {
+				
+			})
+			.on("keypress", function() {
+				if (d3.event.keyCode === /*enter*/ 13) {
+					// TODO
+					self.setMainParameter(this.value)
+					run()
+				}
+			})
+			.on("input", function() {
+				setTextOfInput(self.labelInput, self.label)
+			})
 	}
 	
-	self.label.classed("hide", selection.e !== self
-		&& manipulation.insertedCommand !== self.root)
-	
 	if (callerF === F_) {
+		self.label.classed("hide", selection.e !== self
+			&& manipulation.insertedCommand !== self.root
+			&& self.root.mainParameter.isConst())
 		var dir = correctRadius(callerF.state.r - angle/2)
 		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
-		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 + .5 // vertical alignment
-		var labelText = self.root.mainParameter.get()+"="+Math.round(angle/Math.PI*180)+"°"
-		// .text(labelText)
-		self.label
-			.attr("transform", "translate("+x+","+y+") scale(0.1)")
-		self.labelInput.property("value", labelText)
-
+		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 - 1 // vertical alignment
+		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
+		setTextOfInput(self.labelInput, self.label, self.root.mainParameter.get())
+			//+"="+Math.round(angle/Math.PI*180)+"°"
+		
 		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
 	}
@@ -1181,8 +1311,10 @@ Rotate.prototype.exec = function(callerF) {
 Rotate.prototype.select = function() {
 	var self = this
 	selection.add(self)
-	if (self.label !== undefined)
+	if (self.label !== undefined) {
 		self.label.classed("hide", false)
+		setTextOfInput(self.labelInput, self.label)
+	}
 	if (self.arc !== undefined)
 		self.arc.classed("selected", true)
 }
@@ -1218,28 +1350,91 @@ function Loop(numberOfRepetitions, commands) {
 	var self = this
 	self.setUpReferences(Loop)
 	self.setMainParameter(numberOfRepetitions)
-	self.commands = commands
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].scope = self
+	self.commandsInLoop = commands
+	for (var i=0; i<self.commandsInLoop.length; i++)
+		self.commandsInLoop[i].scope = self
 	// "unfolded" loop
-	self.commandsAll = []
+	self.commands = []
 	// for all repetitions
 	self.iconGs = []
-	self.iconGsMainSVG = []
 }
 Loop.prototype = new Command()
 
 Loop.prototype.exec = function(callerF) {
 	var self = this
-	var numberOfRepetitions = self.getMainParameter(callerF)
+	var numberOfRepetitions = Math.floor(self.getMainParameter(callerF))
 	self.savedState = callerF.state.clone()
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius*Math.pow(0.7, self.refDepthOfSameType+1)
 	
-	function createIcon(iconG) {
+	function createIcon() {
+		var iconG = mainSVG.paintingG.append("g")
 		if (i === 0) {
-			iconG.append("text").style(textStyle).text(numberOfRepetitions)
-				.attr("transform", "translate("+0+","+(-loopClockRadiusUsed*1.3)+")")
+			var dragStartMouseX, originalValue
+			
+			iconG.fo = iconG.append("foreignObject")
+				.attr("width", 250 /*max-width*/).attr("height", 25).attr("x", 0).attr("y", 0)
+				.on("click", function() {
+					d3.event.stopPropagation()
+				})
+			
+			iconG.labelInput = iconG.fo.append("xhtml:body").append("xhtml:input")
+				.attr("type", "text")
+				.on("blur", function() {
+					// TODO setMainParameter
+					self.root.mainParameter.set(this.value)
+					run()
+				})
+				.on("keypress", function() {
+					if (d3.event.keyCode === /*enter*/ 13) {
+						self.root.mainParameter.set(this.value)
+						run()
+					}
+				})
+				.on("input", function() {
+					setTextOfInput(iconG.labelInput, iconG.fo)
+				})
+				.call(d3.behavior.drag()
+					.on("dragstart", function (d) {
+						dragStartMouseX = d3.mouse(this)[0]
+						originalValue = self.root.getMainParameter()
+						// drag is not called if this is not done:
+						d3.event.sourceEvent.stopPropagation()
+					})
+					.on("drag", function (d) {
+						// TODO if main parameter is not simple constant ...
+						var mouseDiff = d3.mouse(this)[0] - dragStartMouseX
+						mouseDiff *= .1 /*feels good value*/
+						mouseDiff = parseFloat(mouseDiff.toFixed(0))
+						var nv = Math.max(1, originalValue+mouseDiff)
+						if (self.root.getMainParameter() !== nv) {
+							self.root.setMainParameter(nv)
+							iconG.labelInput.property("value", nv.toFixed(0))
+							run()
+						}
+					})
+					.on("dragend", function (d) {
+
+					})
+				)
+		}
+
+		iconG.clockHand = iconG.append("path").style(clockHandStyle)
+		iconG.circleF = iconG.append("circle").style(clockStyle)
+			.attr("cx", 0).attr("cy", 0)
+		iconG.on("click", function () {
+			self.select(i)
+			// to prevent click on background
+			d3.event.stopPropagation()
+		})
+		return iconG
+	}
+	
+	function updateIcon(iconG) {
+		if (i === 0) {
+			iconG.fo
+				.attr("transform", "translate("+(loopClockRadiusUsed*1.1)+","+(-loopClockRadiusUsed*1.3)+") scale(0.1)")
+			setTextOfInput(iconG.labelInput, iconG.fo, self.root.mainParameter.get())
 		}
 		
 		var arc = d3.svg.arc()
@@ -1247,81 +1442,79 @@ Loop.prototype.exec = function(callerF) {
 			.outerRadius(loopClockRadiusUsed)
 			.startAngle(0)
 			.endAngle(Math.PI*2/numberOfRepetitions*(i+1))
-		iconG.append("path")
+		iconG.clockHand
 			.attr("d", arc)
-			.style(clockHandStyle)
-
-		iconG.append("circle")
-			.attr("cx", 0).attr("cy", 0).attr("r", loopClockRadiusUsed)
-			.style(clockStyle)
+		iconG.circleF
+			.attr("r", loopClockRadiusUsed)
+			
 	}
 	
-	var rebuild = self.commandsAll.length !== numberOfRepetitions * self.root.commands.length
+	var rebuild = self.commands.length !== numberOfRepetitions * self.root.commandsInLoop.length
 	if (rebuild) {
-		for (var k=0; k<self.commandsAll.length; k++)
-			self.commandsAll[k].remove()
-		self.commandsAll = []
+		for (var k=0; k<self.commands.length; k++)
+			self.commands[k].remove()
+		self.commands = []
+		if (callerF === F_)
+			if (numberOfRepetitions < self.iconGs.length) { // remove dangling
+				for (var k=numberOfRepetitions; k<self.iconGs.length; k++)
+					self.iconGs[k].remove()
+				self.iconGs.splice(numberOfRepetitions, self.iconGs.length-numberOfRepetitions)
+			} else {
+				for (var i=self.iconGs.length; i<numberOfRepetitions; i++)
+					self.iconGs.push(createIcon())
+			}
 	}
 	
 	for (var i=0; i<numberOfRepetitions; i++) {
-		if (self.iconGs.length <= i && drawLoopInPreview) {
-			var iconG = callerF.paintingG.append("g")
-			self.iconGs.push(iconG)
-			createIcon(iconG)
-		}
-		
-		if (self.iconGsMainSVG.length <= i && callerF === F_) {
-			var iconG = mainSVG.paintingG.append("g")
-			self.iconGsMainSVG.push(iconG)
-			createIcon(iconG)
-		}
-		
 		// TODO consider line-in and -out diretion for angle
 		// place center away from current position in 90° angle to current heading
 		var dir = correctRadius(callerF.state.r + Math.PI/2)
 		var cx = callerF.state.x + Math.sin(dir) * loopClockRadius * 1.4
 		var cy = callerF.state.y - Math.cos(dir) * loopClockRadius * 1.4
-		var iconGsL = []
-		if (drawLoopInPreview)
-			iconGsL.push(self.iconGs[i])
-		if (callerF === F_)
-			iconGsL.push(self.iconGsMainSVG[i])
-		for (var iL in iconGsL)
-			iconGsL[iL].attr("transform", "translate("+cx+","+cy+")")
+		if (callerF === F_) {
+			updateIcon(self.iconGs[i])
+			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
+			self.iconGs[i].circleF.classed("loopSelected", !selection.isEmpty() && selection.e.root === self.root)
+		}
 		
-		for (var k=0; k<self.root.commands.length; k++) {
-			var pos = i*self.root.commands.length + k
+		for (var k=0; k<self.root.commandsInLoop.length; k++) {
+			var pos = i*self.root.commandsInLoop.length + k
 			if (rebuild)
-				self.commandsAll[pos] = self.root.commands[k].shallowClone(self)
-			self.commandsAll[pos].exec(callerF)
+				self.commands[pos] = self.root.commandsInLoop[k].shallowClone(self)
+			self.commands[pos].exec(callerF)
 		}
 	}
 }
 
-Loop.prototype.select = function() {
+Loop.prototype.select = function(i) {
+	var self = this
+	for (var k=0; k<self.iconGs.length; k++)
+		// TODO if i===k
+		self.iconGs[k].circleF.classed("loopSelected", true)
+	selection.add(self)
 }
 
 Loop.prototype.deselect = function() {
+	var self = this
+	for (var k=0; k<self.iconGs.length; k++)
+		self.iconGs[k].circleF.classed("loopSelected", false)
 }
 
 Loop.prototype.remove = function() {
 	var self = this
 //	self.deselect()
-	for (var i=0; i<self.commandsAll.length; i++)
-		self.commandsAll[i].remove()
-	for (var i=0; i<self.iconGs.length; i++)
-		self.iconGs[i].remove()
-	self.iconGs = []
+	for (var i=0; i<self.commands.length; i++)
+		self.commands[i].remove()
 	self.removeFromMainSVG()
 }
 
 Loop.prototype.removeFromMainSVG = function() {
 	var self = this
-	for (var i=0; i<self.commandsAll.length; i++)
-		self.commandsAll[i].removeFromMainSVG()
-	for (var i=0; i<self.iconGsMainSVG.length; i++)
-		self.iconGsMainSVG[i].remove()
-	self.iconGsMainSVG = []
+	for (var i=0; i<self.commands.length; i++)
+		self.commands[i].removeFromMainSVG()
+	for (var i=0; i<self.iconGs.length; i++)
+		self.iconGs[i].remove()
+	self.iconGs = []
 }
 
 
