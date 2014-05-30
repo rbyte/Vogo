@@ -34,10 +34,13 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 6
+// this determines the default zoom level
+var defaultSvgViewboxHeight = 100
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
-var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r", 107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l" }
+var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
+	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -70,7 +73,7 @@ var functions = []
 // the function that is currently selected
 var F_
 
-var functionPanelSizePercentOfBodyWidth = 0.2
+var functionPanelSizePercentOfBodyWidth = 0.18
 var lastNotificationUpdateTime
 var dragInProgress = false
 var mousePos = [0,0]
@@ -79,30 +82,39 @@ var mousePosPrevious = [0,0]
 
 
 var selection = {
-	e: undefined,
-	add: function(elem) {
-		if (!selection.isEmpty()) {
-			selection.e.deselect()
-		}
-		selection.e = elem
+	e: [],
+	add: function(x) {
+		if (!keyPressed.shift)
+			this.deselectAll()
+		// else accumulate
+		this.e.push(x)
+	},
+	contains: function(x) {
+		return this.e.indexOf(x) !== -1
+	},
+	containsAsRoot: function(x) {
+		for (var i=0; i<this.e.length; i++)
+			if (this.e[i].root === x)
+				return true
+		return false
 	},
 	isEmpty: function() {
-		return selection.e === undefined
+		return this.e.length === 0
 	},
 	deselectAll: function() {
-		if (!selection.isEmpty()) {
-			selection.e.deselect()
-			selection.e = undefined
-		}
+		var detach = this.e
+		this.e = []
+		for (var i=0; i<detach.length; i++)
+			detach[i].deselect()
+		return detach
 	},
 	removeAll: function() {
-		if (!selection.isEmpty()) {
-			selection.e.deselect()
-			selection.e.removeFromMainSVG()
-			selection.e.removeCommand()
-			selection.e = undefined
-			run()
+		var detach = this.deselectAll()
+		for (var i=0; i<detach.length; i++) {
+			detach[i].removeFromMainSVG()
+			detach[i].removeCommand()
 		}
+		return detach
 	}
 }
 
@@ -112,9 +124,6 @@ ma.init = function() {
 	F_ = new Function()
 	functions.push(F_)
 	F_.svgContainer.classed("fSVGselected", true)
-	F_.addArgument(5)
-	
-//	F_.setCommands([])
 	
 //	F_.setCommands([
 //		new Rotate(1),
@@ -128,20 +137,16 @@ ma.init = function() {
 //			])
 //		])
 //	])
-	F_.setCommands([
-		new Rotate(1),
-		new Move("a*2"),
-		new Loop(3, [
-			new Rotate(-0.5),
-			new Move(7)
-		])
-	])
 	
-	d3.select("#f_addNew").on("click", function() {
-		var f = new Function()
-		functions.push(f)
-		f.switchTo()
-	})
+//	F_.addArgument(5)
+//	F_.setCommands([
+//		new Rotate(1),
+//		new Move("a*2"),
+//		new Loop(3, [
+//			new Rotate(-0.5),
+//			new Move(7)
+//		])
+//	])
 	
 	setup()
 	run()
@@ -206,6 +211,12 @@ function MainSVG() {
 }
 
 function setup() {
+	d3.select("#f_addNew").on("click", function() {
+		var f = new Function()
+		functions.push(f)
+		f.switchTo()
+	})
+	
 	var domSvg = document.getElementById("turtleSVG")
 	
 	window.onresize = function(event) {
@@ -332,7 +343,7 @@ function Function(name) {
 	self.state = new State()
 	
 	self.svgViewboxWidth
-	self.svgViewboxHeight = 100 // fix on startup
+	self.svgViewboxHeight = defaultSvgViewboxHeight // fix on startup
 	self.svgViewboxX
 	self.svgViewboxY
 	self.svgWidth
@@ -410,6 +421,7 @@ Function.prototype.updateTurtle = function() {
 function updateViewboxFor(obj, ref, afterZoom) {
 	console.assert(ref !== undefined && !isNaN(ref.svgViewboxX) && !isNaN(ref.svgViewboxY)
 		&& ref.svgViewboxWidth > 0 && ref.svgViewboxHeight > 0)
+	console.assert(isFinite(ref.svgViewboxX) && isFinite(ref.svgViewboxY) && isFinite(ref.svgViewboxWidth) && isFinite(ref.svgViewboxHeight))
 	function applyTransition() {
 		return afterZoom === undefined ? obj : obj.transition().duration(zoomTransitionDuration)
 	}
@@ -428,7 +440,14 @@ Function.prototype.updateViewbox = function(afterZoom) {
 	self.svgHeight = self.svgWidth * mainSVG.svgHeight/mainSVG.svgWidth
 	self.svgContainer.style({height: self.svgHeight+"px"})
 	
-	console.assert(self.svgWidth > 0 && self.svgViewboxHeight > 0 && mainSVG.svgWidth > 0 && mainSVG.svgHeight > 0)
+//	console.assert(self.svgWidth > 0 && self.svgViewboxHeight > 0 && mainSVG.svgWidth > 0 && mainSVG.svgHeight > 0)
+//	console.log(self.svgWidth+","+self.svgViewboxHeight+","+mainSVG.svgWidth+","+mainSVG.svgHeight)
+	console.assert(self.svgWidth > 0)
+	console.assert(self.svgViewboxHeight > 0)
+	console.assert(mainSVG.svgWidth > 0)
+	// there have be instances (occuring when resizing the window), when this failed
+	console.assert(mainSVG.svgHeight > 0)
+	
 	// keep height stable and center (on startup to 0,0)
 	var svgViewboxWidthPrevious = self.svgViewboxWidth
 	self.svgViewboxWidth = self.svgViewboxHeight * mainSVG.svgWidth/mainSVG.svgHeight
@@ -631,6 +650,10 @@ Function.prototype.switchTo = function() {
 	F_.updateViewbox()
 	mainSVG.updateViewbox()
 	run()
+//	document.body.focus()
+	// this sets the active element back to body, which is required for drawing
+	document.activeElement.blur()
+//	console.assert(bodyIsSelected())
 }
 
 Function.prototype.remove = function() {
@@ -705,13 +728,14 @@ manipulation.createPreview = function(cmdType) {
 		this.savedState = F_.state.clone()
 		F_.commands.push(this.insertedCommand)
 	} else {
-		var sScope = selection.e.root.scope
+		var selectedElem = selection.e[0]
+		var sScope = selectedElem.root.scope
 //		console.assert(sScope instanceof Function)
 		var cmdsRef = sScope instanceof Loop ? sScope.commandsInLoop : sScope.commands
-		var cmdSelIdx = cmdsRef.indexOf(selection.e.root)
+		var cmdSelIdx = cmdsRef.indexOf(selectedElem.root)
 		console.assert(cmdSelIdx !== -1)
 //		this.savedState = sScope.commands[cmdSelIdx].savedState.clone()
-		this.savedState = selection.e.savedState.clone()
+		this.savedState = selectedElem.savedState.clone()
 		this.insertedCommand = new cmdType()
 		this.insertedCommand.scope = sScope
 		cmdsRef.splice(cmdSelIdx, 0, this.insertedCommand)
@@ -747,7 +771,9 @@ manipulation.update = function(cmdType) {
 manipulation.finish = function(cmdType) {
 	console.assert(this.isCreating(cmdType))
 	this.update(cmdType)
+	var ic = this.insertedCommand
 	this.insertedCommand = false
+	updateLabelVisibility(ic)
 }
 
 manipulation.remove = function(cmdType) {
@@ -884,8 +910,10 @@ onKeyDown.s = function() {
 }
 
 onKeyDown.del = function() {
-	if (bodyIsSelected())
+	if (bodyIsSelected()) {
 		selection.removeAll()
+		run()
+	}
 }
 
 onKeyDown.esc = function() {
@@ -897,23 +925,44 @@ onKeyDown.esc = function() {
 
 onKeyDown.a = function() {
 	if (!selection.isEmpty()) {
-		var argName = F_.addArgument(selection.e.getMainParameter())
-		selection.e.setMainParameter(argName)
+		var argName = F_.addArgument(selection.e[0].getMainParameter())
+		selection.e[0].setMainParameter(argName)
 		run()
 	}
 }
 
-onKeyDown.l = function() {
+onKeyDown.l = function() { // create loop containing selection
 	if (!selection.isEmpty()) {
-		var sScope = selection.e.root.scope
-		var cmdsRef = sScope instanceof Loop ? sScope.commandsInLoop : sScope.commands
-		var cmdSelIdx = cmdsRef.indexOf(selection.e.root)
-		console.assert(cmdSelIdx !== -1)
-		selection.e.root.removeCommand()
-		var loop = new Loop(2, [selection.e.root])
-		loop.scope = sScope
-		cmdsRef.splice(cmdSelIdx, 0, loop)
+		var selectedElem = selection.e[0].root
+		var scope = selectedElem.scope
+		var cmdsRef = scope instanceof Loop ? scope.commandsInLoop : scope.commands
+		var idxArr = []
+		for (var i=0; i<selection.e.length; i++) {
+			if (i !== 0 && scope !== selection.e[i].root.scope) {
+				updateNotification("Can only loop elements from the same scope.", 5000)
+				return
+			}
+			idxArr.push(cmdsRef.indexOf(selection.e[i].root))
+		}
+		idxArr.sort(function(a,b) {return a - b})
+		// check whether idxArr has form [x, x+1, x+2, ... ]
+		var first = idxArr[0]
+		var cmdList = []
+		for (var i=0; i<idxArr.length; i++) {
+			if (i !== 0 && idxArr[i] !== first+i && first !== -1) {
+				updateNotification("Can only loop connected elements.", 5000)
+				return
+			}
+			// create new connections
+			cmdList.push(cmdsRef[idxArr[i]])
+		}
+		selection.removeAll()
+		var loop = new Loop(2, cmdList)
+		loop.scope = scope
+		cmdsRef.splice(first, 0, loop)
 		run()
+	} else {
+		updateNotification("Select something to loop.", 5000)
 	}
 }
 
@@ -922,6 +971,8 @@ function ArithmeticExpression(exp) {
 }
 
 ArithmeticExpression.prototype.set = function(exp) {
+	if (typeof exp == "string" && isRegularNumber(exp))
+		exp = parseFloat(exp)
 	this.exp = exp
 }
 
@@ -1086,6 +1137,16 @@ Command.prototype.removeCommand = function() {
 	root.remove()
 }
 
+Command.prototype.removeProxyConnection = function() {
+	var self = this
+	if (self.root !== self) {
+		console.assert(self.root.proxies.length > 0)
+		var idx = self.root.proxies.indexOf(self)
+		console.assert(idx !== -1)
+		self.root.proxies.splice(idx, 1)
+	}
+	return self
+}
 
 function Move(lineLength) {
 	var self = this
@@ -1114,9 +1175,11 @@ Move.prototype.exec = function(callerF) {
 	if (self.lineMainSVG === undefined && callerF === F_) {
 		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
 		self.lineMainSVG.on("click", function(d, i) {
-			self.select()
-			// to prevent click on background
-			d3.event.stopPropagation()
+			if (!manipulation.isCreating()) {
+				self.select()
+				// to prevent click on background
+				d3.event.stopPropagation()
+			}
 		})
 	}
 	if (self.label === undefined && callerF === F_) {
@@ -1148,10 +1211,7 @@ Move.prototype.exec = function(callerF) {
 	var lines = [self.line]
 	if (callerF === F_) {
 		lines.push(self.lineMainSVG)
-		self.label.classed("hide", selection.e !== self
-			&& manipulation.insertedCommand !== self.root
-			&& self.root.mainParameter.isConst())
-		
+		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r)
 		var x = callerF.state.x + Math.sin(dir) * lineLength * -0.5
 		var y = callerF.state.y - Math.cos(dir) * lineLength * -0.5
@@ -1177,10 +1237,9 @@ Move.prototype.select = function() {
 
 Move.prototype.deselect = function() {
 	var self = this
+	updateLabelVisibility(self)
 	if (self.lineMainSVG !== undefined)
 		self.lineMainSVG.classed("lineSelected", false)
-	if (self.label !== undefined)
-		self.label.classed("hide", true)
 }
 
 Move.prototype.remove = function() {
@@ -1216,7 +1275,7 @@ Rotate.prototype = new Command()
 
 Rotate.prototype.exec = function(callerF) {
 	var self = this
-	var angle = self.getMainParameter(callerF)
+	var angle = correctRadius(self.getMainParameter(callerF))
 	self.savedState = callerF.state.clone()
 	var dragStartState
 	
@@ -1237,14 +1296,15 @@ Rotate.prototype.exec = function(callerF) {
 				self.arc.style(arcStyle)
 			})
 			.on("click", function (d, i) {
-				self.select()
-				// to prevent click on background
-				d3.event.stopPropagation()
+				if (!manipulation.isCreating()) {
+					self.select()
+					// to prevent click on background
+					d3.event.stopPropagation()
+				}
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
 					dragInProgress = true
-					self.select()
 					dragStartState = self.savedState.clone()
 					d3.select(this).classed("dragging", true)
 					// to prevent drag on background
@@ -1293,9 +1353,7 @@ Rotate.prototype.exec = function(callerF) {
 	}
 	
 	if (callerF === F_) {
-		self.label.classed("hide", selection.e !== self
-			&& manipulation.insertedCommand !== self.root
-			&& self.root.mainParameter.isConst())
+		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r - angle/2)
 		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
 		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 - 1 // vertical alignment
@@ -1306,6 +1364,13 @@ Rotate.prototype.exec = function(callerF) {
 		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
 	}
+}
+
+function updateLabelVisibility(self) {
+	if (self.label !== undefined)
+		self.label.classed("hide", !selection.contains(self)
+			&& manipulation.insertedCommand !== self.root
+			&& self.root.mainParameter.isConst())
 }
 
 Rotate.prototype.select = function() {
@@ -1321,8 +1386,7 @@ Rotate.prototype.select = function() {
 
 Rotate.prototype.deselect = function() {
 	var self = this
-	if (self.label !== undefined)
-		self.label.classed("hide", true)
+	updateLabelVisibility(self)
 	if (self.arc !== undefined)
 		self.arc.classed("selected", false)
 }
@@ -1350,7 +1414,7 @@ function Loop(numberOfRepetitions, commands) {
 	var self = this
 	self.setUpReferences(Loop)
 	self.setMainParameter(numberOfRepetitions)
-	self.commandsInLoop = commands
+	self.commandsInLoop = commands === undefined ? [] : commands
 	for (var i=0; i<self.commandsInLoop.length; i++)
 		self.commandsInLoop[i].scope = self
 	// "unfolded" loop
@@ -1423,9 +1487,11 @@ Loop.prototype.exec = function(callerF) {
 		iconG.circleF = iconG.append("circle").style(clockStyle)
 			.attr("cx", 0).attr("cy", 0)
 		iconG.on("click", function () {
-			self.select(i)
-			// to prevent click on background
-			d3.event.stopPropagation()
+			if (!manipulation.isCreating()) {
+				self.select(i)
+				// to prevent click on background
+				d3.event.stopPropagation()
+			}
 		})
 		return iconG
 	}
@@ -1450,9 +1516,12 @@ Loop.prototype.exec = function(callerF) {
 	}
 	
 	var rebuild = self.commands.length !== numberOfRepetitions * self.root.commandsInLoop.length
+		|| self.iconGs.length !== numberOfRepetitions
 	if (rebuild) {
-		for (var k=0; k<self.commands.length; k++)
+		for (var k=0; k<self.commands.length; k++) {
 			self.commands[k].remove()
+			self.commands[k].removeProxyConnection()
+		}
 		self.commands = []
 		if (callerF === F_)
 			if (numberOfRepetitions < self.iconGs.length) { // remove dangling
@@ -1474,7 +1543,7 @@ Loop.prototype.exec = function(callerF) {
 		if (callerF === F_) {
 			updateIcon(self.iconGs[i])
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
-			self.iconGs[i].circleF.classed("loopSelected", !selection.isEmpty() && selection.e.root === self.root)
+			self.iconGs[i].circleF.classed("loopSelected", selection.containsAsRoot(self.root))
 		}
 		
 		for (var k=0; k<self.root.commandsInLoop.length; k++) {
