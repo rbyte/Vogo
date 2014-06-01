@@ -33,7 +33,7 @@ var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px",
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
-var rotationArcRadius = 6
+var rotationArcRadius = 4
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 100
 
@@ -73,7 +73,7 @@ var functions = []
 // the function that is currently selected
 var F_
 
-var functionPanelSizePercentOfBodyWidth = 0.18
+var functionPanelSizePercentOfBodyWidth = 0.15 /* also change in css */
 var lastNotificationUpdateTime
 var dragInProgress = false
 var mousePos = [0,0]
@@ -140,12 +140,8 @@ ma.init = function() {
 	
 //	F_.addArgument(5)
 //	F_.setCommands([
-//		new Rotate(1),
-//		new Move("a*2"),
-//		new Loop(3, [
-//			new Rotate(-0.5),
-//			new Move(7)
-//		])
+//		new Rotate(-1),
+//		new Move("a")
 //	])
 	
 	setup()
@@ -163,6 +159,7 @@ ma.init = function() {
 }
 
 function run() {
+//	console.log("RUNNING")
 	F_.state.reset()
 	for (var i=0; i<F_.commands.length; i++) {
 		F_.commands[i].savedState = undefined
@@ -387,11 +384,35 @@ function Function(name) {
 	self.ul_args = self.li_f.append("ul").attr("class", "ul_args")
 	
 	self.svgContainer = self.li_f.append("div").attr("class", "fSVGcontainer")
+	var isDragged = false
 	self.svg = self.svgContainer.append("svg").attr("class", "fSVG")
 		.attr("xmlns", "http://www.w3.org/2000/svg")
-	self.svg.on("click", function() {
-		self.switchTo()
-	})
+		.on("click", function() {
+			// dragstart and click are fired at the same time, so I have to check for myself
+			if (!isDragged) {
+				self.switchTo()
+			}
+		})
+		.call(d3.behavior.drag()
+			.on("dragstart", function (d) {
+			})
+			.on("drag", function (d) {
+				isDragged = true
+			})
+			.on("dragend", function (d) {
+				if (isDragged) {
+					isDragged = false
+					if (self === F_) {
+						// recursion!
+					} else {
+						var fc = new FunctionCall(self)
+						fc.scope = F_
+						F_.commands.push(fc)
+						run()
+					}
+				}
+			})
+		)
 	
 	self.svgInit()
 	return self
@@ -529,40 +550,30 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 	if (argName === undefined)
 		argName = self.searchForName(97/*=a*/, 26/*=z*/, function (s) { return self.checkArgumentName(s) }, "", 1)
 	
-	var r = self.checkArgumentName(argName)
-	if (r)
-		self.args[argName] = defaultValue
+	console.assert(self.checkArgumentName(argName))
+	self.args[argName] = new Expression(defaultValue)
 	
 	function onChange(value) {
 		console.assert(typeof value == "string")
 		if (value === "") {
 			// delete argument
 		}
-		
 		var regEx = /^([a-zA-Z][a-zA-Z0-9]*)=(.+)$/
 		var match = regEx.exec(value)
 		if (match !== null) { // match success
 			var newArgName = match[1]
 			var newValue = match[2]
 			if (argName !== newArgName) {
-				// rename all occurences
+				// TODO rename all occurences
+				self.args[newArgName] = self.args[argName]
+				delete self.args[argName] // dereference
 				argName = newArgName
 			}
-			
-			if (isRegularNumber(newValue)) {
-				self.args[newArgName] = parseFloat(newValue)
-				run()
-			} else {
-				// eval
-				// e.g. for arrays
-				// did the type change? dependencies?
-			}
-			
+			self.args[argName].set(newValue)
+			run()
 		} else {
-			
 			// restore field
 		}
-		
 	}
 	
 	var dragStartMouseX
@@ -587,16 +598,16 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 		.call(d3.behavior.drag()
 			.on("dragstart", function (d) {
 				dragStartMouseX = d3.mouse(this)[0]
-				originalValue = self.args[argName]
-				this.blur()
-				if (isRegularNumber(self.args[argName])) {
-					dragPrecision = getPrecision(self.args[argName])
+				if (self.args[argName].isConst()) {
+					originalValue = self.args[argName].eval()
+					this.blur()
+					dragPrecision = getPrecision(self.args[argName].eval())
 				} else {
-					// could be an array
+					console.log("cannot drag non-const argument")
 				}
 			})
 			.on("drag", function (d) {
-				if (isRegularNumber(self.args[argName])) {
+				if (self.args[argName].isConst()) {
 					var mouseDiff = d3.mouse(this)[0] - dragStartMouseX
 					// the number of digits after the comma influences how much the number changes on drag
 					// 20.01 will only change slightly, whereas 100 will change rapidly
@@ -604,9 +615,10 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 					// small Bug: the order of magnitude changes unexpectedly in the next drag,
 					// if the value is left of ending with .xy0, because the 0 is forgotten
 					mouseDiff = parseFloat(mouseDiff.toFixed(Math.max(0, -dragPrecision)))
-					if (self.args[argName] !== originalValue+mouseDiff) {
-						self.args[argName] = originalValue+mouseDiff
-						inputField.property("value", argName+"="+self.args[argName].toFixed(Math.max(0, -dragPrecision)))
+					var newValue = originalValue+mouseDiff
+					if (self.args[argName].eval(/*const!*/) !== newValue) {
+						self.args[argName].set(newValue)
+						inputField.property("value", argName+"="+newValue.toFixed(Math.max(0, -dragPrecision)))
 						run()
 					}
 				}
@@ -615,10 +627,9 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 				
 			})
 		)
-		.property("value", argName+"="+defaultValue)
+		.property("value", argName+"="+self.args[argName].get())
 	
-	
-	return r ? argName : false
+	return argName
 }
 
 Function.prototype.setCommands = function(commands) {
@@ -639,12 +650,15 @@ Function.prototype.exec = function() {
 
 Function.prototype.switchTo = function() {
 	var self = this
+	if (F_ === self)
+		return
 	if (F_ !== undefined) {
 		self.previousF_ = F_
 		F_.svgContainer.classed("fSVGselected", false)
 		for (var i=0; i<F_.commands.length; i++)
 			F_.commands[i].removeFromMainSVG()
 	}
+	selection.deselectAll()
 	F_ = self
 	F_.svgContainer.classed("fSVGselected", true)
 	F_.updateViewbox()
@@ -895,13 +909,29 @@ function setTextOfInput(input, containingForeignObject, text) {
 }
 
 onKeyDown.d = function() {
-	if (bodyIsSelected() && !manipulation.isCreating())
-		manipulation.createPreview(Move)
+	if (bodyIsSelected()) {
+		if (!manipulation.isCreating()) {
+			manipulation.createPreview(Move)
+		} else {
+			if (manipulation.isCreating(Rotate)) {
+				manipulation.finish(Rotate)
+				manipulation.createPreview(Move)
+			}
+		}
+	}
 }
 
 onKeyDown.r = function() {
-	if (bodyIsSelected() && !manipulation.isCreating())
-		manipulation.createPreview(Rotate)
+	if (bodyIsSelected()) {
+		if (!manipulation.isCreating()) {
+			manipulation.createPreview(Rotate)
+		} else {
+			if (manipulation.isCreating(Move)) {
+				manipulation.finish(Move)
+				manipulation.createPreview(Rotate)
+			}
+		}
+	}
 }
 
 onKeyDown.s = function() {
@@ -932,92 +962,141 @@ onKeyDown.a = function() {
 }
 
 onKeyDown.l = function() { // create loop containing selection
-	if (!selection.isEmpty()) {
-		var selectedElem = selection.e[0].root
-		var scope = selectedElem.scope
-		var cmdsRef = scope instanceof Loop ? scope.commandsInLoop : scope.commands
-		var idxArr = []
-		for (var i=0; i<selection.e.length; i++) {
-			if (i !== 0 && scope !== selection.e[i].root.scope) {
-				updateNotification("Can only loop elements from the same scope.", 5000)
-				return
-			}
-			idxArr.push(cmdsRef.indexOf(selection.e[i].root))
-		}
-		idxArr.sort(function(a,b) {return a - b})
-		// check whether idxArr has form [x, x+1, x+2, ... ]
-		var first = idxArr[0]
-		var cmdList = []
-		for (var i=0; i<idxArr.length; i++) {
-			if (i !== 0 && idxArr[i] !== first+i && first !== -1) {
-				updateNotification("Can only loop connected elements.", 5000)
-				return
-			}
-			// create new connections
-			cmdList.push(cmdsRef[idxArr[i]])
-		}
-		selection.removeAll()
-		var loop = new Loop(2, cmdList)
-		loop.scope = scope
-		cmdsRef.splice(first, 0, loop)
-		run()
-	} else {
+	if (selection.isEmpty()) {
 		updateNotification("Select something to loop.", 5000)
+		return
 	}
+	var selectedElem = selection.e[0].root
+	var scope = selectedElem.scope
+	var cmdsRef = scope instanceof Loop ? scope.commandsInLoop : scope.commands
+	var idxArr = []
+	for (var i=0; i<selection.e.length; i++) {
+		if (i !== 0 && scope !== selection.e[i].root.scope) {
+			updateNotification("Can only loop elements from the same scope.", 5000)
+			return
+		}
+		idxArr.push(cmdsRef.indexOf(selection.e[i].root))
+	}
+	idxArr.sort(function(a,b) {return a - b})
+	// check whether idxArr has form [x, x+1, x+2, ... ]
+	var first = idxArr[0]
+	var cmdList = []
+	for (var i=0; i<idxArr.length; i++) {
+		if (i !== 0 && idxArr[i] !== first+i && first !== -1) {
+			updateNotification("Can only loop connected elements.", 5000)
+			return
+		}
+		// create new connections
+		cmdList.push(cmdsRef[idxArr[i]])
+	}
+	selection.removeAll()
+	var loop = new Loop(2, cmdList)
+	loop.scope = scope
+	cmdsRef.splice(first, 0, loop)
+	run()
 }
 
-function ArithmeticExpression(exp) {
+function Expression(exp) {
 	this.set(exp)
 }
 
-ArithmeticExpression.prototype.set = function(exp) {
+Expression.prototype.set = function(exp) {
 	if (typeof exp == "string" && isRegularNumber(exp))
 		exp = parseFloat(exp)
 	this.exp = exp
 }
 
-ArithmeticExpression.prototype.get = function() {
+Expression.prototype.get = function() {
 	return this.exp
 }
 
-ArithmeticExpression.prototype.isConst = function() {
+Expression.prototype.isConst = function() {
 	return typeof this.exp == "number"
 }
 
-ArithmeticExpression.prototype.eval = function(functionContext) {
+
+// THIS IS WELL THOUGHT THROUGH. do not mess with it, unless you know what you do
+Expression.prototype.eval = function(command) {
 	var self = this
-	console.assert(self.exp !== undefined, "ArithmeticExpression eval: Warning: exp is undefined!")
-	// TODO speed up further. caching? but what if the fContext changes?
+	console.assert(self.exp !== undefined, "Expression eval: Warning: exp is undefined!")
 	if (self.isConst())
 		return self.exp
-	console.assert(functionContext !== undefined, "ArithmeticExpression eval: Warning: functionContext is undefined!")
-	var shortCut = functionContext.args[self.exp]
-	if (shortCut !== undefined) // if exp is just a variable
-		return shortCut
 	
-	// construct function that has all the arguments for expression eval
-	var selfXuwforgjd6 = self
-	var func = "(function("
-	var argsCount = 0
-	for (var arg in functionContext.args)
-		argsCount++
-	var i = 0
-	for (var arg in functionContext.args)
-		func += arg+(++i < argsCount ? ", " : "")
-	func +=") { return eval(selfXuwforgjd6.exp) })("
-	i = 0
-	for (var arg in functionContext.args)
-		func += "functionContext.args[\""+arg+"\"]"+(++i < argsCount ? ", " : "")
-	func +=")"
-	
-//	console.log(func)
-	
-	try {
-		return eval(func)
-	} catch(e) {
-		console.log(e)
-		return 1
+	function evalWithChecks(toEval) {
+	//	console.log(toEval)
+		var result
+		try {
+			result = eval(toEval)
+		} catch(e) {
+			console.log(e)
+		}
+		console.assert(isRegularNumber(result), "eval result is bullshit: "+result)
+		return result
 	}
+	if (command === undefined)
+		return evalWithChecks(self.exp)
+	
+	// check whether this command is inside a function call context (which has its own custom arguments)
+	// or, if none, get the calling function
+	var sc = command.scope
+	var loopIndex // currently, only the innermost loop is considered
+	while (sc !== undefined /*should not be false before one of the other two: */
+		&& !(sc instanceof FunctionCall) && !(sc instanceof Function)) {
+		// also, check whether there is a loop on the way (because it has an index)
+		if (loopIndex === undefined && sc.i !== undefined)
+			loopIndex = sc.i
+		sc = sc.scope // traverse scope chain up
+	}
+	var fc, mainArgProvider
+	if (sc instanceof FunctionCall) {
+		fc = sc.root
+		mainArgProvider = fc.f.args
+//			console.log("found function context: "+self.exp+", "+fc.customArguments)
+		var shortCut = fc.customArguments[self.exp]
+		if (shortCut !== undefined) { // exp is just a variable
+//				console.log("shortcut fc!: "+shortCut.get())
+			return shortCut.eval(fc)
+		}
+	} else {
+		// each command, up its scope chain, has to have a function at its end
+		// all functions are in the global scope
+		console.assert(sc instanceof Function)
+		mainArgProvider = sc.args
+	}
+	
+	var argsCount = Object.keys(mainArgProvider).length
+	if (argsCount === 0)
+		return evalWithChecks(self.exp)
+
+	var shortCut = mainArgProvider[self.exp]
+	if (shortCut !== undefined) { // exp is just a variable
+	// shortCut here is an argument of the global scope (a function)
+	// the global scope does not depend on arguments, because that would create nasty endless loops (eval to eval to eval ...)
+//			console.log("shortcut: "+shortCut.get())
+		return shortCut.eval()
+	}
+
+	// TODO speed up further.
+	// construct function that has all the arguments for expression eval
+	var toEval = "(function("
+	var i = 0
+	for (var arg in mainArgProvider)
+		toEval += arg+(++i < argsCount ? ", " : "")
+	if (loopIndex !== undefined)
+		toEval +=", l1" // loop 1 index
+	toEval +=") { return eval(self.exp) })("
+	i = 0
+	for (var arg in mainArgProvider) { // arguments itself are Expressions
+		toEval += (fc !== undefined && fc.customArguments[arg] !== undefined
+			? "fc.customArguments"+"[\""+arg+"\"].eval(fc)"
+			: "mainArgProvider"+"[\""+arg+"\"].eval()")
+			+(++i < argsCount ? ", " : "")
+	}
+	// TODO for simplicity, lets just do the first loop...
+	if (loopIndex !== undefined)
+		toEval += ", "+loopIndex
+	toEval +=")"
+	return evalWithChecks(toEval)
 }
 
 
@@ -1062,15 +1141,19 @@ Command.prototype.setUpReferences = function(constructor) {
 
 Command.prototype.setMainParameter = function(x) {
 	var self = this
-	self.root.mainParameter = new ArithmeticExpression(x)
+	console.assert(x !== undefined)
+	if (self.root.mainParameter === undefined)
+		self.root.mainParameter = new Expression(x)
+	else
+		self.root.mainParameter.set(x)
 }
 
 Command.prototype.getMainParameter = function(callerF) {
 	var self = this
 	if (callerF === undefined)
 		callerF = self.scope
-	console.assert(self.root.mainParameter instanceof ArithmeticExpression)
-	var mainParameter = self.root.mainParameter.eval(callerF)
+	console.assert(self.root.mainParameter instanceof Expression)
+	var mainParameter = self.root.mainParameter.eval(self)
 	console.assert(isRegularNumber(mainParameter))
 	return mainParameter
 }
@@ -1085,7 +1168,7 @@ Command.prototype.shallowClone = function(scope) {
 //	var c = Object.create(self)
 	var c = new self.myConstructor()
 	// it is important to understand that there is a difference between the
-	// initiator of the clone (scope) and self (the context that called)
+	// initiator of the clone (scope) and self (the command that is cloned)
 	c.root = self.root
 	if (self.root.proxies === undefined)
 		self.root.proxies = []
@@ -1151,7 +1234,8 @@ Command.prototype.removeProxyConnection = function() {
 function Move(lineLength) {
 	var self = this
 	self.setUpReferences(Move)
-	self.setMainParameter(lineLength)
+	if (lineLength !== undefined)
+		self.setMainParameter(lineLength)
 	self.line
 	self.lineMainSVG
 	self.label
@@ -1265,7 +1349,8 @@ Move.prototype.removeFromMainSVG = function() {
 function Rotate(angle) {
 	var self = this
 	self.setUpReferences(Rotate)
-	self.setMainParameter(angle)
+	if (angle !== undefined)
+		self.setMainParameter(angle)
 	// both are just in the mainSVG
 	// -> Rotate is not explicitly visualised in the preview
 	self.arc
@@ -1323,7 +1408,7 @@ Rotate.prototype.exec = function(callerF) {
 					dragInProgress = false
 					d3.select(this).classed("dragging", false)
 				})
-		)
+			)
 	}
 	
 	if (self.label === undefined && callerF === F_) {
@@ -1413,7 +1498,8 @@ Rotate.prototype.removeFromMainSVG = function() {
 function Loop(numberOfRepetitions, commands) {
 	var self = this
 	self.setUpReferences(Loop)
-	self.setMainParameter(numberOfRepetitions)
+	if (numberOfRepetitions !== undefined)
+		self.setMainParameter(numberOfRepetitions)
 	self.commandsInLoop = commands === undefined ? [] : commands
 	for (var i=0; i<self.commandsInLoop.length; i++)
 		self.commandsInLoop[i].scope = self
@@ -1535,6 +1621,7 @@ Loop.prototype.exec = function(callerF) {
 	}
 	
 	for (var i=0; i<numberOfRepetitions; i++) {
+		self.i = i
 		// TODO consider line-in and -out diretion for angle
 		// place center away from current position in 90° angle to current heading
 		var dir = correctRadius(callerF.state.r + Math.PI/2)
@@ -1548,8 +1635,9 @@ Loop.prototype.exec = function(callerF) {
 		
 		for (var k=0; k<self.root.commandsInLoop.length; k++) {
 			var pos = i*self.root.commandsInLoop.length + k
-			if (rebuild)
+			if (rebuild) {
 				self.commands[pos] = self.root.commandsInLoop[k].shallowClone(self)
+			}
 			self.commands[pos].exec(callerF)
 		}
 	}
@@ -1592,10 +1680,9 @@ function FunctionCall(func) {
 	var self = this
 	self.setUpReferences(FunctionCall)
 	self.f = func
-	console.assert(self.f !== undefined)
 	self.commands = []
 	self.icon
-	self.iconMainSVG
+	self.customArguments = {}
 }
 FunctionCall.prototype = new Command()
 
@@ -1608,14 +1695,47 @@ FunctionCall.prototype.exec = function(callerF) {
 			self.commands.push(self.root.f.commands[i].shallowClone(self))
 		}
 	}
-	if (self.icon === undefined) {
-		// is not displayed in the preview
+	if (self.icon === undefined && callerF === F_) {
+		self.icon = mainSVG.paintingG.append("foreignObject")
+			.attr("width", 250).attr("height", 100).attr("x", 0).attr("y", 0)
+		self.icon.body = self.icon.append("xhtml:body")
+		self.icon.body.append("xhtml:text")
+			.text("ƒ"+self.root.f.name)
+			.on("click", function() {
+				self.select()
+				d3.event.stopPropagation()
+			})
+		self.icon.argUl = self.icon.body.append("ul")
+		for (var a in self.root.f.args) {
+			var li = self.icon.argUl.append("li").attr("class", "titleRow")
+			li.append("div").attr("class", "titleRowCellLast").text(a+"←")
+			li.append("div").attr("class", "titleRowCellLast").append("xhtml:input")
+				.attr("type", "text")
+				.property("value", self.root.f.args[a].get())
+				.on("blur", function() {
+					
+				})
+				.on("keypress", function() {
+					if (d3.event.keyCode === /*enter*/ 13) {
+						console.log("keypress FC")
+						if (self.root.customArguments[a] === undefined)
+							self.root.customArguments[a] = new Expression(this.value)
+						else
+							self.root.customArguments[a].set(this.value)
+						run()
+					}
+				})
+				.on("input", function() {
+					
+				})
+		}
 	}
-	if (self.iconMainSVG === undefined && callerF === F_) {
-		self.iconMainSVG = mainSVG.paintingG.append("text")
-			.style(textStyle).text("ƒ"+self.root.f.name)
-			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
+	
+	if (callerF === F_) {
+		self.icon
+			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
 	}
+	
 	
 	for (var i=0; i<self.commands.length; i++) {
 		self.commands[i].exec(callerF)
@@ -1623,6 +1743,9 @@ FunctionCall.prototype.exec = function(callerF) {
 }
 
 FunctionCall.prototype.select = function() {
+	selection.add(this)
+	console.log("selected: "+selection)
+	console.assert(!selection.isEmpty())
 }
 
 FunctionCall.prototype.deselect = function() {
@@ -1632,9 +1755,6 @@ FunctionCall.prototype.remove = function() {
 	var self = this
 	for (var i=0; i<self.commands.length; i++)
 		self.commands[i].remove()
-	if (self.icon !== undefined)
-		self.icon.remove()
-	self.icon = undefined
 	self.removeFromMainSVG()
 }
 
@@ -1642,9 +1762,9 @@ FunctionCall.prototype.removeFromMainSVG = function() {
 	var self = this
 	for (var i=0; i<self.commands.length; i++)
 		self.commands[i].removeFromMainSVG()
-	if (self.iconMainSVG !== undefined)
-		self.iconMainSVG.remove()
-	self.iconMainSVG = undefined
+	if (self.icon !== undefined)
+		self.icon.remove()
+	self.icon = undefined
 }
 
 

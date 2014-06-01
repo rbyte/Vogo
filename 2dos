@@ -1,4 +1,5 @@
 
+function call needs to eval its custom arguments once exec is called. -> each scope has its own arguments that overwrite higher level scopes
 dereference proxies!
 functions side panel
 	updates/functionality

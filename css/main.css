@@ -7,7 +7,7 @@ body {
 	position: absolute;
 	left: 0;
 	top: 0;
-	width: 20%;
+	width: 15%; /*coupled*/
 	height: 100%;
 	overflow-y: auto;
 	background-color: #D6D6D6;
@@ -16,7 +16,7 @@ body {
 	position: absolute;
 	height: 100%;
 	width: 2px;
-	left: 20%;
+	left: 15%; /*coupled*/
 	background-color: #bbb;
 	box-shadow: 0 0 5px rgba(0,0,0,0.3);
 	cursor: col-resize;
@@ -26,7 +26,7 @@ body {
 	position: fixed;
 	right: 0;
 	top: 0;
-	width: 80%;
+	width: 85%; /*coupled*/
 	height: 100%;
 }
 #turtleSVG {
@@ -127,14 +127,20 @@ button::-moz-focus-inner {
 }
 
 
-#functions .titleRow {
+.titleRow {
 	display: table;
 	width: 100%;
 }
-#functions .titleRowCell {
+.titleRowCell {
 	display: table-cell;
 }
-#functions .titleRowCell:first-child {
+.titleRowCell:first-child {
+	width: 100%;
+}
+.titleRowCellLast {
+	display: table-cell;
+}
+.titleRowCellLast:last-child {
 	width: 100%;
 }
 #functions .f_name {
@@ -202,4 +208,11 @@ svg input {
 }
 svg input:focus {
 	background-color: rgba(255,0,0,0.1);
+}
+svg ul {
+	margin: 0;
+	padding: 0 0 0 12px;  /*top right bottom left*/
+}
+svg li {
+	list-style: none;
 }
