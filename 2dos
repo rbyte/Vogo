@@ -1,5 +1,5 @@
 
-function call needs to eval its custom arguments once exec is called. -> each scope has its own arguments that overwrite higher level scopes
+foreignObject relative width and height
 dereference proxies!
 functions side panel
 	updates/functionality
@@ -9,7 +9,6 @@ allow functions as arguments?
 hotkeys explanation
 drawing/adding steps at arbitrary positions
 fix: rotation manipulation in loop mousepos wrong
-display svg in 2 places without duplication
 selection
 	move selection
 		move manipulation
