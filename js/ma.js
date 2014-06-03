@@ -34,6 +34,7 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 4
+var scopeDepthLimit = 15 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 100
 var domSvg
@@ -41,7 +42,8 @@ var domSvg
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
-	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift" }
+	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
+	78: "n" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -212,9 +214,7 @@ function MainSVG() {
 
 function setup() {
 	d3.select("#f_addNew").on("click", function() {
-		var f = new Function()
-		functions.push(f)
-		f.switchTo()
+		createNewFunction()
 	})
 	
 	window.onresize = function(event) {
@@ -893,6 +893,17 @@ function setTextOfInput(input, containingForeignObject, text) {
 	}
 }
 
+function createNewFunction() {
+	var f = new Function()
+	functions.push(f)
+	f.switchTo()
+}
+
+onKeyDown.n = function() {
+	if (bodyIsSelected())
+		createNewFunction()
+}
+
 onKeyDown.d = function() {
 	if (bodyIsSelected()) {
 		if (!manipulation.isCreating()) {
@@ -1043,8 +1054,9 @@ Expression.prototype.eval = function(command) {
 			result = eval(toEval)
 		} catch(e) {
 			console.log(e)
-			return 1 /*be tolerant*/
+			return 1 // be a bit robust
 		}
+		// TODO if arg is array, it is evaluated each time, but fails
 		console.assert(isRegularNumber(result), "eval result is bullshit: "+result)
 		return result
 	}
@@ -1064,10 +1076,12 @@ Expression.prototype.eval = function(command) {
 	}
 	var fc, mainArgProvider
 	if (sc instanceof FunctionCall) {
-		fc = sc.root
-		mainArgProvider = fc.f.args
+		// this is important for recusion. each proxy has to take the arguments from the previous level
+		// the eval call has to take the fc, not fc.root, but the cargs and f have to come from fc.root
+		fc = sc
+		mainArgProvider = fc.root.f.args
 //			console.log("found function context: "+self.exp+", "+fc.customArguments)
-		var shortCut = fc.customArguments[self.exp]
+		var shortCut = fc.root.customArguments[self.exp]
 		if (shortCut !== undefined) { // exp is just a variable
 //				console.log("shortcut fc!: "+shortCut.get())
 			return shortCut.eval(fc)
@@ -1102,8 +1116,8 @@ Expression.prototype.eval = function(command) {
 	toEval +=") { return eval(self.exp) })("
 	i = 0
 	for (var arg in mainArgProvider) { // arguments itself are Expressions
-		toEval += (fc !== undefined && fc.customArguments[arg] !== undefined
-			? "fc.customArguments"+"[\""+arg+"\"].eval(fc)"
+		toEval += (fc !== undefined && fc.root.customArguments[arg] !== undefined
+			? "fc.root.customArguments"+"[\""+arg+"\"].eval(fc)"
 			: "mainArgProvider"+"[\""+arg+"\"].eval()")
 			+(++i < argsCount ? ", " : "")
 	}
@@ -1214,9 +1228,8 @@ Command.prototype.shallowClone = function(scope) {
 	self.root.proxies.push(c)
 	c.scope = scope
 	c.scopeDepth = scope.scopeDepth + 1
-	if (self.scopeDepth > 1000) {
-		console.log("warning: scopeDepth > 1000!")
-	}
+	if (self.scopeDepth > scopeDepthLimit+1)
+		console.log("warning: scope depth to high!")
 	c.refDepthOfSameType = scope.refDepthOfSameType + (scope instanceof self.myConstructor ? 1 : 0)
 	return c
 }
@@ -1748,7 +1761,8 @@ FunctionCall.prototype.exec = function(callerF) {
 	
 	if (self.icon === undefined && callerF === F_) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
-			.attr("width", 250).attr("height", 100).attr("x", 0).attr("y", 0)
+			// TODO make this relative
+			.attr("width", 200).attr("height", 100).attr("x", 0).attr("y", 0)
 		self.icon.body = self.icon.append("xhtml:body")
 		self.icon.body.text = self.icon.body.append("xhtml:text")
 			.text("ƒ"+root.f.name)
@@ -1857,24 +1871,35 @@ FunctionCall.prototype.exec = function(callerF) {
 			self.commands.push(root.f.commands[i].shallowClone(self))
 	}
 	
-	if (self.scopeDepth > 15) {
-		console.log("shallowClone scopeDepth to high. endless loop? aborting exec.")
+	if (self.scopeDepth > scopeDepthLimit) {
+//		console.log("scope depth to high. endless loop/recursion? stopping here.")
 	} else {
+//		console.log("exec fc with scopeDepth: "+self.scopeDepth)
 		for (var i=0; i<self.commands.length; i++) {
 			self.commands[i].exec(callerF)
 		}
 	}
 }
 
+FunctionCall.prototype.mark = function(on) {
+	var self = this
+	// .icon is undefined ? ... when recursing
+//	if (self.root.proxies !== undefined)
+//		for (var i=0; i<self.root.proxies.length; i++)
+//			self.applyCSSClass([self.root.proxies[i].icon.body.text], "mark", on)
+}
+
 FunctionCall.prototype.select = function() {
 	var self = this
 	selection.add(self)
 	self.applyCSSClass([self.icon.body.text], "selected", true)
+	self.mark(true)
 }
 
 FunctionCall.prototype.deselect = function() {
 	var self = this
 	self.applyCSSClass([self.icon.body.text], "selected", false)
+	self.mark(false)
 }
 
 FunctionCall.prototype.remove = function() {
