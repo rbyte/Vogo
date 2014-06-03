@@ -41,14 +41,23 @@ body {
 	fill: #f00 !important;
 	fill-opacity: 0.3 !important;
 }
-.selected {
-	stroke: #f00;
+path.selected, line.selected, circle.selected {
+	stroke: #f00 !important;
 	stroke-opacity: 1;
+}
+text.selected {
+	color: #f00;
+}
+path.selected, path.mark {
 	/*shape-rendering: crispEdges;*/
 	vector-effect: non-scaling-stroke;
 }
-.lineSelected, .loopSelected {
-	stroke: #f00 !important;
+path.mark:not(.selected), line.mark:not(.selected), circle.mark:not(.selected) {
+	stroke: #00f !important;
+	stroke-opacity: 1;
+}
+text.mark {
+	color: #00f;
 }
 #functions #ul_f {
 	list-style: none;

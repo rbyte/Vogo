@@ -85,10 +85,11 @@ var mousePosPrevious = [0,0]
 var selection = {
 	e: [],
 	add: function(x) {
-		if (!keyPressed.shift)
+		if (!keyPressed.shift) {
 			this.deselectAll()
-		// else accumulate
-		this.e.push(x)
+			this.e.push(x)
+		} else if (!this.contains(x)) // accumulate multiple
+			this.e.push(x)
 	},
 	contains: function(x) {
 		return this.e.indexOf(x) !== -1
@@ -402,14 +403,14 @@ function Function(name) {
 			.on("dragend", function (d) {
 				if (isDragged) {
 					isDragged = false
-					if (self === F_) {
-						// recursion!
-					} else {
+//					if (self === F_) {
+//						// recursion!
+//					} else {
 						var fc = new FunctionCall(self)
 						fc.scope = F_
 						F_.commands.push(fc)
 						run()
-					}
+//					}
 				}
 			})
 		)
@@ -629,13 +630,13 @@ Function.prototype.switchTo = function() {
 	var self = this
 	if (F_ === self)
 		return
+	selection.deselectAll()
 	if (F_ !== undefined) {
 		self.previousF_ = F_
 		F_.svgContainer.classed("fSVGselected", false)
 		for (var i=0; i<F_.commands.length; i++)
 			F_.commands[i].removeFromMainSVG()
 	}
-	selection.deselectAll()
 	F_ = self
 	F_.svgContainer.classed("fSVGselected", true)
 	F_.updateViewbox()
@@ -872,6 +873,13 @@ function bodyIsSelected() {
 	return document.activeElement.nodeName === "BODY"
 }
 
+function updateLabelVisibility(self) {
+	if (self.label !== undefined)
+		self.label.classed("hide", !selection.contains(self)
+			&& manipulation.insertedCommand !== self.root
+			&& self.root.mainParameter.isStatic())
+}
+
 function setTextOfInput(input, containingForeignObject, text) {
 	if (text === undefined)
 		text = input.property("value")
@@ -1029,7 +1037,7 @@ Expression.prototype.eval = function(command) {
 		return self.cachedEvalFromStaticExp
 	
 	function evalWithChecks(toEval) {
-	//	console.log(toEval)
+//		console.log(toEval)
 		var result
 		try {
 			result = eval(toEval)
@@ -1072,7 +1080,7 @@ Expression.prototype.eval = function(command) {
 	}
 	
 	var argsCount = Object.keys(mainArgProvider).length
-	if (argsCount === 0)
+	if (argsCount === 0 && loopIndex === undefined)
 		return evalWithChecks(self.exp)
 
 	var shortCut = mainArgProvider[self.exp]
@@ -1090,7 +1098,7 @@ Expression.prototype.eval = function(command) {
 	for (var arg in mainArgProvider)
 		toEval += arg+(++i < argsCount ? ", " : "")
 	if (loopIndex !== undefined)
-		toEval +=", l1" // loop 1 index
+		toEval += (argsCount > 0 ? ", " : "")+"l1" // loop 1 index
 	toEval +=") { return eval(self.exp) })("
 	i = 0
 	for (var arg in mainArgProvider) { // arguments itself are Expressions
@@ -1101,7 +1109,7 @@ Expression.prototype.eval = function(command) {
 	}
 	// TODO for simplicity, lets just do the first loop...
 	if (loopIndex !== undefined)
-		toEval += ", "+loopIndex
+		toEval += (argsCount > 0 ? ", " : "")+loopIndex
 	toEval +=")"
 	return evalWithChecks(toEval)
 }
@@ -1206,11 +1214,10 @@ Command.prototype.shallowClone = function(scope) {
 	self.root.proxies.push(c)
 	c.scope = scope
 	c.scopeDepth = scope.scopeDepth + 1
-	c.refDepthOfSameType = scope.refDepthOfSameType + (scope instanceof self.myConstructor ? 1 : 0)
-	if (c.scopeDepth > 100) {
-		console.error("shallowClone scopeDepth to high. endless loop? aborting exec.")
-		c.exec = function() {}
+	if (self.scopeDepth > 1000) {
+		console.log("warning: scopeDepth > 1000!")
 	}
+	c.refDepthOfSameType = scope.refDepthOfSameType + (scope instanceof self.myConstructor ? 1 : 0)
 	return c
 }
 
@@ -1260,6 +1267,20 @@ Command.prototype.removeProxyConnection = function() {
 		self.root.proxies.splice(idx, 1)
 	}
 	return self
+}
+
+Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
+	if (elements instanceof Array)
+		for (var i=0; i<elements.length; i++)
+			if (elements[i] !== undefined) {
+				if (prop !== undefined) {
+					if (elements[i][prop] !== undefined) {
+						elements[i][prop].classed(cssName, on)
+					}
+				} else {
+					elements[i].classed(cssName, on)
+				}
+			}
 }
 
 function Move(lineLength) {
@@ -1357,8 +1378,8 @@ Move.prototype.exec = function(callerF) {
 Move.prototype.select = function() {
 	var self = this
 	selection.add(self)
-	if (self.lineMainSVG !== undefined)
-		self.lineMainSVG.classed("lineSelected", true)
+	self.applyCSSClass([self.lineMainSVG], "selected", true)
+	self.applyCSSClass(self.root.proxies, "mark", true, "lineMainSVG")
 	if (self.label !== undefined) {
 		self.label.classed("hide", false)
 		setTextOfInput(self.labelInput, self.label)
@@ -1368,8 +1389,8 @@ Move.prototype.select = function() {
 Move.prototype.deselect = function() {
 	var self = this
 	updateLabelVisibility(self)
-	if (self.lineMainSVG !== undefined)
-		self.lineMainSVG.classed("lineSelected", false)
+	self.applyCSSClass([self.lineMainSVG], "selected", false)
+	self.applyCSSClass(self.root.proxies, "mark", false, "lineMainSVG")
 }
 
 Move.prototype.remove = function() {
@@ -1384,6 +1405,7 @@ Move.prototype.removeFromMainSVG = function() {
 	var self = this
 	if (self.lineMainSVG !== undefined)
 		self.lineMainSVG.remove()
+	self.lineMainSVG = undefined
 	if (self.label !== undefined)
 		self.label.remove()
 	self.label = undefined
@@ -1495,29 +1517,22 @@ Rotate.prototype.exec = function(callerF) {
 	}
 }
 
-function updateLabelVisibility(self) {
-	if (self.label !== undefined)
-		self.label.classed("hide", !selection.contains(self)
-			&& manipulation.insertedCommand !== self.root
-			&& self.root.mainParameter.isStatic())
-}
-
 Rotate.prototype.select = function() {
 	var self = this
 	selection.add(self)
+	self.applyCSSClass([self.arc], "selected", true)
+	self.applyCSSClass(self.root.proxies, "mark", true, "arc")
 	if (self.label !== undefined) {
 		self.label.classed("hide", false)
 		setTextOfInput(self.labelInput, self.label)
 	}
-	if (self.arc !== undefined)
-		self.arc.classed("selected", true)
 }
 
 Rotate.prototype.deselect = function() {
 	var self = this
 	updateLabelVisibility(self)
-	if (self.arc !== undefined)
-		self.arc.classed("selected", false)
+	self.applyCSSClass([self.arc], "selected", false)
+	self.applyCSSClass(self.root.proxies, "mark", false, "arc")
 }
 
 Rotate.prototype.remove = function() {
@@ -1605,7 +1620,7 @@ Loop.prototype.exec = function(callerF) {
 			.attr("cx", 0).attr("cy", 0)
 		iconG.on("click", function () {
 			if (!manipulation.isCreating()) {
-				self.select(i)
+				self.select()
 				// to prevent click on background
 				d3.event.stopPropagation()
 			}
@@ -1661,7 +1676,8 @@ Loop.prototype.exec = function(callerF) {
 		if (callerF === F_) {
 			updateIcon(self.iconGs[i])
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
-			self.iconGs[i].circleF.classed("loopSelected", selection.containsAsRoot(self.root))
+			self.applyCSSClass([self.iconGs[i].circleF], "selected", selection.contains(self))
+			self.applyCSSClass([self.iconGs[i].circleF], "mark", selection.containsAsRoot(self.root))
 		}
 		
 		for (var k=0; k<self.root.commandsInLoop.length; k++) {
@@ -1674,18 +1690,24 @@ Loop.prototype.exec = function(callerF) {
 	}
 }
 
-Loop.prototype.select = function(i) {
+Loop.prototype.mark = function(on) {
 	var self = this
-	for (var k=0; k<self.iconGs.length; k++)
-		// TODO if i===k
-		self.iconGs[k].circleF.classed("loopSelected", true)
+	if (self.root.proxies !== undefined)
+		for (var i=0; i<self.root.proxies.length; i++)
+			self.applyCSSClass(self.root.proxies[i].iconGs, "mark", on, "circleF")
+}
+
+Loop.prototype.select = function() {
+	var self = this
 	selection.add(self)
+	self.applyCSSClass(self.iconGs, "selected", true, "circleF")
+	self.mark(true)
 }
 
 Loop.prototype.deselect = function() {
 	var self = this
-	for (var k=0; k<self.iconGs.length; k++)
-		self.iconGs[k].circleF.classed("loopSelected", false)
+	self.applyCSSClass(self.iconGs, "selected", false, "circleF")
+	self.mark(false)
 }
 
 Loop.prototype.remove = function() {
@@ -1739,6 +1761,7 @@ FunctionCall.prototype.exec = function(callerF) {
 	
 	function createInputField() {
 		console.assert(self.argumentFields[a] !== undefined)
+		console.assert(self.argumentFields[a].text !== undefined)
 		console.assert(self.argumentFields[a].input === undefined)
 		self.argumentFields[a].text.text(a+"←")
 		var value = root.customArguments[a] === undefined ? root.f.args[a].get() : root.customArguments[a].get()
@@ -1801,11 +1824,15 @@ FunctionCall.prototype.exec = function(callerF) {
 					.text(a+"↑")
 					.style({cursor: "pointer"})
 					.on("click", function() {
+						// beware! "a" changed due until click is called.
+						// so we need to retrieve the original "a"
+						a = this.a
 						switchInputFieldForArg()
 					})
-				if (root.customArguments[a] !== undefined) {
+				self.argumentFields[a].text[0][0].a = a
+				
+				if (root.customArguments[a] !== undefined)
 					createInputField()
-				}
 			}
 		}
 		for (var a in root.customArguments) {
@@ -1830,23 +1857,24 @@ FunctionCall.prototype.exec = function(callerF) {
 			self.commands.push(root.f.commands[i].shallowClone(self))
 	}
 	
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].exec(callerF)
+	if (self.scopeDepth > 15) {
+		console.log("shallowClone scopeDepth to high. endless loop? aborting exec.")
+	} else {
+		for (var i=0; i<self.commands.length; i++) {
+			self.commands[i].exec(callerF)
+		}
+	}
 }
 
 FunctionCall.prototype.select = function() {
 	var self = this
 	selection.add(self)
-	if (self.icon !== undefined) {
-		self.icon.body.text.style({color: "#f00"})
-	}
+	self.applyCSSClass([self.icon.body.text], "selected", true)
 }
 
 FunctionCall.prototype.deselect = function() {
 	var self = this
-	if (self.icon !== undefined) {
-		self.icon.body.text.style({color: "#000"})
-	}
+	self.applyCSSClass([self.icon.body.text], "selected", false)
 }
 
 FunctionCall.prototype.remove = function() {
