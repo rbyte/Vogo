@@ -5,7 +5,7 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<title>DeltaLogo</title>
+	<title>Vogo</title>
 	<link rel="icon" href="images/favicon.png" type="image/png"/>
 	<link rel="stylesheet" type="text/css" href="css/main.css"/>
 	<script type='text/javascript' src='js/d3.v3.min.js'></script>
