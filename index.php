@@ -27,15 +27,6 @@
 	
 	<script>
 		vogo.init()
-		var f = new vogo.Function("myf", {a: undefined}, [new vogo.Rotate(1), new vogo.Move("a")])
-		d3.select("#turtleSVG").call(vogo.draw(f, {a: 20}))
-		
-//		d3.select("#turtleSVG").call(function(elem) {
-//			new vogo.Drawing(f, {a: 20}, elem)
-//		})
-		
-		
-//		new vogo.Drawing(f, {a: 20}, d3.select("#turtleSVG").append("g"))
-</script>
+	</script>
 </body>
 </html>

@@ -5,7 +5,7 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<title>Vogo</title>
+	<title>Vogo Use</title>
 	<link rel="icon" href="images/favicon.png" type="image/png"/>
 	<link rel="stylesheet" type="text/css" href="css/main.css"/>
 	<script type='text/javascript' src='js/d3.v3.min.js'></script>
@@ -21,8 +21,30 @@
 		 style="border: 1px solid grey;"></svg>
 	
 	<script>
-		var f = new vogo.Function("myf", {a: undefined}, [new vogo.Rotate(1), new vogo.Move("a")])
-		d3.select("#mysvg").call(vogo.draw(f, {a: 20}))
+var α = new vogo.Function("α", {})
+α.setCommands([
+	new vogo.Move(9.78),
+	new vogo.Rotate(0.291),
+	new vogo.FunctionCall(α)])
+
+new vogo.Drawing(α, {}, d3.select("#mysvg"))
+
+if (false) {
+	var fd = new vogo.Drawing(α, {n: 10}, d3.select("#mysvg"))
+	fd.update({n: 5})
+}
+
+if (false)
+	d3.select("#mysvg").append("g")
+		.call(vogo.draw(α, {n: 10}))
+		.call(vogo.update({n: 5}))
+
+if (false) {
+	var data = [3, 5, 7]
+	data.forEach(function(e) {
+		new vogo.Drawing(α, {n: e}, d3.select("#mysvg").append("g"))
+	})
+}
 		
 	</script>
 </body>

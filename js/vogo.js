@@ -131,20 +131,37 @@ vogo.init = function() {
 	
 	addNewFunctionToUI()
 	
-//	var f = new Function("myf", {a: undefined}, [new Rotate(1), new Move("a")])
-//	var f3 = new Drawing(f, {a: 20}, mainSVG.svg.append("g"))
-	
 	setupUIEventListeners()
 }
 
 // wraps a function for drawing it multiple times
 function Drawing(f, args, paintingG) {
-	return new Function(f.name, {}, [new FunctionCall(f, args)], paintingG).exec()
+	var func = new Function(f.name, {}, [new FunctionCall(f, args)], paintingG).exec()
+	paintingG[0][0].vogo = func
+	func.update = function(newArgs) {
+		console.assert(this.commands.length == 1)
+		var fc = this.commands[0]
+		console.assert(fc instanceof FunctionCall)
+		if (newArgs !== undefined) {
+			// leave old, just overwrite
+			for (var a in newArgs)
+				fc.customArguments[a] = !(newArgs[a] instanceof Expression)
+					? new Expression(newArgs[a]) 
+					: newArgs[a]
+		}
+		this.state.reset()
+		return this.exec()
+	}
+	return func
 }
 
 // for d3.call()
 vogo.draw = function(f, args) {
 	return function(elem) { return new Drawing(f, args, elem) }
+}
+
+vogo.update = function(args) {
+	return function(elem) { return elem[0][0].vogo.update(args) }
 }
 
 function run() {
@@ -687,6 +704,60 @@ Function.prototype.setStateTo = function(idx) {
 	}
 }
 
+Function.prototype.exportAsCode = function() {
+	var self = this
+	var result = "var "+self.name+" = new vogo.Function(\""+self.name+"\", {"
+	
+	function commandsToCodeString(commands, scopeDepth) {
+		var result = "["
+		for (var i=0; i<commands.length; i++) {
+			console.assert(commands[i] instanceof Command)
+			result += "\n"
+			for (var t=0; t<scopeDepth+1; t++)
+				result += "\t"
+			if (commands[i] instanceof FunctionCall) {
+				var p = commands[i].f.name
+				var argsLength = Object.keys(commands[i].customArguments).length
+				var k = 0
+				if (argsLength > 0) p += ", {"
+				for (var a in commands[i].customArguments) {
+					var q = commands[i].customArguments[a].get()
+					if (typeof q == "string")
+						q = "\""+q+"\""
+					p += "\""+a+"\": "+q
+						+(++k < argsLength ? ", " : "")
+				}
+				if (argsLength > 0) p += "}"
+			} else {
+				var p = commands[i].root.mainParameter.get()
+				if (typeof p == "string")
+					p = "\""+p+"\""
+			}
+			// it is expected that referred to functions exist as variable
+			result += "new vogo."+commands[i].myConstructor.name/*JS6*/+"("+p+
+				(commands[i] instanceof Loop
+					? ", "+commandsToCodeString(commands[i].commandsInLoop, scopeDepth+1)
+					: "")+")"
+			result += i < commands.length-1 ? ",": ""
+		}
+		result += "]"
+		return result
+	}
+	
+	var argsCount = Object.keys(self.args).length
+	var i = 0
+	for (var a in self.args) {
+		var p = self.args[a].get()
+		if (typeof p == "string")
+			p = "\""+p+"\""
+		result += "\""+a+"\": "+p+(++i < argsCount ? ", " : "")
+	}
+	// the extra call will make recursion possible
+	result += "})\n"+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+")"
+	return result
+}
+
+
 
 var manipulation = {
 	insertedCommand: false
@@ -896,6 +967,58 @@ function addNewFunctionToUI() {
 	f.switchTo()
 }
 
+function exportAllNOTWORKING() {
+	var result = "var "
+	for (var i=0; i<functions.length; i++)
+		result += functions[i].name+(i < functions.length-1 ? ", ": "")
+	result += "\n"
+	for (var i=0; i<functions.length; i++)
+		result += functions[i].exportAsCode()+"\n\n"
+	return result
+}
+
+function exportAll() {
+	var fDep = determineFunctionDependencies()
+	var fProcessed = {}
+	var result = ""
+	outer: while (Object.keys(fProcessed).length < functions.length) {
+		var fProcessedOld = Object.keys(fProcessed).length
+		for (var i=0; i<functions.length; i++) {
+			if (fDep[i] === undefined || fProcessed[fDep[i]] !== undefined || i === fDep[i] /*allow recursion*/) {
+				result += functions[i].exportAsCode()+"\n\n"
+				fProcessed[i] = true
+				if (Object.keys(fProcessed).length === functions.length)
+					break outer
+			}
+		}
+		if (fProcessedOld === Object.keys(fProcessed).length) {
+			// TODO
+			console.log("exportAll: error: circular dependencies between functions!")
+			break
+		}
+	}
+	return result
+}
+
+function determineFunctionDependencies() {
+	var dependencies = {}
+	function searchForFunctionCall(commands) {
+		for (var k=0; k<commands.length; k++) {
+			if (commands[k] instanceof FunctionCall) {
+				dependencies[i] = functions.indexOf(commands[k].root.f)
+			}
+			if (commands[k] instanceof Loop)
+				searchForFunctionCall(commands[k].commandsInLoop)
+		}
+	}
+	for (var i=0; i<functions.length; i++)
+		searchForFunctionCall(functions[i].commands)
+	if (false)
+		for (var d in dependencies)
+			console.log(functions[d].name+" depends on "+functions[dependencies[d]].name)
+	return dependencies
+}
+
 onKeyDown.n = function() {
 	if (bodyIsSelected())
 		addNewFunctionToUI()
@@ -925,6 +1048,12 @@ onKeyDown.r = function() {
 			}
 		}
 	}
+}
+
+onKeyDown.e = function() {
+	console.log(exportAll())
+//	determineFunctionDependencies()
+//	console.log(F_.exportAsCode())
 }
 
 onKeyDown.s = function() {
@@ -1571,8 +1700,11 @@ function Loop(numberOfRepetitions, commands) {
 	if (numberOfRepetitions !== undefined)
 		self.setMainParameter(numberOfRepetitions)
 	self.commandsInLoop = commands === undefined ? [] : commands
-	for (var i=0; i<self.commandsInLoop.length; i++)
+	for (var i=0; i<self.commandsInLoop.length; i++) {
 		self.commandsInLoop[i].scope = self
+		// TODO scopeDepth is always 0 for root commands
+//		self.commandsInLoop[i].scopeDepth++
+	}
 	// "unfolded" loop
 	self.commands = []
 	// for all repetitions
@@ -1743,7 +1875,7 @@ Loop.prototype.removeFromMainSVG = function() {
 function FunctionCall(func, args) {
 	var self = this
 	self.setUpReferences(FunctionCall)
-	console.assert(func !== undefined)
+	// func may be undefined if it is a shallowClone
 	self.f = func
 	self.customArguments = {}
 	if (args !== undefined) {
