@@ -1,7 +1,7 @@
 /*
-	Drawing Turtle Graphics
+	Vogo
 	Copyright (C) 2014 Matthias Graf
-	matthias.graf <a> eclasca.de
+	matthias.graf <a> mgrf.de
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published by
@@ -17,9 +17,9 @@
 	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-var ma = function() {// spans everything - not indented
+var vogo = function() {// spans everything - not indented
 "use strict";
-var ma = {}
+var vogo = {}
 
 // CONSTANTS (const not supported in strict mode)
 var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "stroke-linecap": "round"}
@@ -40,7 +40,6 @@ var defaultSvgViewboxHeight = 100
 var domSvg
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
-// http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
 	78: "n" }
@@ -122,45 +121,30 @@ var selection = {
 	}
 }
 
-ma.init = function() {
+vogo.init = function() {
 	domSvg = document.getElementById("turtleSVG")
 	mainSVG = new MainSVG()
+	window.onresize = function(event) {
+		updateScreenElemsSize()
+	}
+	window.onresize()
 	
-	F_ = new Function()
-	functions.push(F_)
-	F_.svgContainer.classed("fSVGselected", true)
+	addNewFunctionToUI()
 	
-//	F_.setCommands([
-//		new Rotate(1),
-//		new Move(10),
-//		new Loop(2, [
-//			new Loop(2, [
-//				new Loop(2, [
-//					new Rotate(-0.5),
-//					new Move(7)
-//				])
-//			])
-//		])
-//	])
+//	var f = new Function("myf", {a: undefined}, [new Rotate(1), new Move("a")])
+//	var f3 = new Drawing(f, {a: 20}, mainSVG.svg.append("g"))
 	
-//	F_.addArgument(5)
-//	F_.setCommands([
-//		new Rotate(-1),
-//		new Move("a")
-//	])
-	
-	setup()
-	run()
-	
-//	var f = new Function()
-//	functions.push(f)
-//	f.setCommands([
-//		new Rotate(1),
-//		new Move(10),
-//		new FunctionCall(functions[0])
-//	])
-//	f.switchTo()
-	
+	setupUIEventListeners()
+}
+
+// wraps a function for drawing it multiple times
+function Drawing(f, args, paintingG) {
+	return new Function(f.name, {}, [new FunctionCall(f, args)], paintingG).exec()
+}
+
+// for d3.call()
+vogo.draw = function(f, args) {
+	return function(elem) { return new Drawing(f, args, elem) }
 }
 
 function run() {
@@ -212,16 +196,10 @@ function MainSVG() {
 	self.svgInit()
 }
 
-function setup() {
+function setupUIEventListeners() {
 	d3.select("#f_addNew").on("click", function() {
-		createNewFunction()
+		addNewFunctionToUI()
 	})
-	
-	window.onresize = function(event) {
-		updateScreenElemsSize()
-	}
-//	updatePanelSize()
-	window.onresize()
 	
 	d3.select("#border").call(d3.behavior.drag()
 		.on("drag", function (d) {
@@ -336,19 +314,33 @@ State.prototype.clone = function() {
 	return s
 }
 
-function Function(name) {
+function Function(name, args, commands, customPaintingG) {
 	var self = this
 	self.state = new State()
-	
+	self.setName(name)
+	self.args = {}
+	if (args !== undefined) {
+		self.args = args
+		for (var a in args) // wrap in expressions
+			if (!(self.args[a] instanceof Expression) && self.args[a] !== undefined)
+				self.args[a] = new Expression(self.args[a])
+	}
+	self.commands = []
+	if (commands !== undefined)
+		self.setCommands(commands)
+	if (customPaintingG !== undefined)
+		self.paintingG = customPaintingG
+	return self
+}
+
+Function.prototype.initUI = function() {
+	var self = this
 	self.svgViewboxWidth
 	self.svgViewboxHeight = defaultSvgViewboxHeight // fix on startup
 	self.svgViewboxX
 	self.svgViewboxY
 	self.svgWidth
 	self.svgHeight
-	
-	self.commands = []
-	self.args = {}
 	
 	self.li_f = d3.select("#ul_f").append("li")//.attr("id", "f_"+self.name)
 	// this complicated wrapping is sadly necessary
@@ -358,6 +350,7 @@ function Function(name) {
 	self.nameInput = titleRow.append("div").attr("class", "titleRowCell")
 		.append("input")
 		.attr("class", "f_name")
+		.property("value", self.name)
 		.attr("type", "text")
 		.on("blur", function() {
 			self.setName(this.value)
@@ -370,7 +363,6 @@ function Function(name) {
 			self.nameInput.classed({"inputInEditState": true})
 			self.checkName(this.value)
 		})
-	self.setName(name)
 	
 	titleRow.append("div").attr("class", "titleRowCell")
 		.append("button").attr("class", "f_remove").text("x")
@@ -437,7 +429,8 @@ MainSVG.prototype.updateTurtle = function() {
 
 Function.prototype.updateTurtle = function() {
 	var self = this
-	self.turtleCursor.attr("transform", "translate("+self.state.x+", "+self.state.y+") rotate("+(self.state.r/Math.PI*180)+")")
+	if (self.turtleCursor !== undefined)
+		self.turtleCursor.attr("transform", "translate("+self.state.x+", "+self.state.y+") rotate("+(self.state.r/Math.PI*180)+")")
 }
 
 function updateViewboxFor(obj, ref, afterZoom) {
@@ -451,7 +444,8 @@ function updateViewboxFor(obj, ref, afterZoom) {
 }
 
 MainSVG.prototype.updateViewbox = function(afterZoom) {
-	updateViewboxFor(this.svg, F_, afterZoom)
+	if (F_ !== undefined)
+		updateViewboxFor(this.svg, F_, afterZoom)
 }
 
 Function.prototype.updateViewbox = function(afterZoom) {
@@ -493,13 +487,17 @@ Function.prototype.checkName = function(newName) {
 	// check for duplicates
 	for (var i=0; i<functions.length; i++) {
 		if (functions[i] !== this && functions[i].name === newName) {
-			this.nameInput.classed({"inputInWrongState": true})
-			updateNotification("Function name duplication.")
+			if (this.nameInput !== undefined) {
+				this.nameInput.classed({"inputInWrongState": true})
+				updateNotification("Function name duplication.")
+			}
 			return false
 		}
 	}
-	this.nameInput.classed({"inputInWrongState": false})
-	hideNotification()
+	if (this.nameInput !== undefined) {
+		this.nameInput.classed({"inputInWrongState": false})
+		hideNotification()
+	}
 	return true
 }
 
@@ -523,9 +521,11 @@ Function.prototype.setName = function(newName) {
 	var r = self.checkName(newName)
 	if (r)
 		self.name = newName
-	self.nameInput.property("value", self.name)
-	self.nameInput.classed({"inputInEditState": false, "inputInWrongState": false})
-	hideNotification()
+	if (self.nameInput !== undefined) {
+		self.nameInput.property("value", self.name)
+		self.nameInput.classed({"inputInEditState": false, "inputInWrongState": false})
+		hideNotification()
+	}
 	return r
 }
 
@@ -624,10 +624,12 @@ Function.prototype.exec = function() {
 	for (var i=0; i<self.commands.length; i++)
 		self.commands[i].exec(self)
 	self.updateTurtle()
+	return self
 }
 
 Function.prototype.switchTo = function() {
 	var self = this
+	self.svgContainer.classed("fSVGselected", true)
 	if (F_ === self)
 		return
 	selection.deselectAll()
@@ -638,32 +640,26 @@ Function.prototype.switchTo = function() {
 			F_.commands[i].removeFromMainSVG()
 	}
 	F_ = self
-	F_.svgContainer.classed("fSVGselected", true)
 	F_.updateViewbox()
 	mainSVG.updateViewbox()
 	run()
-//	document.body.focus()
 	// this sets the active element back to body, which is required for drawing
 	document.activeElement.blur()
-//	console.assert(bodyIsSelected())
 }
 
 Function.prototype.remove = function() {
 	var self = this
-	
 	functions.splice(functions.indexOf(self), 1)
-	if (F_ === self) {
-		if (self.previousF_ !== undefined && functions.indexOf(self.previousF_) !== -1)
-			F_ = self.previousF_
-		else
-			F_ = functions[functions.length-1]
-		F_.switchTo()
+	if (F_ === self && functions.length > 0) { // switch to previous or last
+		(self.previousF_ !== undefined && functions.indexOf(self.previousF_) !== -1
+			? self.previousF_
+			: functions[functions.length-1])
+				.switchTo()
 	}
 	
 	for (var i=0; i<self.commands.length; i++)
 		self.commands[i].remove()
-	for (var i=self.commands.length-1; i>=0; i--)
-		delete self.commands[i]
+	self.commands = []
 	
 	// contains everything
 	self.li_f.remove()
@@ -893,15 +889,16 @@ function setTextOfInput(input, containingForeignObject, text) {
 	}
 }
 
-function createNewFunction() {
+function addNewFunctionToUI() {
 	var f = new Function()
+	f.initUI()
 	functions.push(f)
 	f.switchTo()
 }
 
 onKeyDown.n = function() {
 	if (bodyIsSelected())
-		createNewFunction()
+		addNewFunctionToUI()
 }
 
 onKeyDown.d = function() {
@@ -951,6 +948,7 @@ onKeyDown.esc = function() {
 
 onKeyDown.a = function() {
 	if (!selection.isEmpty()) {
+		// TODO if exp isStatic
 		var argName = F_.addArgument(selection.e[0].evalMainParameter())
 		selection.e[0].setMainParameter(argName)
 		run()
@@ -1742,11 +1740,18 @@ Loop.prototype.removeFromMainSVG = function() {
 
 
 
-function FunctionCall(func) {
+function FunctionCall(func, args) {
 	var self = this
 	self.setUpReferences(FunctionCall)
+	console.assert(func !== undefined)
 	self.f = func
 	self.customArguments = {}
+	if (args !== undefined) {
+		self.customArguments = args
+		for (var a in self.customArguments)
+			if (!(self.customArguments[a] instanceof Expression))
+				self.customArguments[a] = new Expression(self.customArguments[a])
+	}
 	self.commands = []
 	self.icon
 	self.argumentFields = {}
@@ -1757,7 +1762,7 @@ FunctionCall.prototype.exec = function(callerF) {
 	var self = this
 	var root = self.root
 	self.savedState = callerF.state.clone()
-	console.assert(root.f !== undefined && functions.indexOf(root.f) !== -1)
+	console.assert(root.f !== undefined)
 	
 	if (self.icon === undefined && callerF === F_) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
@@ -1923,7 +1928,12 @@ FunctionCall.prototype.removeFromMainSVG = function() {
 
 
 
+vogo.Drawing = Drawing
+vogo.Function = Function
+vogo.Move = Move
+vogo.Rotate = Rotate
+vogo.Loop = Loop
+vogo.FunctionCall = FunctionCall
 
-
-return ma
+return vogo
 }()
