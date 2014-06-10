@@ -21,11 +21,13 @@
 		 style="border: 1px solid grey;"></svg>
 	
 	<script>
-var α = new vogo.Function("α", {})
+		
+var α = new vogo.Function("α", {"a": 16.66});
 α.setCommands([
-	new vogo.Move(9.78),
-	new vogo.Rotate(0.291),
-	new vogo.FunctionCall(α)])
+	new vogo.Branch("a>1", [
+			new vogo.Rotate(0.203),
+			new vogo.Move("a")], []),
+	new vogo.FunctionCall(α, {"a": "a*0.7"})]);
 
 new vogo.Drawing(α, {}, d3.select("#mysvg"))
 

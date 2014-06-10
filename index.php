@@ -26,6 +26,7 @@
 	</div>
 	
 	<script>
+		// functions and variables set here can be used inside vogo
 		vogo.init()
 	</script>
 </body>

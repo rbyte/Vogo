@@ -34,7 +34,7 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 4
-var scopeDepthLimit = 15 // for endless loops and recursion
+var scopeDepthLimit = 30 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 100
 var domSvg
@@ -42,7 +42,7 @@ var domSvg
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
-	78: "n" }
+	78: "n", 66: "b"}
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -130,6 +130,9 @@ vogo.init = function() {
 	window.onresize()
 	
 	addNewFunctionToUI()
+	
+//	F_.setCommands([new Branch("true", [new Move(10)], [new Rotate(2)])])
+//	run()
 	
 	setupUIEventListeners()
 }
@@ -631,15 +634,13 @@ Function.prototype.setCommands = function(commands) {
 	console.assert(commands instanceof Array)
 	var self = this
 	self.commands = commands
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].scope = self
+	self.commands.forEach(function (e) { e.scope = self })
 	return self
 }
 
 Function.prototype.exec = function() {
 	var self = this
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].exec(self)
+	self.commands.forEach(function(e) { e.exec(self) })
 	self.updateTurtle()
 	return self
 }
@@ -653,8 +654,7 @@ Function.prototype.switchTo = function() {
 	if (F_ !== undefined) {
 		self.previousF_ = F_
 		F_.svgContainer.classed("fSVGselected", false)
-		for (var i=0; i<F_.commands.length; i++)
-			F_.commands[i].removeFromMainSVG()
+		F_.commands.forEach(function(e) { e.removeFromMainSVG() })
 	}
 	F_ = self
 	F_.updateViewbox()
@@ -674,8 +674,7 @@ Function.prototype.remove = function() {
 				.switchTo()
 	}
 	
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].remove()
+	self.commands.forEach(function(e) { e.remove() })
 	self.commands = []
 	
 	// contains everything
@@ -708,42 +707,6 @@ Function.prototype.exportAsCode = function() {
 	var self = this
 	var result = "var "+self.name+" = new vogo.Function(\""+self.name+"\", {"
 	
-	function commandsToCodeString(commands, scopeDepth) {
-		var result = "["
-		for (var i=0; i<commands.length; i++) {
-			console.assert(commands[i] instanceof Command)
-			result += "\n"
-			for (var t=0; t<scopeDepth+1; t++)
-				result += "\t"
-			if (commands[i] instanceof FunctionCall) {
-				var p = commands[i].f.name
-				var argsLength = Object.keys(commands[i].customArguments).length
-				var k = 0
-				if (argsLength > 0) p += ", {"
-				for (var a in commands[i].customArguments) {
-					var q = commands[i].customArguments[a].get()
-					if (typeof q == "string")
-						q = "\""+q+"\""
-					p += "\""+a+"\": "+q
-						+(++k < argsLength ? ", " : "")
-				}
-				if (argsLength > 0) p += "}"
-			} else {
-				var p = commands[i].root.mainParameter.get()
-				if (typeof p == "string")
-					p = "\""+p+"\""
-			}
-			// it is expected that referred to functions exist as variable
-			result += "new vogo."+commands[i].myConstructor.name/*JS6*/+"("+p+
-				(commands[i] instanceof Loop
-					? ", "+commandsToCodeString(commands[i].commandsInLoop, scopeDepth+1)
-					: "")+")"
-			result += i < commands.length-1 ? ",": ""
-		}
-		result += "]"
-		return result
-	}
-	
 	var argsCount = Object.keys(self.args).length
 	var i = 0
 	for (var a in self.args) {
@@ -752,12 +715,11 @@ Function.prototype.exportAsCode = function() {
 			p = "\""+p+"\""
 		result += "\""+a+"\": "+p+(++i < argsCount ? ", " : "")
 	}
+	
 	// the extra call will make recursion possible
-	result += "})\n"+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+")"
+	result += "});\n"+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+");"
 	return result
 }
-
-
 
 var manipulation = {
 	insertedCommand: false
@@ -790,7 +752,7 @@ manipulation.createPreview = function(cmdType) {
 		var selectedElem = selection.e[0]
 		var sScope = selectedElem.root.scope
 //		console.assert(sScope instanceof Function)
-		var cmdsRef = sScope instanceof Loop ? sScope.commandsInLoop : sScope.commands
+		var cmdsRef = sScope.commands
 		var cmdSelIdx = cmdsRef.indexOf(selectedElem.root)
 		console.assert(cmdSelIdx !== -1)
 //		this.savedState = sScope.commands[cmdSelIdx].savedState.clone()
@@ -967,16 +929,6 @@ function addNewFunctionToUI() {
 	f.switchTo()
 }
 
-function exportAllNOTWORKING() {
-	var result = "var "
-	for (var i=0; i<functions.length; i++)
-		result += functions[i].name+(i < functions.length-1 ? ", ": "")
-	result += "\n"
-	for (var i=0; i<functions.length; i++)
-		result += functions[i].exportAsCode()+"\n\n"
-	return result
-}
-
 function exportAll() {
 	var fDep = determineFunctionDependencies()
 	var fProcessed = {}
@@ -1008,15 +960,32 @@ function determineFunctionDependencies() {
 				dependencies[i] = functions.indexOf(commands[k].root.f)
 			}
 			if (commands[k] instanceof Loop)
-				searchForFunctionCall(commands[k].commandsInLoop)
+				searchForFunctionCall(commands[k].commands)
+			if (commands[k] instanceof Branch) {
+				searchForFunctionCall(commands[k].ifTrueBranch)
+				searchForFunctionCall(commands[k].ifFalseBranch)
+			}
 		}
 	}
-	for (var i=0; i<functions.length; i++)
-		searchForFunctionCall(functions[i].commands)
+	functions.forEach(function(f) { searchForFunctionCall(f.commands) })
 	if (false)
 		for (var d in dependencies)
 			console.log(functions[d].name+" depends on "+functions[dependencies[d]].name)
 	return dependencies
+}
+
+function commandsToCodeString(commands, scopeDepth) {
+	var result = "["
+	for (var i=0; i<commands.length; i++) {
+		console.assert(commands[i] instanceof Command)
+		result += "\n"
+		for (var t=0; t<scopeDepth+1; t++)
+			result += "\t"
+		result += commands[i].toCode(scopeDepth+1)
+		result += i < commands.length-1 ? ",": ""
+	}
+	result += "]"
+	return result
 }
 
 onKeyDown.n = function() {
@@ -1051,7 +1020,10 @@ onKeyDown.r = function() {
 }
 
 onKeyDown.e = function() {
-	console.log(exportAll())
+	var result = exportAll()
+	console.log(result)
+	// TODO make it beautiful
+//	window.prompt("Copy to clipboard: Ctrl+C, Enter", result)
 //	determineFunctionDependencies()
 //	console.log(F_.exportAsCode())
 }
@@ -1084,18 +1056,18 @@ onKeyDown.a = function() {
 	}
 }
 
-onKeyDown.l = function() { // create loop containing selection
+function wrapSelectionInCommand(cmdName, doWithCmdList) {
 	if (selection.isEmpty()) {
-		updateNotification("Select something to loop.", 5000)
+		updateNotification("Select something to "+cmdName+".", 5000)
 		return
 	}
 	var selectedElem = selection.e[0].root
 	var scope = selectedElem.scope
-	var cmdsRef = scope instanceof Loop ? scope.commandsInLoop : scope.commands
+	var cmdsRef = scope.commands
 	var idxArr = []
 	for (var i=0; i<selection.e.length; i++) {
 		if (i !== 0 && scope !== selection.e[i].root.scope) {
-			updateNotification("Can only loop elements from the same scope.", 5000)
+			updateNotification("Can only "+cmdName+" elements from the same scope.", 5000)
 			return
 		}
 		idxArr.push(cmdsRef.indexOf(selection.e[i].root))
@@ -1106,17 +1078,25 @@ onKeyDown.l = function() { // create loop containing selection
 	var cmdList = []
 	for (var i=0; i<idxArr.length; i++) {
 		if (i !== 0 && idxArr[i] !== first+i && first !== -1) {
-			updateNotification("Can only loop connected elements.", 5000)
+			updateNotification("Can only "+cmdName+" connected elements.", 5000)
 			return
 		}
 		// create new connections
 		cmdList.push(cmdsRef[idxArr[i]])
 	}
 	selection.removeAll()
-	var loop = new Loop(2, cmdList)
-	loop.scope = scope
-	cmdsRef.splice(first, 0, loop)
+	var cmdThatWrapped = doWithCmdList(cmdList)
+	cmdThatWrapped.scope = scope
+	cmdsRef.splice(first, 0, cmdThatWrapped)
 	run()
+}
+
+onKeyDown.l = function() {
+	wrapSelectionInCommand("loop", function(cmdList) { return new Loop(2, cmdList) })
+}
+
+onKeyDown.b = function() { // create branch containing selection
+	wrapSelectionInCommand("branch", function(cmdList) { return new Branch("true", cmdList, []) })
 }
 
 function Expression(exp) {
@@ -1137,7 +1117,7 @@ Expression.prototype.set = function(exp) {
 		var result
 		try {
 			result = eval(exp)
-			if (isRegularNumber(result)) {
+			if (this.isNormalResult(result)) {
 				this.cachedEvalFromStaticExp = result
 				this.exp = exp
 				return
@@ -1156,12 +1136,20 @@ Expression.prototype.get = function() {
 	return this.exp
 }
 
+Expression.prototype.getWrapped = function() {
+	return (typeof this.exp == "string" ? "\""+this.exp+"\"" : this.exp)
+}
+
 Expression.prototype.isConst = function() {
 	return typeof this.exp == "number"
 }
 
 Expression.prototype.isStatic = function() {
 	return this.isConst() || (this.cachedEvalFromStaticExp !== undefined)
+}
+
+Expression.prototype.isNormalResult = function(result) {
+	return isRegularNumber(result) || result === true || result === false
 }
 
 // THIS IS WELL THOUGHT THROUGH. do not mess with it, unless you know what you do
@@ -1175,7 +1163,7 @@ Expression.prototype.eval = function(command) {
 		return self.cachedEvalFromStaticExp
 	
 	function evalWithChecks(toEval) {
-//		console.log(toEval)
+//		console.log(toEval+" -- "+self.exp)
 		var result
 		try {
 			result = eval(toEval)
@@ -1184,7 +1172,7 @@ Expression.prototype.eval = function(command) {
 			return 1 // be a bit robust
 		}
 		// TODO if arg is array, it is evaluated each time, but fails
-		console.assert(isRegularNumber(result), "eval result is bullshit: "+result)
+		console.assert(self.isNormalResult(result), "eval result is bullshit: "+result)
 		return result
 	}
 	if (command === undefined) // can this ever be true? -> isStatic
@@ -1374,31 +1362,31 @@ Function.prototype.fromRemove = Command.prototype.fromRemove = function(cmd) {
 		}
 	}
 	console.assert(self instanceof Loop)
-	for (var k=0; k<self.commandsInLoop.length; k++) {
-		if (self.commandsInLoop[k] === cmd) {
-			self.commandsInLoop.splice(k, 1)
-			// TODO if (self.commandsInLoop.length === 0) ...
+	for (var k=0; k<self.execCmds.length; k++) {
+		if (self.execCmds[k] === cmd) {
+			self.execCmds.splice(k, 1)
+			// TODO if (self.commands.length === 0) ...
 			return // can only exist once
 		}
 	}
-	console.assert(false, "removeFrom is expected to find cmd. "+self.commandsInLoop+", "+cmd)
+	console.assert(false, "removeFrom is expected to find cmd. "+self.execCmds+", "+cmd)
 }
 
 Command.prototype.removeCommand = function() {
 	var root = this.root
 	if (root.proxies !== undefined) {
 		// "self" is in proxies
-		for (var i=0; i<root.proxies.length; i++) {
-			root.proxies[i].scope.fromRemove(root.proxies[i])
-			root.proxies[i].remove()
-		}
+		root.proxies.forEach(function(p) {
+			p.scope.fromRemove(p)
+			p.remove()
+		})
 		root.proxies = undefined
 	}
 	root.scope.fromRemove(root)
 	root.remove()
 }
 
-Command.prototype.removeProxyConnection = function() {
+Command.prototype.removeWithProxyConnection = function() {
 	var self = this
 	if (self.root !== self) {
 		console.assert(self.root.proxies.length > 0)
@@ -1406,21 +1394,27 @@ Command.prototype.removeProxyConnection = function() {
 		console.assert(idx !== -1)
 		self.root.proxies.splice(idx, 1)
 	}
-	return self
+	self.remove()
 }
 
 Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
 	if (elements instanceof Array)
-		for (var i=0; i<elements.length; i++)
-			if (elements[i] !== undefined) {
+		elements.forEach(function(e) {
+			if (e !== undefined) {
 				if (prop !== undefined) {
-					if (elements[i][prop] !== undefined) {
-						elements[i][prop].classed(cssName, on)
+					if (e[prop] !== undefined) {
+						e[prop].classed(cssName, on)
 					}
 				} else {
-					elements[i].classed(cssName, on)
+					e.classed(cssName, on)
 				}
 			}
+		})
+}
+
+Command.prototype.toCode = function(scopeDepth) {
+	return "new vogo."+this.myConstructor.name/*JS6*/
+		+"("+this.root.mainParameter.getWrapped()+")"
 }
 
 function Move(lineLength) {
@@ -1552,8 +1546,6 @@ Move.prototype.removeFromMainSVG = function() {
 	self.lineMainSVG = undefined
 }
 
-
-
 function Rotate(angle) {
 	var self = this
 	self.setUpReferences(Rotate)
@@ -1584,6 +1576,7 @@ Rotate.prototype.exec = function(callerF) {
 					self.arc.style({fill: "#f00"})
 			})
 			.on("mouseleave", function (d, i) {
+				// TODO self.arc is sometimes undefined
 				self.arc.style(arcStyle)
 			})
 			.on("click", function (d, i) {
@@ -1699,14 +1692,11 @@ function Loop(numberOfRepetitions, commands) {
 	self.setUpReferences(Loop)
 	if (numberOfRepetitions !== undefined)
 		self.setMainParameter(numberOfRepetitions)
-	self.commandsInLoop = commands === undefined ? [] : commands
-	for (var i=0; i<self.commandsInLoop.length; i++) {
-		self.commandsInLoop[i].scope = self
-		// TODO scopeDepth is always 0 for root commands
-//		self.commandsInLoop[i].scopeDepth++
-	}
+	// TODO scopeDepth is always 0 for root commands
+	self.commands = commands === undefined ? [] : commands
+	self.commands.forEach(function (e) { e.scope = self })
 	// "unfolded" loop
-	self.commands = []
+	self.execCmds = []
 	// for all repetitions
 	self.iconGs = []
 }
@@ -1790,14 +1780,11 @@ Loop.prototype.exec = function(callerF) {
 			
 	}
 	
-	var rebuild = self.commands.length !== numberOfRepetitions * self.root.commandsInLoop.length
+	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length
 		|| self.iconGs.length !== numberOfRepetitions
 	if (rebuild) {
-		for (var k=0; k<self.commands.length; k++) {
-			self.commands[k].remove()
-			self.commands[k].removeProxyConnection()
-		}
-		self.commands = []
+		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
+		self.execCmds = []
 		if (callerF === F_)
 			if (0 <= numberOfRepetitions && numberOfRepetitions < self.iconGs.length) { // remove dangling
 				for (var k=numberOfRepetitions; k<self.iconGs.length; k++)
@@ -1823,12 +1810,12 @@ Loop.prototype.exec = function(callerF) {
 			self.applyCSSClass([self.iconGs[i].circleF], "mark", selection.containsAsRoot(self.root))
 		}
 		
-		for (var k=0; k<self.root.commandsInLoop.length; k++) {
-			var pos = i*self.root.commandsInLoop.length + k
+		for (var k=0; k<self.root.commands.length; k++) {
+			var pos = i*self.root.commands.length + k
 			if (rebuild) {
-				self.commands[pos] = self.root.commandsInLoop[k].shallowClone(self)
+				self.execCmds[pos] = self.root.commands[k].shallowClone(self)
 			}
-			self.commands[pos].exec(callerF)
+			self.execCmds[pos].exec(callerF)
 		}
 	}
 }
@@ -1836,8 +1823,9 @@ Loop.prototype.exec = function(callerF) {
 Loop.prototype.mark = function(on) {
 	var self = this
 	if (self.root.proxies !== undefined)
-		for (var i=0; i<self.root.proxies.length; i++)
-			self.applyCSSClass(self.root.proxies[i].iconGs, "mark", on, "circleF")
+		self.root.proxies.forEach(function(e) {
+			self.applyCSSClass(e.iconGs, "mark", on, "circleF")
+		})
 }
 
 Loop.prototype.select = function() {
@@ -1856,21 +1844,21 @@ Loop.prototype.deselect = function() {
 Loop.prototype.remove = function() {
 	var self = this
 //	self.deselect()
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].remove()
+	self.execCmds.forEach(function(e) { e.remove() })
 	self.removeFromMainSVG()
 }
 
 Loop.prototype.removeFromMainSVG = function() {
 	var self = this
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].removeFromMainSVG()
-	for (var i=0; i<self.iconGs.length; i++)
-		self.iconGs[i].remove()
+	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
+	self.iconGs.forEach(function(e) { e.remove() })
 	self.iconGs = []
 }
 
-
+Loop.prototype.toCode = function(scopeDepth) {
+	return "new vogo.Loop("+this.root.mainParameter.getWrapped()+", "
+		+commandsToCodeString(this.root.commands, scopeDepth+1)+")"
+}
 
 function FunctionCall(func, args) {
 	var self = this
@@ -1884,7 +1872,7 @@ function FunctionCall(func, args) {
 			if (!(self.customArguments[a] instanceof Expression))
 				self.customArguments[a] = new Expression(self.customArguments[a])
 	}
-	self.commands = []
+	self.execCmds = []
 	self.icon
 	self.argumentFields = {}
 }
@@ -1988,7 +1976,7 @@ FunctionCall.prototype.exec = function(callerF) {
 		}
 		for (var a in root.customArguments) {
 			if (root.f.args[a] === undefined) {
-				if (self.argumentFields[a] !== undefined) {
+				if (secommandslf.argumentFields[a] !== undefined) {
 					self.argumentFields[a].remove()
 					delete self.argumentFields[a]
 				}
@@ -1998,23 +1986,19 @@ FunctionCall.prototype.exec = function(callerF) {
 		}
 	}
 	
-	if (self.commands.length !== root.f.commands.length) {
-		for (var i=0; i<self.commands.length; i++) {
-			self.commands[i].remove()
-			self.commands[i].removeProxyConnection()
-		}
-		self.commands = []
-		for (var i=0; i<root.f.commands.length; i++)
-			self.commands.push(root.f.commands[i].shallowClone(self))
+	if (self.execCmds.length !== root.f.commands.length) {
+		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
+		self.execCmds = []
+		root.f.commands.forEach(function(e) {
+			self.execCmds.push(e.shallowClone(self))
+		})
 	}
 	
 	if (self.scopeDepth > scopeDepthLimit) {
-//		console.log("scope depth to high. endless loop/recursion? stopping here.")
+		updateNotification("Execution depth too high (>"+scopeDepthLimit+"). Endless loop/recursion? Stopping here.", 5000)
 	} else {
 //		console.log("exec fc with scopeDepth: "+self.scopeDepth)
-		for (var i=0; i<self.commands.length; i++) {
-			self.commands[i].exec(callerF)
-		}
+		self.execCmds.forEach(function(e) { e.exec(callerF) })
 	}
 }
 
@@ -2041,15 +2025,13 @@ FunctionCall.prototype.deselect = function() {
 
 FunctionCall.prototype.remove = function() {
 	var self = this
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].remove()
+	self.execCmds.forEach(function(e) { e.remove() })
 	self.removeFromMainSVG()
 }
 
 FunctionCall.prototype.removeFromMainSVG = function() {
 	var self = this
-	for (var i=0; i<self.commands.length; i++)
-		self.commands[i].removeFromMainSVG()
+	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
 	if (self.icon !== undefined)
 		self.icon.remove()
 	self.icon = undefined
@@ -2058,6 +2040,138 @@ FunctionCall.prototype.removeFromMainSVG = function() {
 	self.argumentFields = {}
 }
 
+FunctionCall.prototype.toCode = function(scopeDepth) {
+	var self = this
+	console.assert(self === self.root)
+	// the f.name is not wrapped. it is assumed to exist as a variable
+	var result = "new vogo.FunctionCall("+self.f.name+", {"
+	var argsLength = Object.keys(self.customArguments).length
+	var k = 0
+	for (var a in self.customArguments) {
+		result += "\""+a+"\": "+self.customArguments[a].getWrapped()
+			+(++k < argsLength ? ", " : "")
+	}
+	result += "})"
+	return result
+}
+
+
+function Branch(cond, ifTrueCmds, ifFalseCmds) {
+	var self = this
+	self.setUpReferences(Branch)
+	if (cond !== undefined)
+		self.setMainParameter(cond)
+	self.lastCondEvalResult
+	self.ifTrueCmds = ifTrueCmds === undefined ? [] : ifTrueCmds
+	self.ifTrueCmds.forEach(function (e) { e.scope = self })
+	self.ifFalseCmds = ifFalseCmds === undefined ? [] : ifFalseCmds
+	self.ifFalseCmds.forEach(function (e) { e.scope = self })
+	self.execCmds = []
+	self.iconG
+}
+Branch.prototype = new Command()
+
+Branch.prototype.exec = function(callerF) {
+	var self = this
+	var root = self.root
+	self.savedState = callerF.state.clone()
+	var condEval = self.evalMainParameter()
+	var condEvalChanged = self.lastCondEvalResult === undefined || self.lastCondEvalResult !== condEval
+	self.lastCondEvalResult = condEval
+	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
+	
+	if (self.iconG === undefined && callerF === F_) {
+		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
+//		self.iconG.append("text").text("?")
+//		callerF.paintingG
+		self.iconG.trueL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 0)
+		self.iconG.falseL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 2)
+		self.iconG.append("line").attr("x1", 0).attr("y1", 1).attr("x2", 1).attr("y2", 1)
+		
+		self.iconG.fo = self.iconG.append("foreignObject")
+			.attr("width", 250 /*max-width*/).attr("height", 25).attr("x", 0).attr("y", 0)
+			.on("click", function() {
+				d3.event.stopPropagation()
+			})
+		
+		self.iconG.labelInput = self.iconG.fo.append("xhtml:body").append("xhtml:input")
+			.attr("type", "text")
+			.on("blur", function() {
+				self.setMainParameter(this.value)
+				run()
+			})
+			.on("keypress", function() {
+				if (d3.event.keyCode === /*enter*/ 13) {
+					self.setMainParameter(this.value)
+					run()
+				}
+			})
+			.on("input", function() {
+				setTextOfInput(self.iconG.labelInput, self.iconG.fo)
+			})
+	}
+	
+	if (callerF === F_) {
+		self.iconG.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+")")
+		var takenBranchColor = branchCmds.length === 0 ? /*dead end branch*/ "#b00" : "#0b0"
+		self.iconG.trueL.style({stroke: condEval ? takenBranchColor : "#000"})
+		self.iconG.falseL.style({stroke: condEval ? "#000" : takenBranchColor})
+		self.iconG.fo.attr("transform", "translate("+2.4+","+0+") scale(0.1)")
+		self.iconG.labelInput.property("value", root.mainParameter.get())
+		setTextOfInput(self.iconG.labelInput, self.iconG.fo)
+	}
+	
+	if (condEvalChanged) {
+		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
+		self.execCmds = []
+		branchCmds.forEach(function(e) { self.execCmds.push(e.shallowClone(self)) })
+	}
+	
+	self.execCmds.forEach(function(e) { e.exec(callerF) })
+}
+
+Branch.prototype.mark = function(on) {
+	var self = this
+	self.applyCSSClass([self.iconG], "mark", on)
+}
+
+Branch.prototype.select = function() {
+	var self = this
+	selection.add(self)
+	self.applyCSSClass([self.iconG], "selected", true)
+	self.mark(true)
+}
+
+Branch.prototype.deselect = function() {
+	var self = this
+	self.applyCSSClass([self.iconG], "selected", false)
+	self.mark(false)
+}
+
+Branch.prototype.remove = function() {
+	var self = this
+	self.ifTrueCmds.forEach(function(e) { e.remove() })
+	self.ifFalseCmds.forEach(function(e) { e.remove() })
+	self.removeFromMainSVG()
+}
+
+Branch.prototype.removeFromMainSVG = function() {
+	var self = this
+	self.ifTrueCmds.forEach(function(e) { e.removeFromMainSVG() })
+	self.ifFalseCmds.forEach(function(e) { e.removeFromMainSVG() })
+	if (self.iconG !== undefined)
+		self.iconG.remove()
+	self.iconG = undefined
+}
+
+Branch.prototype.toCode = function(scopeDepth) {
+	var self = this
+	console.assert(self === self.root)
+	var result = "new vogo.Branch("+self.root.mainParameter.getWrapped()+", "
+		+commandsToCodeString(self.ifTrueCmds, scopeDepth+1)+", "
+		+commandsToCodeString(self.ifFalseCmds, scopeDepth+1)+")"
+	return result
+}
 
 
 vogo.Drawing = Drawing
@@ -2066,6 +2180,7 @@ vogo.Move = Move
 vogo.Rotate = Rotate
 vogo.Loop = Loop
 vogo.FunctionCall = FunctionCall
+vogo.Branch = Branch
 
 return vogo
 }()
