@@ -114,7 +114,7 @@ var selection = {
 	removeAll: function() {
 		var detach = this.deselectAll()
 		for (var i=0; i<detach.length; i++) {
-			detach[i].removeFromMainSVG()
+			detach[i].removeVisible()
 			detach[i].removeCommand()
 		}
 		return detach
@@ -124,17 +124,11 @@ var selection = {
 vogo.init = function() {
 	domSvg = document.getElementById("turtleSVG")
 	mainSVG = new MainSVG()
-	window.onresize = function(event) {
-		updateScreenElemsSize()
-	}
+	window.onresize = function(event) { updateScreenElemsSize()}
 	window.onresize()
-	
 	addNewFunctionToUI()
-	
-//	F_.setCommands([new Branch("true", [new Move(10)], [new Rotate(2)])])
-//	run()
-	
 	setupUIEventListeners()
+	test()
 }
 
 // wraps a function for drawing it multiple times
@@ -418,6 +412,7 @@ Function.prototype.initUI = function() {
 //					if (self === F_) {
 //						// recursion!
 //					} else {
+						// TODO respect selection!
 						var fc = new FunctionCall(self)
 						fc.scope = F_
 						F_.commands.push(fc)
@@ -654,7 +649,7 @@ Function.prototype.switchTo = function() {
 	if (F_ !== undefined) {
 		self.previousF_ = F_
 		F_.svgContainer.classed("fSVGselected", false)
-		F_.commands.forEach(function(e) { e.removeFromMainSVG() })
+		F_.commands.forEach(function(e) { e.removeVisibleFromMainSVG() })
 	}
 	F_ = self
 	F_.updateViewbox()
@@ -674,7 +669,8 @@ Function.prototype.remove = function() {
 				.switchTo()
 	}
 	
-	self.commands.forEach(function(e) { e.remove() })
+	// TODO kill proxies?
+	self.commands.forEach(function(e) { e.removeVisible() })
 	self.commands = []
 	
 	// contains everything
@@ -703,21 +699,12 @@ Function.prototype.setStateTo = function(idx) {
 	}
 }
 
-Function.prototype.exportAsCode = function() {
+Function.prototype.toCode = function() {
 	var self = this
-	var result = "var "+self.name+" = new vogo.Function(\""+self.name+"\", {"
-	
-	var argsCount = Object.keys(self.args).length
-	var i = 0
-	for (var a in self.args) {
-		var p = self.args[a].get()
-		if (typeof p == "string")
-			p = "\""+p+"\""
-		result += "\""+a+"\": "+p+(++i < argsCount ? ", " : "")
-	}
-	
-	// the extra call will make recursion possible
-	result += "});\n"+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+");"
+	var result = "var "+self.name+" = new vogo.Function(\""+self.name+"\", "
+		+argsToCode(self.args)+");\n"
+		// the extra call will make recursion possible
+		+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+");"
 	return result
 }
 
@@ -802,7 +789,8 @@ manipulation.remove = function(cmdType) {
 	
 	var idx = this.insertedCommand.scope.commands.indexOf(this.insertedCommand)
 	this.insertedCommand.scope.commands.splice(idx, 1)
-	this.insertedCommand.remove()
+	// TODO removeCommand?
+	this.insertedCommand.removeVisible()
 	this.insertedCommand = false
 	if (selection.isEmpty()) {
 		F_.state = this.savedState.clone()
@@ -937,7 +925,7 @@ function exportAll() {
 		var fProcessedOld = Object.keys(fProcessed).length
 		for (var i=0; i<functions.length; i++) {
 			if (fDep[i] === undefined || fProcessed[fDep[i]] !== undefined || i === fDep[i] /*allow recursion*/) {
-				result += functions[i].exportAsCode()+"\n\n"
+				result += functions[i].toCode()+"\n\n"
 				fProcessed[i] = true
 				if (Object.keys(fProcessed).length === functions.length)
 					break outer
@@ -967,7 +955,8 @@ function determineFunctionDependencies() {
 			}
 		}
 	}
-	functions.forEach(function(f) { searchForFunctionCall(f.commands) })
+	for (var i=0; k<functions.length; k++)
+		searchForFunctionCall(functions[i].commands)
 	if (false)
 		for (var d in dependencies)
 			console.log(functions[d].name+" depends on "+functions[dependencies[d]].name)
@@ -985,6 +974,18 @@ function commandsToCodeString(commands, scopeDepth) {
 		result += i < commands.length-1 ? ",": ""
 	}
 	result += "]"
+	return result
+}
+
+function argsToCode(args) {
+	var result = "{"
+	var argsLength = Object.keys(args).length
+	var k = 0
+	for (var a in args) {
+		result += "\""+a+"\": "+args[a].getWrapped()
+			+(++k < argsLength ? ", " : "")
+	}
+	result += "}"
 	return result
 }
 
@@ -1024,8 +1025,6 @@ onKeyDown.e = function() {
 	console.log(result)
 	// TODO make it beautiful
 //	window.prompt("Copy to clipboard: Ctrl+C, Enter", result)
-//	determineFunctionDependencies()
-//	console.log(F_.exportAsCode())
 }
 
 onKeyDown.s = function() {
@@ -1095,7 +1094,7 @@ onKeyDown.l = function() {
 	wrapSelectionInCommand("loop", function(cmdList) { return new Loop(2, cmdList) })
 }
 
-onKeyDown.b = function() { // create branch containing selection
+onKeyDown.b = function() {
 	wrapSelectionInCommand("branch", function(cmdList) { return new Branch("true", cmdList, []) })
 }
 
@@ -1378,12 +1377,12 @@ Command.prototype.removeCommand = function() {
 		// "self" is in proxies
 		root.proxies.forEach(function(p) {
 			p.scope.fromRemove(p)
-			p.remove()
+			p.removeVisible()
 		})
 		root.proxies = undefined
 	}
 	root.scope.fromRemove(root)
-	root.remove()
+	root.removeVisible()
 }
 
 Command.prototype.removeWithProxyConnection = function() {
@@ -1394,7 +1393,7 @@ Command.prototype.removeWithProxyConnection = function() {
 		console.assert(idx !== -1)
 		self.root.proxies.splice(idx, 1)
 	}
-	self.remove()
+	self.removeVisible()
 }
 
 Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
@@ -1410,6 +1409,44 @@ Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
 				}
 			}
 		})
+}
+
+Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
+	var self = this
+	props.forEach(function(p) {
+		// we have 3 cases: self[p] is
+		// 1) a simple d3 object
+		// 2) an array of simple d3 objects
+		// 3) an array of commands
+		var isArray = false
+		if (self[p] !== undefined) {
+			// cannot check for Array directly because any d3 object is also an Array
+			isArray = self[p].remove === undefined
+			if (isArray) {
+				self[p].forEach(function(e) {
+					if (e.remove === undefined) // 3
+						fromMainSVG
+							? e.removeVisibleFromMainSVG()
+							: e.removeVisible()
+					else // 2
+						e.remove()
+				})
+			} else { // 1
+				self[p].remove()
+			}
+		}
+		self[p] = isArray ? [] : undefined
+	})
+}
+
+Command.prototype.removeVisible = function() {
+	this.removeVisibleElements(this.getVisibleElements())
+	this.removeVisibleFromMainSVG()
+}
+
+Command.prototype.removeVisibleFromMainSVG = function() {
+	this.deselect()
+	this.removeVisibleElements(this.getVisibleElementsFromMainSVG(), true)
 }
 
 Command.prototype.toCode = function(scopeDepth) {
@@ -1527,24 +1564,31 @@ Move.prototype.deselect = function() {
 	self.applyCSSClass(self.root.proxies, "mark", false, "lineMainSVG")
 }
 
-Move.prototype.remove = function() {
-	var self = this
-	if (self.line !== undefined)
-		self.line.remove()
-	self.line = undefined
-	self.removeFromMainSVG()
+Move.prototype.getVisibleElementsFromMainSVG = function() {
+	return ["lineMainSVG", "label"]
 }
 
-Move.prototype.removeFromMainSVG = function() {
-	var self = this
-	if (self.lineMainSVG !== undefined)
-		self.lineMainSVG.remove()
-	self.lineMainSVG = undefined
-	if (self.label !== undefined)
-		self.label.remove()
-	self.label = undefined
-	self.lineMainSVG = undefined
+Move.prototype.getVisibleElements = function() {
+	return ["line"]
 }
+
+//Move.prototype.remove = function() {
+//	var self = this
+//	if (self.line !== undefined)
+//		self.line.remove()
+//	self.line = undefined
+//	self.removeFromMainSVG()
+//}
+//
+//Move.prototype.removeFromMainSVG = function() {
+//	var self = this
+//	if (self.lineMainSVG !== undefined)
+//		self.lineMainSVG.remove()
+//	self.lineMainSVG = undefined
+//	if (self.label !== undefined)
+//		self.label.remove()
+//	self.label = undefined
+//}
 
 function Rotate(angle) {
 	var self = this
@@ -1668,21 +1712,29 @@ Rotate.prototype.deselect = function() {
 	self.applyCSSClass(self.root.proxies, "mark", false, "arc")
 }
 
-Rotate.prototype.remove = function() {
-	var self = this
-	self.removeFromMainSVG()
+Rotate.prototype.getVisibleElementsFromMainSVG = function() {
+	return ["arc", "label"]
 }
 
-Rotate.prototype.removeFromMainSVG = function() {
-	var self = this
-	self.deselect()
-	if (self.arc !== undefined)
-		self.arc.remove()
-	self.arc = undefined
-	if (self.label !== undefined)
-		self.label.remove()
-	self.label = undefined
+Rotate.prototype.getVisibleElements = function() {
+	return []
 }
+
+//Rotate.prototype.remove = function() {
+//	var self = this
+//	self.removeFromMainSVG()
+//}
+//
+//Rotate.prototype.removeFromMainSVG = function() {
+//	var self = this
+//	self.deselect()
+//	if (self.arc !== undefined)
+//		self.arc.remove()
+//	self.arc = undefined
+//	if (self.label !== undefined)
+//		self.label.remove()
+//	self.label = undefined
+//}
 
 
 
@@ -1841,19 +1893,26 @@ Loop.prototype.deselect = function() {
 	self.mark(false)
 }
 
-Loop.prototype.remove = function() {
-	var self = this
-//	self.deselect()
-	self.execCmds.forEach(function(e) { e.remove() })
-	self.removeFromMainSVG()
+Loop.prototype.getVisibleElementsFromMainSVG = function() {
+	return ["iconGs", "execCmds"]
 }
 
-Loop.prototype.removeFromMainSVG = function() {
-	var self = this
-	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
-	self.iconGs.forEach(function(e) { e.remove() })
-	self.iconGs = []
+Loop.prototype.getVisibleElements = function() {
+	return ["execCmds"]
 }
+
+//Loop.prototype.remove = function() {
+//	var self = this
+//	self.execCmds.forEach(function(e) { e.remove() })
+//	self.removeFromMainSVG()
+//}
+//
+//Loop.prototype.removeFromMainSVG = function() {
+//	var self = this
+//	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
+//	self.iconGs.forEach(function(e) { e.remove() })
+//	self.iconGs = []
+//}
 
 Loop.prototype.toCode = function(scopeDepth) {
 	return "new vogo.Loop("+this.root.mainParameter.getWrapped()+", "
@@ -1874,7 +1933,6 @@ function FunctionCall(func, args) {
 	}
 	self.execCmds = []
 	self.icon
-	self.argumentFields = {}
 }
 FunctionCall.prototype = new Command()
 
@@ -1888,6 +1946,7 @@ FunctionCall.prototype.exec = function(callerF) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
 			// TODO make this relative
 			.attr("width", 200).attr("height", 100).attr("x", 0).attr("y", 0)
+		self.icon.argF = {}
 		self.icon.body = self.icon.append("xhtml:body")
 		self.icon.body.text = self.icon.body.append("xhtml:text")
 			.text("ƒ"+root.f.name)
@@ -1899,14 +1958,14 @@ FunctionCall.prototype.exec = function(callerF) {
 	}
 	
 	function createInputField() {
-		console.assert(self.argumentFields[a] !== undefined)
-		console.assert(self.argumentFields[a].text !== undefined)
-		console.assert(self.argumentFields[a].input === undefined)
-		self.argumentFields[a].text.text(a+"←")
+		console.assert(self.icon.argF[a] !== undefined)
+		console.assert(self.icon.argF[a].text !== undefined)
+		console.assert(self.icon.argF[a].input === undefined)
+		self.icon.argF[a].text.text(a+"←")
 		var value = root.customArguments[a] === undefined ? root.f.args[a].get() : root.customArguments[a].get()
 		if (root.customArguments[a] === undefined)
 			root.customArguments[a] = new Expression(value)
-		self.argumentFields[a].input = self.argumentFields[a].append("div")
+		self.icon.argF[a].input = self.icon.argF[a].append("div")
 			.attr("class", "titleRowCellLast")
 			.append("xhtml:input")
 			.attr("type", "text")
@@ -1923,7 +1982,7 @@ FunctionCall.prototype.exec = function(callerF) {
 				}
 			})
 			.on("input", function() {
-				self.argumentFields[a].input.attr("size", Math.max(1, self.argumentFields[a].input.property("value").toString().length))
+				self.icon.argF[a].input.attr("size", Math.max(1, self.icon.argF[a].input.property("value").toString().length))
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
@@ -1941,10 +2000,10 @@ FunctionCall.prototype.exec = function(callerF) {
 	}
 	
 	function switchInputFieldForArg() {
-		if (self.argumentFields[a].input !== undefined) {
-			self.argumentFields[a].text.text(a+"↑")
-			self.argumentFields[a].input.remove()
-			self.argumentFields[a].input = undefined
+		if (self.icon.argF[a].input !== undefined) {
+			self.icon.argF[a].text.text(a+"↑")
+			self.icon.argF[a].input.remove()
+			self.icon.argF[a].input = undefined
 			delete root.customArguments[a]
 			run()
 		} else {
@@ -1956,9 +2015,9 @@ FunctionCall.prototype.exec = function(callerF) {
 		self.icon
 			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
 		for (var a in root.f.args) {
-			if (self.argumentFields[a] === undefined) {
-				self.argumentFields[a] = self.icon.argUl.append("li").attr("class", "titleRow")
-				self.argumentFields[a].text = self.argumentFields[a].append("div")
+			if (self.icon.argF[a] === undefined) {
+				self.icon.argF[a] = self.icon.argUl.append("li").attr("class", "titleRow")
+				self.icon.argF[a].text = self.icon.argF[a].append("div")
 					.attr("class", "titleRowCellLast")
 					.text(a+"↑")
 					.style({cursor: "pointer"})
@@ -1968,7 +2027,7 @@ FunctionCall.prototype.exec = function(callerF) {
 						a = this.a
 						switchInputFieldForArg()
 					})
-				self.argumentFields[a].text[0][0].a = a
+				self.icon.argF[a].text[0][0].a = a
 				
 				if (root.customArguments[a] !== undefined)
 					createInputField()
@@ -1976,9 +2035,9 @@ FunctionCall.prototype.exec = function(callerF) {
 		}
 		for (var a in root.customArguments) {
 			if (root.f.args[a] === undefined) {
-				if (secommandslf.argumentFields[a] !== undefined) {
-					self.argumentFields[a].remove()
-					delete self.argumentFields[a]
+				if (self.icon.argF[a] !== undefined) {
+					self.icon.argF[a].remove()
+					delete self.icon.argF[a]
 				}
 				// may mess for loop up :/
 				delete root.customArguments[a]
@@ -2023,35 +2082,35 @@ FunctionCall.prototype.deselect = function() {
 	self.mark(false)
 }
 
-FunctionCall.prototype.remove = function() {
-	var self = this
-	self.execCmds.forEach(function(e) { e.remove() })
-	self.removeFromMainSVG()
+FunctionCall.prototype.getVisibleElementsFromMainSVG = function() {
+	return ["icon", "execCmds"]
 }
 
-FunctionCall.prototype.removeFromMainSVG = function() {
-	var self = this
-	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
-	if (self.icon !== undefined)
-		self.icon.remove()
-	self.icon = undefined
-	for (var a in self.argumentFields)
-		self.argumentFields[a].remove()
-	self.argumentFields = {}
+FunctionCall.prototype.getVisibleElements = function() {
+	return ["execCmds"]
 }
+
+//FunctionCall.prototype.remove = function() {
+//	var self = this
+//	self.removeFromMainSVG()
+//	self.execCmds.forEach(function(e) { e.remove() })
+//}
+//
+//FunctionCall.prototype.removeFromMainSVG = function() {
+//	var self = this
+//	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
+//	if (self.icon !== undefined)
+//		self.icon.remove()
+//	self.icon = undefined
+//}
 
 FunctionCall.prototype.toCode = function(scopeDepth) {
 	var self = this
 	console.assert(self === self.root)
 	// the f.name is not wrapped. it is assumed to exist as a variable
-	var result = "new vogo.FunctionCall("+self.f.name+", {"
-	var argsLength = Object.keys(self.customArguments).length
-	var k = 0
-	for (var a in self.customArguments) {
-		result += "\""+a+"\": "+self.customArguments[a].getWrapped()
-			+(++k < argsLength ? ", " : "")
-	}
-	result += "})"
+	var result = "new vogo.FunctionCall("+self.f.name+", "
+	+argsToCode(self.customArguments)
+	+")"
 	return result
 }
 
@@ -2087,6 +2146,12 @@ Branch.prototype.exec = function(callerF) {
 		self.iconG.trueL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 0)
 		self.iconG.falseL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 2)
 		self.iconG.append("line").attr("x1", 0).attr("y1", 1).attr("x2", 1).attr("y2", 1)
+			.on("click", function() {
+				if (!manipulation.isCreating()) {
+					self.select()
+					d3.event.stopPropagation()
+				}
+			})
 		
 		self.iconG.fo = self.iconG.append("foreignObject")
 			.attr("width", 250 /*max-width*/).attr("height", 25).attr("x", 0).attr("y", 0)
@@ -2148,21 +2213,27 @@ Branch.prototype.deselect = function() {
 	self.mark(false)
 }
 
-Branch.prototype.remove = function() {
-	var self = this
-	self.ifTrueCmds.forEach(function(e) { e.remove() })
-	self.ifFalseCmds.forEach(function(e) { e.remove() })
-	self.removeFromMainSVG()
+Branch.prototype.getVisibleElementsFromMainSVG = function() {
+	return ["iconG", "execCmds"]
 }
 
-Branch.prototype.removeFromMainSVG = function() {
-	var self = this
-	self.ifTrueCmds.forEach(function(e) { e.removeFromMainSVG() })
-	self.ifFalseCmds.forEach(function(e) { e.removeFromMainSVG() })
-	if (self.iconG !== undefined)
-		self.iconG.remove()
-	self.iconG = undefined
+Branch.prototype.getVisibleElements = function() {
+	return ["execCmds"]
 }
+
+//Branch.prototype.remove = function() {
+//	var self = this
+//	self.execCmds.forEach(function(e) { e.remove() })
+//	self.removeFromMainSVG()
+//}
+//
+//Branch.prototype.removeFromMainSVG = function() {
+//	var self = this
+//	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
+//	if (self.iconG !== undefined)
+//		self.iconG.remove()
+//	self.iconG = undefined
+//}
 
 Branch.prototype.toCode = function(scopeDepth) {
 	var self = this
@@ -2181,6 +2252,12 @@ vogo.Rotate = Rotate
 vogo.Loop = Loop
 vogo.FunctionCall = FunctionCall
 vogo.Branch = Branch
+
+
+function test() {
+	var assert = console.assert
+	// TODO
+}
 
 return vogo
 }()
