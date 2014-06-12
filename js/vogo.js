@@ -113,11 +113,10 @@ var selection = {
 			detach[i].deselect()
 		return detach
 	},
-	removeAll: function() {
+	deselectAndDeleteAllCompletely: function() {
 		var detach = this.deselectAll()
 		for (var i=0; i<detach.length; i++) {
-			detach[i].removeVisible()
-			detach[i].removeCommand()
+			detach[i].deleteCompletely()
 		}
 		return detach
 	}
@@ -142,7 +141,7 @@ function Drawing(f, args, paintingG) {
 		var fc = this.commands[0]
 		console.assert(fc instanceof FunctionCall)
 		if (newArgs !== undefined) {
-			// leave old, just overwrite
+			// leave old, just override
 			for (var a in newArgs)
 				fc.customArguments[a] = !(newArgs[a] instanceof Expression)
 					? new Expression(newArgs[a]) 
@@ -632,6 +631,8 @@ Function.prototype.setCommands = function(commands) {
 	var self = this
 	self.commands = commands
 	self.commands.forEach(function (e) { e.scope = self })
+	// TODO could add a execCmds here and require every root cmd to be shallowCloned before exec()
+	// this would also allow Function to be shallowCloned and replace FunctionCall
 	return self
 }
 
@@ -671,8 +672,7 @@ Function.prototype.remove = function() {
 				.switchTo()
 	}
 	
-	// TODO kill proxies?
-	self.commands.forEach(function(e) { e.removeVisible() })
+	self.commands.forEach(function(e) { e.deleteCompletely() })
 	self.commands = []
 	
 	// contains everything
@@ -788,11 +788,7 @@ manipulation.finish = function(cmdType) {
 
 manipulation.remove = function(cmdType) {
 	console.assert(this.isCreating(cmdType))
-	
-	var idx = this.insertedCommand.scope.commands.indexOf(this.insertedCommand)
-	this.insertedCommand.scope.commands.splice(idx, 1)
-	// TODO removeCommand?
-	this.insertedCommand.removeVisible()
+	this.insertedCommand.deleteCompletely()
 	this.insertedCommand = false
 	if (selection.isEmpty()) {
 		F_.state = this.savedState.clone()
@@ -1038,7 +1034,7 @@ onKeyDown.s = function() {
 
 onKeyDown.del = function() {
 	if (bodyIsSelected()) {
-		selection.removeAll()
+		selection.deselectAndDeleteAllCompletely()
 		run()
 	}
 }
@@ -1067,6 +1063,22 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 	var selectedElem = selection.e[0].root
 	var scope = selectedElem.scope
 	var cmdsRef = scope.commands
+	// TODO this special case handling is ugly
+	if (cmdsRef === undefined) {
+		// Function and Loop have commands
+		// FC does not have root commands
+		// only Branch remains
+		console.assert(scope instanceof Branch)
+		// all selected elements are assumed to be in the same branch, true or false, not both
+		if (scope.ifTrueCmds.indexOf(selectedElem) !== -1) {
+			cmdsRef = scope.ifTrueCmds
+		} else {
+			console.assert(scope.ifFalseCmds.indexOf(selectedElem) !== -1)
+			cmdsRef = scope.ifFalseCmds
+		}
+	}
+	
+	console.assert(cmdsRef !== undefined)
 	var idxArr = []
 	for (var i=0; i<selection.e.length; i++) {
 		if (i !== 0 && scope !== selection.e[i].root.scope) {
@@ -1087,8 +1099,14 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 		// create new connections
 		cmdList.push(cmdsRef[idxArr[i]])
 	}
-	selection.removeAll()
-	var cmdThatWrapped = doWithCmdList(cmdList)
+	var clonedCmdsList = []
+	cmdList.forEach(function(e) {
+		var r = e.clone()
+		console.assert(r.proxies === undefined)
+		clonedCmdsList.push(r)
+	})
+	selection.deselectAndDeleteAllCompletely()
+	var cmdThatWrapped = doWithCmdList(clonedCmdsList)
 	cmdThatWrapped.scope = scope
 	cmdsRef.splice(first, 0, cmdThatWrapped)
 	run()
@@ -1304,27 +1322,33 @@ Expression.prototype.adjustDrag = function(element, prefix) {
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-function Command() {}
+// this is only called once for every kind of command
+function Command(myConstructor) {
+	var self = this
+	// myConstructor is what .constructor should be but isnt.
+	self.myConstructor = myConstructor
+}
 
-Command.prototype.setUpReferences = function(constructor) {
+// this is called for every instance of command
+Command.prototype.commonCommandConstructor = function() {
 	var self = this
 	self.root = self
-	// each shallowCopy is a proxy (child) to the root
+	// each shallowClone is a proxy (child) to the root
 	self.proxies
 	self.scope
+	self.mainParameter
 	self.scopeDepth = 0
 	self.refDepthOfSameType = 0
-	self.myConstructor = constructor
 	self.savedState
 }
 
 Command.prototype.setMainParameter = function(x) {
 	var self = this
-	console.assert(x !== undefined)
-	if (self.root.mainParameter === undefined)
-		self.root.mainParameter = new Expression(x)
-	else
-		self.root.mainParameter.set(x)
+	if (x !== undefined)
+		if (self.root.mainParameter === undefined)
+			self.root.mainParameter = new Expression(x)
+		else
+			self.root.mainParameter.set(x)
 }
 
 Command.prototype.evalMainParameter = function() {
@@ -1335,70 +1359,85 @@ Command.prototype.evalMainParameter = function() {
 
 Command.prototype.shallowClone = function(scope) {
 	var self = this
-	// this should be the same, but breaks ... I dont know why
+	// creates a new object of self's type
+	// so if self is a Move, c will be a Move
+	// note that self.constructor === Command, which is really confusing
+
+	// ok, ok, had several problems with this now!
+	// until I dont know exactly what this is doing, I stay the hell away from it
 //	var c = Object.create(self)
+	// BUMMER: THIS BREAKS
+//	console.assert(c.proxies === undefined)
+	
+	
 	var c = new self.myConstructor()
-	// it is important to understand that there is a difference between the
-	// initiator of the clone (scope) and self (the command that is cloned)
+	// root is not self's parent, so there is no chain of references if a clone is cloned
 	c.root = self.root
+	if (self.root !== self)
+		console.assert(self.proxies === undefined)
 	if (self.root.proxies === undefined)
 		self.root.proxies = []
 	self.root.proxies.push(c)
+	// scope is the initiator of the clone
+	console.assert(scope.canContainCommands())
 	c.scope = scope
 	c.scopeDepth = scope.scopeDepth + 1
 	if (self.scopeDepth > scopeDepthLimit+1)
-		console.log("warning: scope depth to high!")
+		console.log("warning: scope depth too high!")
 	c.refDepthOfSameType = scope.refDepthOfSameType + (scope instanceof self.myConstructor ? 1 : 0)
 	return c
 }
 
-Function.prototype.fromRemove = Command.prototype.fromRemove = function(cmd) {
-	var self = this
-	// self has to be able to contain commands
-	// TODO IMPORTANT!
-	console.assert(self.commands !== undefined)
-	console.assert(cmd.scope === self)
-	console.assert(cmd.proxies === undefined)
-	for (var k=0; k<self.commands.length; k++) {
-		if (self.commands[k] === cmd) {
-			self.commands.splice(k, 1)
-			return // can only exist once
-		}
-	}
-	console.assert(self instanceof Loop)
-	for (var k=0; k<self.execCmds.length; k++) {
-		if (self.execCmds[k] === cmd) {
-			self.execCmds.splice(k, 1)
-			// TODO if (self.commands.length === 0) ...
-			return // can only exist once
-		}
-	}
-	console.assert(false, "removeFrom is expected to find cmd. "+self.execCmds+", "+cmd)
-}
-
-Command.prototype.removeCommand = function() {
+// deletes the root, its proxies, visible elements and all references
+Command.prototype.deleteCompletely = function() {
 	var root = this.root
 	if (root.proxies !== undefined) {
-		// "self" is in proxies
+		// "self" may be in proxies
 		root.proxies.forEach(function(p) {
-			p.scope.fromRemove(p)
+			// remove proxy command from scope
+			console.assert(p.scope.canContainCommands())
+			console.assert(p.proxies === undefined) // -> is proxy
 			p.removeVisible()
+			var idx = p.scope.execCmds.indexOf(p)
+			console.assert(idx !== -1)
+			p.scope.execCmds.splice(idx, 1)
+			delete p.root
+			delete p.scope
 		})
-		root.proxies = undefined
+		delete root.proxies
 	}
-	root.scope.fromRemove(root)
+	// TODO if contains commands ...
 	root.removeVisible()
+	root.scope.fromRemoveRootCommand(root)
+	delete root.root
+	delete root.scope
+	delete root.mainParameter
 }
 
-Command.prototype.removeWithProxyConnection = function() {
+Function.prototype.fromRemoveRootCommand = Command.prototype.fromRemoveRootCommand = function(cmd) {
 	var self = this
-	if (self.root !== self) {
-		console.assert(self.root.proxies.length > 0)
-		var idx = self.root.proxies.indexOf(self)
-		console.assert(idx !== -1)
-		self.root.proxies.splice(idx, 1)
-	}
+	console.assert(cmd.root === cmd)
+	console.assert(self === cmd.scope)
+	console.assert(self.commands !== undefined)
+	var idx = self.commands.indexOf(cmd)
+	console.assert(idx !== -1)
+	self.commands.splice(idx, 1)
+}
+
+Command.prototype.deleteProxyCommand = function() {
+	var self = this
+	console.assert(self.root !== self)
+//	console.assert(self.proxies === undefined)
+	if (self.proxies !== undefined)
+		console.log(self.proxies.length)
+
+	console.assert(self.root.proxies.length > 0)
 	self.removeVisible()
+	var idx = self.root.proxies.indexOf(self)
+	console.assert(idx !== -1)
+	self.root.proxies.splice(idx, 1)
+	delete self.root
+	delete self.scope
 }
 
 Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
@@ -1444,6 +1483,7 @@ Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
 	})
 }
 
+// does not change the program. may become visible again after reexecution.
 Command.prototype.removeVisible = function() {
 	this.removeVisibleElements(this.getVisibleElements())
 	this.removeVisibleFromMainSVG()
@@ -1459,24 +1499,29 @@ Command.prototype.toCode = function(scopeDepth) {
 		+"("+this.root.mainParameter.getWrapped()+")"
 }
 
-//function CommandContainingCommand() {
-//	
-//}
-//CommandContainingCommand.prototype = new Command()
+Command.prototype.canContainCommands = function() {
+	return this.hasOwnProperty("execCmds")
+}
 
 
 
 
 function Move(lineLength) {
 	var self = this
-	self.setUpReferences(Move)
-	if (lineLength !== undefined)
-		self.setMainParameter(lineLength)
+	self.commonCommandConstructor()
+	self.setMainParameter(lineLength)
 	self.line
 	self.lineMainSVG
 	self.label
 }
-Move.prototype = new Command()
+Move.prototype = new Command(Move)
+
+Move.prototype.clone = function(scope) {
+	console.assert(this === this.root)
+	var r = new Move(this.mainParameter.get())
+	r.scope = scope
+	return r
+}
 
 Move.prototype.exec = function(callerF) {
 	var self = this
@@ -1596,13 +1641,19 @@ Move.prototype.getVisibleElements = function() {
 
 function Rotate(angle) {
 	var self = this
-	self.setUpReferences(Rotate)
-	if (angle !== undefined)
-		self.setMainParameter(angle)
+	self.commonCommandConstructor()
+	self.setMainParameter(angle)
 	self.arc
 	self.label
 }
-Rotate.prototype = new Command()
+Rotate.prototype = new Command(Rotate)
+
+Rotate.prototype.clone = function(scope) {
+	console.assert(this === this.root)
+	var r = new Rotate(this.mainParameter.get())
+	r.scope = scope
+	return r
+}
 
 Rotate.prototype.exec = function(callerF) {
 	var self = this
@@ -1732,22 +1783,35 @@ Rotate.prototype.getVisibleElements = function() {
 
 function Loop(numberOfRepetitions, commands) {
 	var self = this
-	self.setUpReferences(Loop)
-	if (numberOfRepetitions !== undefined)
-		self.setMainParameter(numberOfRepetitions)
+	self.commonCommandConstructor()
+	self.setMainParameter(numberOfRepetitions)
 	// TODO scopeDepth is always 0 for root commands
 	self.commands = commands === undefined ? [] : commands
-	self.commands.forEach(function (e) { e.scope = self })
+	self.commands.forEach(function (e) {
+		console.assert(e.proxies === undefined)
+		e.scope = self
+	})
 	// "unfolded" loop
 	self.execCmds = []
 	// for all repetitions
 	self.iconGs = []
 }
-Loop.prototype = new Command()
+Loop.prototype = new Command(Loop)
+
+Loop.prototype.clone = function(scope) {
+	var self = this
+	console.assert(self.root === self)
+	var cmdsClone = []
+	self.commands.forEach(function (e) { cmdsClone.push(e.clone()) })
+	var r = new Loop(self.mainParameter.get(), cmdsClone)
+	r.scope = scope
+	return r
+}
 
 Loop.prototype.exec = function(callerF) {
 	var self = this
-	var numberOfRepetitions = Math.floor(self.evalMainParameter())
+	// TODO if this is 0 the loop becomes unaccessable
+	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
 	self.savedState = callerF.state.clone()
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius*Math.pow(0.7, self.refDepthOfSameType+1)
@@ -1827,7 +1891,10 @@ Loop.prototype.exec = function(callerF) {
 	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length
 		|| self.iconGs.length !== numberOfRepetitions
 	if (rebuild) {
-		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
+		self.execCmds.forEach(function(e) {
+			console.assert(e.proxies === undefined)
+			e.deleteProxyCommand()
+		})
 		self.execCmds = []
 		if (drawIcons)
 			if (0 <= numberOfRepetitions && numberOfRepetitions < self.iconGs.length) { // remove dangling
@@ -1893,6 +1960,7 @@ Loop.prototype.getVisibleElements = function() {
 	return ["execCmds"]
 }
 
+// @override
 Loop.prototype.toCode = function(scopeDepth) {
 	return "new vogo.Loop("+this.root.mainParameter.getWrapped()+", "
 		+commandsToCodeString(this.root.commands, scopeDepth+1)+")"
@@ -1900,7 +1968,8 @@ Loop.prototype.toCode = function(scopeDepth) {
 
 function FunctionCall(func, args) {
 	var self = this
-	self.setUpReferences(FunctionCall)
+	self.commonCommandConstructor()
+	// normally, I would use setMainParameter(func), but func is currently not an Expression and not editable
 	// func may be undefined if it is a shallowClone
 	self.f = func
 	self.customArguments = {}
@@ -1913,7 +1982,18 @@ function FunctionCall(func, args) {
 	self.execCmds = []
 	self.icon
 }
-FunctionCall.prototype = new Command()
+FunctionCall.prototype = new Command(FunctionCall)
+
+FunctionCall.prototype.clone = function(scope) {
+	var self = this
+	console.assert(self.root === self)
+	var customArguments = {}
+	for (var a in self.customArguments)
+		customArguments[a] = new Expression(self.customArguments[a].get())
+	var r = new FunctionCall(self.func, customArguments)
+	r.scope = scope
+	return r
+}
 
 FunctionCall.prototype.exec = function(callerF) {
 	var self = this
@@ -2026,7 +2106,7 @@ FunctionCall.prototype.exec = function(callerF) {
 	}
 	
 	if (self.execCmds.length !== root.f.commands.length) {
-		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
+		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
 		self.execCmds = []
 		root.f.commands.forEach(function(e) {
 			self.execCmds.push(e.shallowClone(self))
@@ -2072,6 +2152,7 @@ FunctionCall.prototype.getVisibleElements = function() {
 	return ["execCmds"]
 }
 
+// @override
 FunctionCall.prototype.toCode = function(scopeDepth) {
 	var self = this
 	console.assert(self === self.root)
@@ -2085,9 +2166,8 @@ FunctionCall.prototype.toCode = function(scopeDepth) {
 
 function Branch(cond, ifTrueCmds, ifFalseCmds) {
 	var self = this
-	self.setUpReferences(Branch)
-	if (cond !== undefined)
-		self.setMainParameter(cond)
+	self.commonCommandConstructor()
+	self.setMainParameter(cond)
 	self.lastCondEvalResult
 	self.ifTrueCmds = ifTrueCmds === undefined ? [] : ifTrueCmds
 	self.ifTrueCmds.forEach(function (e) { e.scope = self })
@@ -2096,7 +2176,19 @@ function Branch(cond, ifTrueCmds, ifFalseCmds) {
 	self.execCmds = []
 	self.iconG
 }
-Branch.prototype = new Command()
+Branch.prototype = new Command(Branch)
+
+Branch.prototype.clone = function(scope) {
+	var self = this
+	console.assert(self.root === self)
+	var ifTrueCmds = []
+	self.ifTrueCmds.forEach(function (e) { ifTrueCmds.push(e.clone()) })
+	var ifFalseCmds = []
+	self.ifFalseCmds.forEach(function (e) { ifFalseCmds.push(e.clone()) })
+	var r = new Branch(self.mainParameter.get(), ifTrueCmds, ifFalseCmds)
+	r.scope = scope
+	return r
+}
 
 Branch.prototype.exec = function(callerF) {
 	var self = this
@@ -2158,7 +2250,7 @@ Branch.prototype.exec = function(callerF) {
 	}
 	
 	if (rebuild) {
-		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
+		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
 		self.execCmds = []
 		branchCmds.forEach(function(e) { self.execCmds.push(e.shallowClone(self)) })
 	}
@@ -2192,6 +2284,7 @@ Branch.prototype.getVisibleElements = function() {
 	return ["execCmds"]
 }
 
+// @override
 Branch.prototype.toCode = function(scopeDepth) {
 	var self = this
 	console.assert(self === self.root)
@@ -2199,6 +2292,20 @@ Branch.prototype.toCode = function(scopeDepth) {
 		+commandsToCodeString(self.ifTrueCmds, scopeDepth+1)+", "
 		+commandsToCodeString(self.ifFalseCmds, scopeDepth+1)+")"
 	return result
+}
+
+// @override
+Branch.prototype.fromRemoveRootCommand = function(cmd) {
+	var self = this
+	console.assert(cmd.root === cmd)
+	console.assert(self === cmd.scope)
+	var idx1 = self.ifTrueCmds.indexOf(cmd)
+	if (idx1 !== -1)
+		self.ifTrueCmds.splice(idx1, 1)
+	var idx2 = self.ifFalseCmds.indexOf(cmd)
+	if (idx1 !== -1)
+		self.ifFalseCmds.splice(idx2, 1)
+	console.assert(idx1 !== -1 || idx2 !== -1)
 }
 
 
