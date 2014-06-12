@@ -34,7 +34,7 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 4
-var scopeDepthLimit = 30 // for endless loops and recursion
+var scopeDepthLimit = 100 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 100
 var domSvg
@@ -78,6 +78,8 @@ var F_
 var functionPanelSizePercentOfBodyWidth = 0.15 /* also change in css */
 var lastNotificationUpdateTime
 var dragInProgress = false
+var lastRotateExecuted
+var lastRotateScaleFactorCalculated
 var mousePos = [0,0]
 var mousePosPrevious = [0,0]
 
@@ -910,8 +912,8 @@ function setTextOfInput(input, containingForeignObject, text) {
 	}
 }
 
-function addNewFunctionToUI() {
-	var f = new Function()
+function addNewFunctionToUI(name) {
+	var f = new Function(name)
 	f.initUI()
 	functions.push(f)
 	f.switchTo()
@@ -941,6 +943,8 @@ function exportAll() {
 }
 
 function determineFunctionDependencies() {
+	// TODO big bug in here: the dependencies are actually a tree, not just a list!
+	// store proxies in function? let fc take care of removing it. shallowClone for function = functionCall ?
 	var dependencies = {}
 	function searchForFunctionCall(commands) {
 		for (var k=0; k<commands.length; k++) {
@@ -1218,8 +1222,8 @@ Expression.prototype.eval = function(command) {
 //			console.log("shortcut: "+shortCut.get())
 		return shortCut.eval()
 	}
-
-	// TODO speed up further.
+	
+	// TODO speed up further. eval() is a major performance sink.
 	// construct function that has all the arguments for expression eval
 	var toEval = "(function("
 	var i = 0
@@ -1351,6 +1355,7 @@ Command.prototype.shallowClone = function(scope) {
 Function.prototype.fromRemove = Command.prototype.fromRemove = function(cmd) {
 	var self = this
 	// self has to be able to contain commands
+	// TODO IMPORTANT!
 	console.assert(self.commands !== undefined)
 	console.assert(cmd.scope === self)
 	console.assert(cmd.proxies === undefined)
@@ -1454,6 +1459,14 @@ Command.prototype.toCode = function(scopeDepth) {
 		+"("+this.root.mainParameter.getWrapped()+")"
 }
 
+//function CommandContainingCommand() {
+//	
+//}
+//CommandContainingCommand.prototype = new Command()
+
+
+
+
 function Move(lineLength) {
 	var self = this
 	self.setUpReferences(Move)
@@ -1469,6 +1482,11 @@ Move.prototype.exec = function(callerF) {
 	var self = this
 	var lineLength = self.evalMainParameter()
 	
+	if (lastRotateExecuted !== undefined && lastRotateExecuted.arc !== undefined) {
+		lastRotateScaleFactorCalculated = Math.min(rotationArcRadius, Math.abs(lineLength)*0.3)/rotationArcRadius
+		lastRotateExecuted.arc.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+") scale("+lastRotateScaleFactorCalculated+")")
+	}
+	
 	self.savedState = callerF.state.clone()
 	var x1 = callerF.state.x
 	var y1 = callerF.state.y
@@ -1479,7 +1497,10 @@ Move.prototype.exec = function(callerF) {
 	if (self.line === undefined) {
 		self.line = callerF.paintingG.append("line").style(lineStyle)
 	}
-	if (self.lineMainSVG === undefined && callerF === F_) {
+	var drawOnMainSVG = callerF === F_
+	var drawIcons = drawOnMainSVG && self === self.root
+	
+	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
 		self.lineMainSVG.on("click", function(d, i) {
 			if (!manipulation.isCreating()) {
@@ -1490,7 +1511,7 @@ Move.prototype.exec = function(callerF) {
 		})
 	}
 	
-	if (self.label === undefined && callerF === F_) {
+	if (self.label === undefined && drawIcons) {
 		self.label = mainSVG.paintingG.append("foreignObject")
 			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
 			.on("click", function() {
@@ -1529,10 +1550,10 @@ Move.prototype.exec = function(callerF) {
 			)
 	}
 	
-	
 	var lines = [self.line]
-	if (callerF === F_) {
+	if (drawOnMainSVG)
 		lines.push(self.lineMainSVG)
+	if (drawIcons) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r)
 		var x = callerF.state.x + Math.sin(dir) * lineLength * -0.5
@@ -1540,6 +1561,7 @@ Move.prototype.exec = function(callerF) {
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
 		setTextOfInput(self.labelInput, self.label, self.root.mainParameter.get())
 	}
+	
 	for (var l in lines)
 		lines[l]
 			.attr("x1", x1).attr("y1", y1)
@@ -1572,24 +1594,6 @@ Move.prototype.getVisibleElements = function() {
 	return ["line"]
 }
 
-//Move.prototype.remove = function() {
-//	var self = this
-//	if (self.line !== undefined)
-//		self.line.remove()
-//	self.line = undefined
-//	self.removeFromMainSVG()
-//}
-//
-//Move.prototype.removeFromMainSVG = function() {
-//	var self = this
-//	if (self.lineMainSVG !== undefined)
-//		self.lineMainSVG.remove()
-//	self.lineMainSVG = undefined
-//	if (self.label !== undefined)
-//		self.label.remove()
-//	self.label = undefined
-//}
-
 function Rotate(angle) {
 	var self = this
 	self.setUpReferences(Rotate)
@@ -1612,8 +1616,10 @@ Rotate.prototype.exec = function(callerF) {
 		.startAngle(callerF.state.r)
 		.endAngle(callerF.state.r + angle)
 	callerF.state.addRadius(angle)
+	var drawIcons = callerF === F_
+	var drawLabel = callerF === F_ && self === self.root
 	
-	if (self.arc === undefined && callerF === F_) {
+	if (self.arc === undefined && drawIcons) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
 			.on("mouseenter", function (d, i) {
 				if (!dragInProgress && !manipulation.isCreating(Rotate))
@@ -1654,7 +1660,7 @@ Rotate.prototype.exec = function(callerF) {
 			)
 	}
 	
-	if (self.label === undefined && callerF === F_) {
+	if (self.label === undefined && drawLabel) {
 		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
 		self.label = mainSVG.paintingG.append("foreignObject")
 			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
@@ -1680,7 +1686,7 @@ Rotate.prototype.exec = function(callerF) {
 			})
 	}
 	
-	if (callerF === F_) {
+	if (drawLabel) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r - angle/2)
 		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
@@ -1688,9 +1694,12 @@ Rotate.prototype.exec = function(callerF) {
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
 		setTextOfInput(self.labelInput, self.label, self.root.mainParameter.get())
 			//+"="+Math.round(angle/Math.PI*180)+"°"
-		
+	}
+	if (drawIcons) {
 		self.arc.attr("d", arc)
-			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")")
+			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
+				+(lastRotateScaleFactorCalculated ? " scale("+lastRotateScaleFactorCalculated+")" : ""))
+		lastRotateExecuted = self
 	}
 }
 
@@ -1720,24 +1729,6 @@ Rotate.prototype.getVisibleElements = function() {
 	return []
 }
 
-//Rotate.prototype.remove = function() {
-//	var self = this
-//	self.removeFromMainSVG()
-//}
-//
-//Rotate.prototype.removeFromMainSVG = function() {
-//	var self = this
-//	self.deselect()
-//	if (self.arc !== undefined)
-//		self.arc.remove()
-//	self.arc = undefined
-//	if (self.label !== undefined)
-//		self.label.remove()
-//	self.label = undefined
-//}
-
-
-
 
 function Loop(numberOfRepetitions, commands) {
 	var self = this
@@ -1760,6 +1751,7 @@ Loop.prototype.exec = function(callerF) {
 	self.savedState = callerF.state.clone()
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius*Math.pow(0.7, self.refDepthOfSameType+1)
+	var drawIcons = callerF === F_
 	
 	function createIcon() {
 		var iconG = mainSVG.paintingG.append("g")
@@ -1837,7 +1829,7 @@ Loop.prototype.exec = function(callerF) {
 	if (rebuild) {
 		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
 		self.execCmds = []
-		if (callerF === F_)
+		if (drawIcons)
 			if (0 <= numberOfRepetitions && numberOfRepetitions < self.iconGs.length) { // remove dangling
 				for (var k=numberOfRepetitions; k<self.iconGs.length; k++)
 					self.iconGs[k].remove()
@@ -1855,7 +1847,7 @@ Loop.prototype.exec = function(callerF) {
 		var dir = correctRadius(callerF.state.r + Math.PI/2)
 		var cx = callerF.state.x + Math.sin(dir) * loopClockRadius * 1.4
 		var cy = callerF.state.y - Math.cos(dir) * loopClockRadius * 1.4
-		if (callerF === F_) {
+		if (drawIcons) {
 			updateIcon(self.iconGs[i])
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
 			self.applyCSSClass([self.iconGs[i].circleF], "selected", selection.contains(self))
@@ -1901,19 +1893,6 @@ Loop.prototype.getVisibleElements = function() {
 	return ["execCmds"]
 }
 
-//Loop.prototype.remove = function() {
-//	var self = this
-//	self.execCmds.forEach(function(e) { e.remove() })
-//	self.removeFromMainSVG()
-//}
-//
-//Loop.prototype.removeFromMainSVG = function() {
-//	var self = this
-//	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
-//	self.iconGs.forEach(function(e) { e.remove() })
-//	self.iconGs = []
-//}
-
 Loop.prototype.toCode = function(scopeDepth) {
 	return "new vogo.Loop("+this.root.mainParameter.getWrapped()+", "
 		+commandsToCodeString(this.root.commands, scopeDepth+1)+")"
@@ -1941,8 +1920,9 @@ FunctionCall.prototype.exec = function(callerF) {
 	var root = self.root
 	self.savedState = callerF.state.clone()
 	console.assert(root.f !== undefined)
+	var drawIcons = callerF === F_ && self.scopeDepth < 1
 	
-	if (self.icon === undefined && callerF === F_) {
+	if (self.icon === undefined && drawIcons) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
 			// TODO make this relative
 			.attr("width", 200).attr("height", 100).attr("x", 0).attr("y", 0)
@@ -2011,7 +1991,7 @@ FunctionCall.prototype.exec = function(callerF) {
 		}
 	}
 	
-	if (callerF === F_) {
+	if (drawIcons) {
 		self.icon
 			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
 		for (var a in root.f.args) {
@@ -2072,13 +2052,15 @@ FunctionCall.prototype.mark = function(on) {
 FunctionCall.prototype.select = function() {
 	var self = this
 	selection.add(self)
-	self.applyCSSClass([self.icon.body.text], "selected", true)
+	if (self.icon !== undefined)
+		self.applyCSSClass([self.icon.body.text], "selected", true)
 	self.mark(true)
 }
 
 FunctionCall.prototype.deselect = function() {
 	var self = this
-	self.applyCSSClass([self.icon.body.text], "selected", false)
+	if (self.icon !== undefined)
+		self.applyCSSClass([self.icon.body.text], "selected", false)
 	self.mark(false)
 }
 
@@ -2089,20 +2071,6 @@ FunctionCall.prototype.getVisibleElementsFromMainSVG = function() {
 FunctionCall.prototype.getVisibleElements = function() {
 	return ["execCmds"]
 }
-
-//FunctionCall.prototype.remove = function() {
-//	var self = this
-//	self.removeFromMainSVG()
-//	self.execCmds.forEach(function(e) { e.remove() })
-//}
-//
-//FunctionCall.prototype.removeFromMainSVG = function() {
-//	var self = this
-//	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
-//	if (self.icon !== undefined)
-//		self.icon.remove()
-//	self.icon = undefined
-//}
 
 FunctionCall.prototype.toCode = function(scopeDepth) {
 	var self = this
@@ -2135,11 +2103,14 @@ Branch.prototype.exec = function(callerF) {
 	var root = self.root
 	self.savedState = callerF.state.clone()
 	var condEval = self.evalMainParameter()
-	var condEvalChanged = self.lastCondEvalResult === undefined || self.lastCondEvalResult !== condEval
+	var rebuild = self.lastCondEvalResult === undefined
+		|| self.lastCondEvalResult !== condEval
+		|| self.execCmds.length === 0
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
+	var drawIcons = callerF === F_ && self === self.root
 	
-	if (self.iconG === undefined && callerF === F_) {
+	if (self.iconG === undefined && drawIcons) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
 //		self.iconG.append("text").text("?")
 //		callerF.paintingG
@@ -2176,7 +2147,7 @@ Branch.prototype.exec = function(callerF) {
 			})
 	}
 	
-	if (callerF === F_) {
+	if (drawIcons) {
 		self.iconG.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+")")
 		var takenBranchColor = branchCmds.length === 0 ? /*dead end branch*/ "#b00" : "#0b0"
 		self.iconG.trueL.style({stroke: condEval ? takenBranchColor : "#000"})
@@ -2186,7 +2157,7 @@ Branch.prototype.exec = function(callerF) {
 		setTextOfInput(self.iconG.labelInput, self.iconG.fo)
 	}
 	
-	if (condEvalChanged) {
+	if (rebuild) {
 		self.execCmds.forEach(function(e) { e.removeWithProxyConnection() })
 		self.execCmds = []
 		branchCmds.forEach(function(e) { self.execCmds.push(e.shallowClone(self)) })
@@ -2221,20 +2192,6 @@ Branch.prototype.getVisibleElements = function() {
 	return ["execCmds"]
 }
 
-//Branch.prototype.remove = function() {
-//	var self = this
-//	self.execCmds.forEach(function(e) { e.remove() })
-//	self.removeFromMainSVG()
-//}
-//
-//Branch.prototype.removeFromMainSVG = function() {
-//	var self = this
-//	self.execCmds.forEach(function(e) { e.removeFromMainSVG() })
-//	if (self.iconG !== undefined)
-//		self.iconG.remove()
-//	self.iconG = undefined
-//}
-
 Branch.prototype.toCode = function(scopeDepth) {
 	var self = this
 	console.assert(self === self.root)
@@ -2256,7 +2213,189 @@ vogo.Branch = Branch
 
 function test() {
 	var assert = console.assert
-	// TODO
+	
+	if (false) {
+		addNewFunctionToUI("nEck")
+		F_.addArgument(4, "n")
+		F_.setCommands([
+			new Loop("n", [
+				new Rotate("Math.PI*2/n"),
+				new Move("100/n")])])
+	}
+	
+	if (false) {
+		addNewFunctionToUI("multiSquare")
+		F_.setCommands([
+			new Loop(36, [
+				new Loop(4, [
+					new Rotate("Math.PI/2"),
+					new Move(20)]),
+				new Rotate("Math.PI/2/10")])])
+	}
+	
+	// this is a performance bummer!
+	if (false) {
+		addNewFunctionToUI("tree")
+		F_.addArgument(150, "size")
+		F_.setCommands([
+			new Branch("size<5", [
+				new Move("size"),
+				new Move("-size")],
+				[
+				new Move("size/3"),
+				new Rotate(-30/180*Math.PI),
+				new FunctionCall(F_, {size: "size*2/3"}),
+				new Rotate(30/180*Math.PI),
+				new Move("size/6"),
+				new Rotate(25/180*Math.PI),
+				new FunctionCall(F_, {size: "size/2"}),
+				new Rotate(-25/180*Math.PI),
+				new Move("size/3"),
+				new Rotate(25/180*Math.PI),
+				new FunctionCall(F_, {size: "size/2"}),
+				new Rotate(-25/180*Math.PI),
+				new Move("size/6"),
+				new Move("-size")
+			])
+		])
+	}
+	
+	if (false) {
+		addNewFunctionToUI("fern")
+		F_.addArgument(10, "size")
+		F_.addArgument(1, "sign")
+		F_.setCommands([
+			new Branch("size>=1", [
+				new Move("size"),
+				new Rotate("70*sign/180*Math.PI"),
+				new FunctionCall(F_, {size: "size*0.5", sign: "-sign"}),
+				new Rotate("-70*sign/180*Math.PI"),
+				new Move("size"),
+				new Rotate("-70*sign/180*Math.PI"),
+				new FunctionCall(F_, {size: "size*0.5", sign: "sign"}),
+				new Rotate("77*sign/180*Math.PI"),
+				new FunctionCall(F_, {size: "size-1", sign: "sign"}),
+				new Rotate("-7*sign/180*Math.PI"),
+				new Move("-2*size")
+			], [])
+		])
+	}
+	
+	if (false) {
+		addNewFunctionToUI("circle")
+		F_.setCommands([
+			new Loop(360, [
+				new Rotate("1/180*Math.PI"),
+				new Move(1),
+			])
+		])
+	}
+	
+	if (false) {
+		addNewFunctionToUI("spirale")
+		F_.addArgument(1, "a")
+		F_.setCommands([
+			new Move("a"),
+			new Rotate("10/180*Math.PI"),
+			new Branch("a<40", [
+				new FunctionCall(F_, {a: "a*1.02"})
+			], [])
+		])
+	}
+	
+	if (false) {
+		addNewFunctionToUI("meinBaum")
+		F_.addArgument(6, "tiefe")
+		F_.addArgument(30, "winkel")
+		F_.setCommands([
+			new Branch("tiefe>=0", [
+				new Move("tiefe*5"),
+				new Rotate("winkel"),
+				new FunctionCall(F_, {tiefe: "tiefe-1"}),
+				new Rotate("-winkel*2"),
+				new FunctionCall(F_, {tiefe: "tiefe-1"}),
+				new Rotate("winkel"),
+				new Move("-tiefe*5")
+			], [])
+		])
+	}
+	
+	if (false) {
+		addNewFunctionToUI("KreisC")
+		F_.addArgument(4, "winkel")
+		F_.setCommands([
+			
+		])
+	}
+	
+/*
+reset
+
+to KreisC :winkel :nachRechts :groesze
+ repeat :winkel [
+  forward :groesze
+  ifelse :nachRechts <= 0
+   [left 1]
+   [right 1]
+ ]
+end
+
+to Welle :n
+ if :n > 0 [
+  KreisC 180 :n%2 0.5
+  Welle :n-1
+ ]
+end
+
+Welle 5
+
+
+to zahnrad :anzahlecken :seitenlaenge
+repeat :anzahlecken [
+  repeat 2 [
+    fw :seitenlaenge
+    rt 90]
+  fw :seitenlaenge
+  lt 90 - (180 / :anzahlecken) 
+  fw :seitenlaenge / 2
+  lt 90 - (180 / :anzahlecken) 
+]
+end
+
+zahnrad 20 10
+
+
+to stern :b
+ repeat 500
+ [
+  forward :b 
+  right 200
+  make "b 1 + :b
+ ]
+end 
+
+stern 1
+
+
+to saege :zacken :zackenlaenge
+repeat :zacken [
+repeat 2 [
+fw :zackenlaenge
+rt 90
+]
+lt 90+(180/:zacken)
+fw :zackenlaenge/2
+lt 90+(180/:zacken)
+]
+end
+
+saege 25 15
+
+ */
+	
+	
+	
+	run()
 }
 
 return vogo

@@ -1,11 +1,11 @@
-
+see also TODO in code
 
 small features
-	angles in degrees
+	### angles in degrees
+	### hide duplicate expressions (in loops or recursion)
+		simplification of visual steps (with increased number of steps)
 	pointer to hand for dragging canvas
 	cursor to right-left arrow on input field
-	hide duplicate expressions (in loops or recursion)
-		simplification of visual steps (with increased number of steps)
 	improve function call look -> context menu for args
 	direct creation of variables ("a" also works if nothing is selected)
 	mark all commands in selected scope
@@ -28,14 +28,13 @@ small features
 	add acknowledgements (back to me)
 
 performance
-	round dom numbers
-	put svg styles in svg css (inkscape compatibility?)
-	store which expression requires which variables, so I only eval those
 	for one run cycle and the same stack position, only evaluate variables once
+	store which expression requires which variables, so I only eval those
+	put svg styles in svg css (inkscape compatibility?)
+	round dom numbers
 
 big features
-	hotkeys sidebar
-	Branching/Conditions
+	### hotkeys sidebar
 	constraint solving
 		snapping/line end handles
 	Collision-Free positioning
@@ -52,9 +51,11 @@ big features
 	allow much more dragging between elements
 
 bugs
+	### add proxies to functions (debug dependency checking) and improve run() performance
+	### fix delete command
+	dereference proxies!
 	allow adding commands at the end inside a loop by selecting non-1 loop iteration
 	foreignObject relative width and height
-	dereference proxies!
 	fix: rotation manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
 	svg output does not work (input tag error)
