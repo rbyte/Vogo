@@ -34,7 +34,7 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 4
-var scopeDepthLimit = 100 // for endless loops and recursion
+var scopeDepthLimit = 25 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 100
 var domSvg
@@ -87,9 +87,12 @@ var mousePosPrevious = [0,0]
 
 var selection = {
 	e: [],
+	isEmpty: function() {
+		return this.e.length === 0
+	},
 	add: function(x) {
 		if (!keyPressed.shift) {
-			this.deselectAll()
+			this.removeAndDeselectAll()
 			this.e.push(x)
 		} else if (!this.contains(x)) // accumulate multiple
 			this.e.push(x)
@@ -103,21 +106,24 @@ var selection = {
 				return true
 		return false
 	},
-	isEmpty: function() {
-		return this.e.length === 0
+	removeAndDeselect: function(x) {
+		if (this.contains(x)) {
+			this.e.splice(this.e.indexOf(x), 1)
+		}
+		x.deselect()
 	},
-	deselectAll: function() {
+	removeAndDeselectAll: function() {
 		var detach = this.e
 		this.e = []
-		for (var i=0; i<detach.length; i++)
-			detach[i].deselect()
+		detach.forEach(function(x) { x.deselect() })
 		return detach
 	},
-	deselectAndDeleteAllCompletely: function() {
-		var detach = this.deselectAll()
-		for (var i=0; i<detach.length; i++) {
-			detach[i].deleteCompletely()
-		}
+	// remove means splice from selection
+	// deselect means disable highlighting indicating selection
+	// delete means structurally remove command from program (root, all proxies, ...)
+	removeDeselectAndDeleteAllCompletely: function() {
+		var detach = this.removeAndDeselectAll()
+		detach.forEach(function(x) { x.deleteCompletely() })
 		return detach
 	}
 }
@@ -165,10 +171,12 @@ vogo.update = function(args) {
 function run() {
 //	console.log("RUNNING")
 	F_.state.reset()
-	for (var i=0; i<F_.commands.length; i++) {
-		F_.commands[i].savedState = undefined
-		F_.commands[i].exec(F_)
-	}
+	F_.exec()
+	
+//	for (var i=0; i<F_.commands.length; i++) {
+//		F_.commands[i].savedState = undefined
+//		F_.commands[i].exec(F_)
+//	}
 	F_.updateTurtle()
 	mainSVG.updateTurtle()
 	
@@ -294,7 +302,7 @@ function setupUIEventListeners() {
 				manipulation.finish(Rotate)
 			}
 		} else {
-			selection.deselectAll()
+			selection.removeAndDeselectAll()
 		}
     })
 	
@@ -341,6 +349,7 @@ function Function(name, args, commands, customPaintingG) {
 				self.args[a] = new Expression(self.args[a])
 	}
 	self.commands = []
+	self.execCmds = []
 	if (commands !== undefined)
 		self.setCommands(commands)
 	if (customPaintingG !== undefined)
@@ -629,16 +638,27 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 Function.prototype.setCommands = function(commands) {
 	console.assert(commands instanceof Array)
 	var self = this
+	console.assert(self.commands.length === 0)
 	self.commands = commands
-	self.commands.forEach(function (e) { e.scope = self })
+	self.commands.forEach(function (e) {
+		console.assert(e.root === e)
+		e.scope = self
+	})
 	// TODO could add a execCmds here and require every root cmd to be shallowCloned before exec()
 	// this would also allow Function to be shallowCloned and replace FunctionCall
+	console.assert(self.execCmds.length === 0)
+	
 	return self
 }
 
 Function.prototype.exec = function() {
 	var self = this
-	self.commands.forEach(function(e) { e.exec(self) })
+	if (self.commands.length !== self.execCmds.length) {
+		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
+		self.execCmds = []
+		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
+	}
+	self.execCmds.forEach(function(e) { e.exec(self) })
 	self.updateTurtle()
 	return self
 }
@@ -648,7 +668,7 @@ Function.prototype.switchTo = function() {
 	self.svgContainer.classed("fSVGselected", true)
 	if (F_ === self)
 		return
-	selection.deselectAll()
+	selection.removeAndDeselectAll()
 	if (F_ !== undefined) {
 		self.previousF_ = F_
 		F_.svgContainer.classed("fSVGselected", false)
@@ -1034,7 +1054,7 @@ onKeyDown.s = function() {
 
 onKeyDown.del = function() {
 	if (bodyIsSelected()) {
-		selection.deselectAndDeleteAllCompletely()
+		selection.removeDeselectAndDeleteAllCompletely()
 		run()
 	}
 }
@@ -1105,7 +1125,7 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 		console.assert(r.proxies === undefined)
 		clonedCmdsList.push(r)
 	})
-	selection.deselectAndDeleteAllCompletely()
+	selection.removeDeselectAndDeleteAllCompletely()
 	var cmdThatWrapped = doWithCmdList(clonedCmdsList)
 	cmdThatWrapped.scope = scope
 	cmdsRef.splice(first, 0, cmdThatWrapped)
@@ -1366,9 +1386,8 @@ Command.prototype.shallowClone = function(scope) {
 	// ok, ok, had several problems with this now!
 	// until I dont know exactly what this is doing, I stay the hell away from it
 //	var c = Object.create(self)
-	// BUMMER: THIS BREAKS
+//	BUMMER: THIS BREAKS
 //	console.assert(c.proxies === undefined)
-	
 	
 	var c = new self.myConstructor()
 	// root is not self's parent, so there is no chain of references if a clone is cloned
@@ -1484,13 +1503,15 @@ Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
 }
 
 // does not change the program. may become visible again after reexecution.
+// this always deselects without removing from selection!
 Command.prototype.removeVisible = function() {
 	this.removeVisibleElements(this.getVisibleElements())
 	this.removeVisibleFromMainSVG()
 }
 
 Command.prototype.removeVisibleFromMainSVG = function() {
-	this.deselect()
+	selection.removeAndDeselect(this)
+//	this.deselect()
 	this.removeVisibleElements(this.getVisibleElementsFromMainSVG(), true)
 }
 
@@ -1501,6 +1522,13 @@ Command.prototype.toCode = function(scopeDepth) {
 
 Command.prototype.canContainCommands = function() {
 	return this.hasOwnProperty("execCmds")
+}
+
+Command.prototype.exec = function(callerF) {
+	var self = this
+	console.assert(self.root !== self, "root cmds are never exec() directly.")
+	self.savedState = callerF.state.clone()
+	self.execInner(callerF)
 }
 
 
@@ -1523,7 +1551,7 @@ Move.prototype.clone = function(scope) {
 	return r
 }
 
-Move.prototype.exec = function(callerF) {
+Move.prototype.execInner = function(callerF) {
 	var self = this
 	var lineLength = self.evalMainParameter()
 	
@@ -1532,7 +1560,6 @@ Move.prototype.exec = function(callerF) {
 		lastRotateExecuted.arc.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+") scale("+lastRotateScaleFactorCalculated+")")
 	}
 	
-	self.savedState = callerF.state.clone()
 	var x1 = callerF.state.x
 	var y1 = callerF.state.y
 	callerF.state.x += Math.sin(callerF.state.r) * lineLength
@@ -1655,10 +1682,9 @@ Rotate.prototype.clone = function(scope) {
 	return r
 }
 
-Rotate.prototype.exec = function(callerF) {
+Rotate.prototype.execInner = function(callerF) {
 	var self = this
 	var angle = correctRadius(self.evalMainParameter())
-	self.savedState = callerF.state.clone()
 	var dragStartState
 	
 	var arc = d3.svg.arc()
@@ -1808,13 +1834,12 @@ Loop.prototype.clone = function(scope) {
 	return r
 }
 
-Loop.prototype.exec = function(callerF) {
+Loop.prototype.execInner = function(callerF) {
 	var self = this
 	// TODO if this is 0 the loop becomes unaccessable
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
-	self.savedState = callerF.state.clone()
 	// shrink inner loops radius
-	var loopClockRadiusUsed = loopClockRadius*Math.pow(0.7, self.refDepthOfSameType+1)
+	var loopClockRadiusUsed = loopClockRadius * Math.pow(0.7, self.refDepthOfSameType+1)
 	var drawIcons = callerF === F_
 	
 	function createIcon() {
@@ -1995,10 +2020,9 @@ FunctionCall.prototype.clone = function(scope) {
 	return r
 }
 
-FunctionCall.prototype.exec = function(callerF) {
+FunctionCall.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
-	self.savedState = callerF.state.clone()
 	console.assert(root.f !== undefined)
 	var drawIcons = callerF === F_ && self.scopeDepth < 1
 	
@@ -2190,10 +2214,9 @@ Branch.prototype.clone = function(scope) {
 	return r
 }
 
-Branch.prototype.exec = function(callerF) {
+Branch.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
-	self.savedState = callerF.state.clone()
 	var condEval = self.evalMainParameter()
 	var rebuild = self.lastCondEvalResult === undefined
 		|| self.lastCondEvalResult !== condEval
