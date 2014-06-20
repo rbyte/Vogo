@@ -656,6 +656,7 @@ Function.prototype.exec = function() {
 	if (self.commands.length !== self.execCmds.length) {
 		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
 		self.execCmds = []
+		console.assert(self.canContainCommands())
 		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
 	}
 	self.execCmds.forEach(function(e) { e.exec(self) })
@@ -783,13 +784,14 @@ manipulation.update = function(cmdType) {
 		else
 			console.assert(false)
 		
-		if (selection.isEmpty()) {
-			this.insertedCommand.exec(F_)
-			F_.updateTurtle()
-			mainSVG.updateTurtle()
-		} else {
+		// TODO optimisations may rather be done in run()
+//		if (selection.isEmpty()) {
+//			this.insertedCommand.exec(F_)
+//			F_.updateTurtle()
+//			mainSVG.updateTurtle()
+//		} else {
 			run()
-		}
+//		}
 	} else {
 		// this happens when update is called before draw, when body is not selected
 		// because update is called, but key press is supressed
@@ -1398,6 +1400,7 @@ Command.prototype.shallowClone = function(scope) {
 		self.root.proxies = []
 	self.root.proxies.push(c)
 	// scope is the initiator of the clone
+	console.assert(scope !== undefined)
 	console.assert(scope.canContainCommands())
 	c.scope = scope
 	c.scopeDepth = scope.scopeDepth + 1
@@ -1520,7 +1523,7 @@ Command.prototype.toCode = function(scopeDepth) {
 		+"("+this.root.mainParameter.getWrapped()+")"
 }
 
-Command.prototype.canContainCommands = function() {
+Function.prototype.canContainCommands = Command.prototype.canContainCommands = function() {
 	return this.hasOwnProperty("execCmds")
 }
 
