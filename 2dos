@@ -1,4 +1,4 @@
-see also TODO in code
+see also TODOs in code
 
 small features
 	### angles in degrees
@@ -35,13 +35,13 @@ performance
 
 big features
 	### hotkeys sidebar
+	### automatic tests (adjust for testability)
 	constraint solving
 		snapping/line end handles
 	Collision-Free positioning
 		check same state of commands, then shift y ?
 	How can the program flow be visualised (stepping through)?
 		Map a parameter to space (show multiple "shadow instances" of it)
-	automatic tests (adjust for testability)
 	Logo output
 	edit lines (colour, breadth)
 	allow functions as arguments
@@ -54,7 +54,6 @@ bugs
 	### add proxies to functions (debug dependency checking) and improve run() performance
 	if recursing, fc with a and b, setting both to be a|b*0.9 will create an endless loop
 		this is caused by the fact that to eval a, a and be are needed, creating a tree of evals, which explodes
-	dereference proxies!
 	allow adding commands at the end inside a loop by selecting non-1 loop iteration
 	foreignObject relative width and height
 	fix: rotation manipulation in loop: so that line crosses mouse

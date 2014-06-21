@@ -94,22 +94,23 @@ var selection = {
 		if (!keyPressed.shift) {
 			this.removeAndDeselectAll()
 			this.e.push(x)
-		} else if (!this.contains(x)) // accumulate multiple
+		} else if (!this.contains(x)) { // accumulate multiple
 			this.e.push(x)
+		}
+		run()
 	},
 	contains: function(x) {
 		return this.e.indexOf(x) !== -1
 	},
 	containsAsRoot: function(x) {
 		for (var i=0; i<this.e.length; i++)
-			if (this.e[i].root === x)
+			if (this.e[i].root === x.root)
 				return true
 		return false
 	},
 	removeAndDeselect: function(x) {
-		if (this.contains(x)) {
+		if (this.contains(x))
 			this.e.splice(this.e.indexOf(x), 1)
-		}
 		x.deselect()
 	},
 	removeAndDeselectAll: function() {
@@ -380,9 +381,9 @@ manipulation.update = function(cmdType) {
 	if (this.isCreating(cmdType)) {
 		F_.state = this.savedState.clone()
 		if (cmdType === Move)
-			this.insertedCommand.setMainParameter(parseFloat(getLineLengthToWithoutChangingDirection(mousePos).toFixed(2)))
+			this.insertedCommand.setMainParameter(parseFloat(getLineLengthToWithoutChangingDirection(mousePos[0], mousePos[1]).toFixed(2)))
 		else if (cmdType === Rotate)
-			this.insertedCommand.setMainParameter(parseFloat(rotateAngleTo(mousePos).toFixed(3)))
+			this.insertedCommand.setMainParameter(parseFloat(rotateAngleTo(mousePos[0], mousePos[1]).toFixed(3)))
 		else
 			console.assert(false)
 		
@@ -425,25 +426,23 @@ manipulation.remove = function(cmdType) {
 
 
 
-function rotateAngleTo(mousePos) {
-	var dx = mousePos[0] - F_.state.x
-	var dy = mousePos[1] - F_.state.y
-	return getAngleDeltaTo(dx, dy)
+function rotateAngleTo(x, y) {
+	return getAngleDeltaTo(x - F_.state.x, y - F_.state.y)
 }
 
 function getAngleDeltaTo(dx, dy, r) {
 	return correctRadius(Math.atan2(dy, dx) + Math.PI/2 - (r === undefined ? F_.state.r : r))
 }
 
-function getLineLengthTo(mousePos) {
-	var dx = mousePos[0] - F_.state.x
-	var dy = mousePos[1] - F_.state.y
+function getLineLengthTo(x, y) {
+	var dx = x - F_.state.x
+	var dy = y - F_.state.y
 	return Math.sqrt(dx*dx + dy*dy)
 }
 
-function getLineLengthToWithoutChangingDirection(mousePos) {
-	var ra = rotateAngleTo(mousePos)
-	return (ra > Math.PI/2 || ra < Math.PI/2 ? 1 : -1) * Math.cos(ra) * getLineLengthTo(mousePos)
+function getLineLengthToWithoutChangingDirection(x, y) {
+	var ra = rotateAngleTo(x, y)
+	return (ra > Math.PI/2 || ra < Math.PI/2 ? 1 : -1) * Math.cos(ra) * getLineLengthTo(x, y)
 }
 
 function correctRadius(r) {
@@ -1634,7 +1633,7 @@ Move.prototype.execInner = function(callerF) {
 		self.line = callerF.paintingG.append("line").style(lineStyle)
 	}
 	var drawOnMainSVG = callerF === F_
-	var drawIcons = drawOnMainSVG && self.scopeDepth <= 1
+	var drawIcons = drawOnMainSVG && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
 	
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
@@ -1758,7 +1757,7 @@ Rotate.prototype.execInner = function(callerF) {
 		.endAngle(callerF.state.r + angle)
 	callerF.state.addRadius(angle)
 	var drawIcons = callerF === F_
-	var drawLabel = callerF === F_ && self.scopeDepth <= 1
+	var drawLabel = callerF === F_ && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
 	
 	if (self.arc === undefined && drawIcons) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
@@ -2006,7 +2005,7 @@ Loop.prototype.execInner = function(callerF) {
 			updateIcon(self.iconGs[i])
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
 			self.applyCSSClass([self.iconGs[i].circleF], "selected", selection.contains(self))
-			self.applyCSSClass([self.iconGs[i].circleF], "mark", selection.containsAsRoot(self.root))
+			self.applyCSSClass([self.iconGs[i].circleF], "mark", selection.containsAsRoot(self))
 		}
 		
 		for (var k=0; k<self.root.commands.length; k++) {
@@ -2087,7 +2086,7 @@ FunctionCall.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	console.assert(root.f !== undefined)
-	var drawIcons = callerF === F_ && self.scopeDepth <= 1
+	var drawIcons = callerF === F_ && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
 	
 	if (self.icon === undefined && drawIcons) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
@@ -2293,7 +2292,7 @@ Branch.prototype.execInner = function(callerF) {
 		|| self.execCmds.length === 0
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
-	var drawIcons = callerF === F_ && self.scopeDepth <= 1
+	var drawIcons = callerF === F_ && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
 	
 	if (self.iconG === undefined && drawIcons) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
@@ -2431,9 +2430,7 @@ vogo.Loop = Loop
 vogo.FunctionCall = FunctionCall
 vogo.Branch = Branch
 
-
 function test() {
-	var assert = console.assert
 	
 	if (false) {
 		addNewFunctionToUI("nEck")
@@ -2618,6 +2615,16 @@ saege 25 15
 	
 	run()
 }
+
+function automaticTest() {
+	
+	mousePos = [10,10]
+	
+	
+	
+	
+}
+
 
 return vogo
 }()
