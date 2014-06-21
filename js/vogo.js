@@ -144,7 +144,8 @@ function Drawing(f, args, paintingG) {
 	paintingG[0][0].vogo = func
 	func.update = function(newArgs) {
 		console.assert(this.commands.length == 1)
-		var fc = this.commands[0]
+		// TODO is this right?
+		var fc = this.execCmds[0]
 		console.assert(fc instanceof FunctionCall)
 		if (newArgs !== undefined) {
 			// leave old, just override
@@ -172,20 +173,15 @@ function run() {
 //	console.log("RUNNING")
 	F_.state.reset()
 	F_.exec()
-	
-//	for (var i=0; i<F_.commands.length; i++) {
-//		F_.commands[i].savedState = undefined
-//		F_.commands[i].exec(F_)
-//	}
 	F_.updateTurtle()
 	mainSVG.updateTurtle()
 	
-	for (var fi=0; fi<functions.length; fi++) {
-		if (functions[fi] !== F_) {
-			functions[fi].state.reset()
-			functions[fi].exec()
+	functions.forEach(function(f) {
+		if (f !== F_) {
+			f.state.reset()
+			f.exec()
 		}
-	}
+	})
 }
 
 function updateScreenElemsSize() {
@@ -196,8 +192,7 @@ function updateScreenElemsSize() {
 	mainSVG.svgWidth = bb.width
 	mainSVG.svgHeight = bb.height
 	
-	for (var i=0; i<functions.length; i++)
-		functions[i].updateViewbox()
+	functions.forEach(function(f) { f.updateViewbox() })
 	mainSVG.updateViewbox()
 }
 
@@ -337,399 +332,6 @@ State.prototype.clone = function() {
 	return s
 }
 
-function Function(name, args, commands, customPaintingG) {
-	var self = this
-	self.state = new State()
-	self.setName(name)
-	self.args = {}
-	if (args !== undefined) {
-		self.args = args
-		for (var a in args) // wrap in expressions
-			if (!(self.args[a] instanceof Expression) && self.args[a] !== undefined)
-				self.args[a] = new Expression(self.args[a])
-	}
-	self.commands = []
-	self.execCmds = []
-	if (commands !== undefined)
-		self.setCommands(commands)
-	if (customPaintingG !== undefined)
-		self.paintingG = customPaintingG
-	return self
-}
-
-Function.prototype.initUI = function() {
-	var self = this
-	self.svgViewboxWidth
-	self.svgViewboxHeight = defaultSvgViewboxHeight // fix on startup
-	self.svgViewboxX
-	self.svgViewboxY
-	self.svgWidth
-	self.svgHeight
-	
-	self.li_f = d3.select("#ul_f").append("li")//.attr("id", "f_"+self.name)
-	// this complicated wrapping is sadly necessary
-	// http://stackoverflow.com/questions/17175038/css-dynamic-length-text-input-field-and-submit-button-in-one-row
-	var titleRow = self.li_f.append("div").attr("class", "titleRow")
-	
-	self.nameInput = titleRow.append("div").attr("class", "titleRowCell")
-		.append("input")
-		.attr("class", "f_name")
-		.property("value", self.name)
-		.attr("type", "text")
-		.on("blur", function() {
-			self.setName(this.value)
-		})
-		.on("keypress", function() {
-			if (d3.event.keyCode === /*enter*/ 13)
-				self.setName(this.value)
-		})
-		.on("input", function() {
-			self.nameInput.classed({"inputInEditState": true})
-			self.checkName(this.value)
-		})
-	
-	titleRow.append("div").attr("class", "titleRowCell")
-		.append("button").attr("class", "f_remove").text("x")
-		.on("click", function() {
-			// TODO dependency check
-			if (functions.length > 1) {
-				self.remove()
-			} else {
-				updateNotification("There has to be at least one function.")
-			}
-		})
-	self.ul_args = self.li_f.append("ul").attr("class", "ul_args")
-	
-	self.svgContainer = self.li_f.append("div").attr("class", "fSVGcontainer")
-	var isDragged = false
-	self.svg = self.svgContainer.append("svg").attr("class", "fSVG")
-		.attr("xmlns", "http://www.w3.org/2000/svg")
-		.on("click", function() {
-			// dragstart and click are fired at the same time, so I have to check for myself
-			if (!isDragged) {
-				self.switchTo()
-			}
-		})
-		.call(d3.behavior.drag()
-			.on("dragstart", function (d) {
-			})
-			.on("drag", function (d) {
-				isDragged = true
-			})
-			.on("dragend", function (d) {
-				if (isDragged) {
-					isDragged = false
-//					if (self === F_) {
-//						// recursion!
-//					} else {
-						// TODO respect selection!
-						var fc = new FunctionCall(self)
-						fc.scope = F_
-						F_.commands.push(fc)
-						run()
-//					}
-				}
-			})
-		)
-	
-	self.svgInit()
-	return self
-}
-
-MainSVG.prototype.svgInit = Function.prototype.svgInit = function() {
-	var self = this
-	self.paintingG = self.svg.append("g").attr("class", "paintingG")
-	
-	self.turtleHomeCursor = self.svg.append("g").attr("class", "turtleHome")
-	self.turtleHomeCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleHomeStyle)
-	
-	self.turtleCursor = self.svg.append("g").attr("class", "turtle")
-	self.turtleCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleStyle)
-}
-
-MainSVG.prototype.updateTurtle = function() {
-	var self = this
-	self.turtleCursor.attr("transform", "translate("+F_.state.x+", "+F_.state.y+") rotate("+(F_.state.r/Math.PI*180)+")")
-}
-
-Function.prototype.updateTurtle = function() {
-	var self = this
-	if (self.turtleCursor !== undefined)
-		self.turtleCursor.attr("transform", "translate("+self.state.x+", "+self.state.y+") rotate("+(self.state.r/Math.PI*180)+")")
-}
-
-function updateViewboxFor(obj, ref, afterZoom) {
-	console.assert(ref !== undefined && !isNaN(ref.svgViewboxX) && !isNaN(ref.svgViewboxY)
-		&& ref.svgViewboxWidth > 0 && ref.svgViewboxHeight > 0)
-	console.assert(isFinite(ref.svgViewboxX) && isFinite(ref.svgViewboxY) && isFinite(ref.svgViewboxWidth) && isFinite(ref.svgViewboxHeight))
-	function applyTransition() {
-		return afterZoom === undefined ? obj : obj.transition().duration(zoomTransitionDuration)
-	}
-	applyTransition(obj).attr("viewBox", ref.svgViewboxX+" "+ref.svgViewboxY+" "+ref.svgViewboxWidth+" "+ref.svgViewboxHeight)
-}
-
-MainSVG.prototype.updateViewbox = function(afterZoom) {
-	if (F_ !== undefined)
-		updateViewboxFor(this.svg, F_, afterZoom)
-}
-
-Function.prototype.updateViewbox = function(afterZoom) {
-	var self = this
-		// [0][0] gets the dom element
-	// the preview svg aspect ratio is coupled to the main svg
-	self.svgWidth = self.svgContainer[0][0].getBoundingClientRect().width
-	self.svgHeight = self.svgWidth * mainSVG.svgHeight/mainSVG.svgWidth
-	self.svgContainer.style({height: self.svgHeight+"px"})
-	
-//	console.assert(self.svgWidth > 0 && self.svgViewboxHeight > 0 && mainSVG.svgWidth > 0 && mainSVG.svgHeight > 0)
-//	console.log(self.svgWidth+","+self.svgViewboxHeight+","+mainSVG.svgWidth+","+mainSVG.svgHeight)
-	console.assert(self.svgWidth > 0)
-	console.assert(self.svgViewboxHeight > 0)
-	console.assert(mainSVG.svgWidth > 0)
-	// there have be instances (occuring when resizing the window), when this failed
-	console.assert(mainSVG.svgHeight > 0)
-	
-	// keep height stable and center (on startup to 0,0)
-	var svgViewboxWidthPrevious = self.svgViewboxWidth
-	self.svgViewboxWidth = self.svgViewboxHeight * mainSVG.svgWidth/mainSVG.svgHeight
-	if (svgViewboxWidthPrevious !== undefined)
-		self.svgViewboxX -= (self.svgViewboxWidth - svgViewboxWidthPrevious)/2
-	if (self.svgViewboxX === undefined)
-		self.svgViewboxX = -self.svgViewboxWidth/2
-	if (self.svgViewboxY === undefined)
-		self.svgViewboxY = -self.svgViewboxHeight/2
-	
-	updateViewboxFor(self.svg, self, afterZoom)
-}
-
-Function.prototype.checkName = function(newName) {
-	var regEx = /^[a-zA-Zα-ω][a-zA-Zα-ω0-9]*$/
-	if (!newName.match(regEx)) {
-		this.nameInput.classed({"inputInWrongState": true})
-		updateNotification("The function name has to be alphanumeric and start with a letter: "+regEx)
-		return false
-	}
-	// check for duplicates
-	for (var i=0; i<functions.length; i++) {
-		if (functions[i] !== this && functions[i].name === newName) {
-			if (this.nameInput !== undefined) {
-				this.nameInput.classed({"inputInWrongState": true})
-				updateNotification("Function name duplication.")
-			}
-			return false
-		}
-	}
-	if (this.nameInput !== undefined) {
-		this.nameInput.classed({"inputInWrongState": false})
-		hideNotification()
-	}
-	return true
-}
-
-Function.prototype.searchForName = function(charCodeStart, range, checkFunction, s, depth) {
-	if (depth === 0)
-		return (checkFunction(s) ? s : false)
-	for (var i=0; i<range; i++) {
-		var r = this.searchForName(charCodeStart, range, checkFunction, s + String.fromCharCode(charCodeStart+i), depth-1)
-		if (r !== false)
-			return r
-	}
-	return this.searchForName(charCodeStart, range, checkFunction, s, depth+1)
-}
-
-Function.prototype.setName = function(newName) {
-	var self = this
-	if (newName === undefined) {
-		newName = self.searchForName(945/*=α*/, 26/*=ω*/, function (s) { return self.checkName(s) }, "", 1)
-	}
-	
-	var r = self.checkName(newName)
-	if (r)
-		self.name = newName
-	if (self.nameInput !== undefined) {
-		self.nameInput.property("value", self.name)
-		self.nameInput.classed({"inputInEditState": false, "inputInWrongState": false})
-		hideNotification()
-	}
-	return r
-}
-
-Function.prototype.checkArgumentName = function(newName) {
-	var regEx = /^[a-zA-Z][a-zA-Z0-9]*$/
-	if (!newName.match(regEx)) {
-		updateNotification("The argument name has to be alphanumeric and start with a letter: "+regEx)
-		return false
-	}
-	// check for duplicates
-	for (var name in this.args) {
-		if (name === newName) {
-			updateNotification("Argument name duplication.")
-			return false
-		}
-	}
-	hideNotification()
-	return true
-}
-
-Function.prototype.addArgument = function(defaultValue, argName) {
-	var self = this
-	if (argName === undefined)
-		argName = self.searchForName(97/*=a*/, 26/*=z*/, function (s) { return self.checkArgumentName(s) }, "", 1)
-	
-	console.assert(self.checkArgumentName(argName))
-	self.args[argName] = new Expression(defaultValue)
-	
-	function onChange(value) {
-		console.assert(typeof value == "string")
-		if (value === "") {
-			// TODO check dependencies
-			inputField.remove()
-			delete self.args[argName]
-		}
-		var regEx = /^([a-zA-Z][a-zA-Z0-9]*)=(.+)$/
-		var match = regEx.exec(value)
-		if (match !== null) { // match success
-			var newArgName = match[1]
-			var newValue = match[2]
-			if (argName !== newArgName) {
-				// TODO rename all occurences
-				self.args[newArgName] = self.args[argName]
-				delete self.args[argName] // dereference
-				argName = newArgName
-			}
-			self.args[argName].set(newValue)
-			run()
-		} else {
-			// restore field
-		}
-	}
-	
-	var inputField = this.ul_args.append("li")
-		.append("input")
-		.attr("class", "f_argument")
-		.attr("type", "text")
-		.on("blur", function() {
-			onChange(this.value)
-		})
-		.on("keypress", function() {
-			if (d3.event.keyCode === /*enter*/ 13) {
-				onChange(this.value)
-			}
-		})
-		.on("input", function() {
-			
-		})
-		.call(d3.behavior.drag()
-			.on("dragstart", function (d) {
-				self.args[argName].adjustDragstart(this)
-			})
-			.on("drag", function (d) {
-				self.args[argName].adjustDrag(this, argName+"=")
-			})
-			.on("dragend", function (d) {
-				
-			})
-		)
-		.property("value", argName+"="+self.args[argName].get())
-	
-	return argName
-}
-
-Function.prototype.setCommands = function(commands) {
-	console.assert(commands instanceof Array)
-	var self = this
-	console.assert(self.commands.length === 0)
-	self.commands = commands
-	self.commands.forEach(function (e) {
-		console.assert(e.root === e)
-		e.scope = self
-	})
-	// TODO could add a execCmds here and require every root cmd to be shallowCloned before exec()
-	// this would also allow Function to be shallowCloned and replace FunctionCall
-	console.assert(self.execCmds.length === 0)
-	
-	return self
-}
-
-Function.prototype.exec = function() {
-	var self = this
-	if (self.commands.length !== self.execCmds.length) {
-		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
-		self.execCmds = []
-		console.assert(self.canContainCommands())
-		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
-	}
-	self.execCmds.forEach(function(e) { e.exec(self) })
-	self.updateTurtle()
-	return self
-}
-
-Function.prototype.switchTo = function() {
-	var self = this
-	self.svgContainer.classed("fSVGselected", true)
-	if (F_ === self)
-		return
-	selection.removeAndDeselectAll()
-	if (F_ !== undefined) {
-		self.previousF_ = F_
-		F_.svgContainer.classed("fSVGselected", false)
-		F_.commands.forEach(function(e) { e.removeVisibleFromMainSVG() })
-	}
-	F_ = self
-	F_.updateViewbox()
-	mainSVG.updateViewbox()
-	run()
-	// this sets the active element back to body, which is required for drawing
-	document.activeElement.blur()
-}
-
-Function.prototype.remove = function() {
-	var self = this
-	functions.splice(functions.indexOf(self), 1)
-	if (F_ === self && functions.length > 0) { // switch to previous or last
-		(self.previousF_ !== undefined && functions.indexOf(self.previousF_) !== -1
-			? self.previousF_
-			: functions[functions.length-1])
-				.switchTo()
-	}
-	
-	self.commands.forEach(function(e) { e.deleteCompletely() })
-	self.commands = []
-	
-	// contains everything
-	self.li_f.remove()
-	delete self.svg
-	delete self.nameInput
-	delete self.ul_args
-	delete self.svgContainer
-	delete self.li_f
-	delete self.previousF_
-}
-
-Function.prototype.setStateTo = function(idx) {
-	var self = this
-	// if idx is negative, counts backwards from last element
-	// idx = 0 -> first element
-	// idx = -1 -> last element
-	if ((idx >= 0 && idx >= self.commands.length) || (idx < 0 && -idx > self.commands.length)) {
-		self.state.reset()
-	} else {
-		var s = self.commands[(idx < 0 ? self.commands.length + idx : idx)].savedState
-		if (s)
-			self.state = s.clone()
-		else
-			console.log("setStateTo: savedState not set. doing nothing.")
-	}
-}
-
-Function.prototype.toCode = function() {
-	var self = this
-	var result = "var "+self.name+" = new vogo.Function(\""+self.name+"\", "
-		+argsToCode(self.args)+");\n"
-		// the extra call will make recursion possible
-		+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+");"
-	return result
-}
 
 var manipulation = {
 	insertedCommand: false
@@ -925,8 +527,8 @@ function setTextOfInput(input, containingForeignObject, text) {
 	input.attr("size", Math.max(1, text.toString().length))
 	if (!containingForeignObject.classed("hide")) {
 		var newWidth = input[0][0].offsetWidth
-		console.assert(newWidth > 0)
-		containingForeignObject.attr("width", newWidth+5)
+		if (newWidth > 0)
+			containingForeignObject.attr("width", newWidth+5)
 	}
 }
 
@@ -1009,6 +611,16 @@ function argsToCode(args) {
 	}
 	result += "}"
 	return result
+}
+
+// call fName on each arr element. it is assumed that fName itself removes the element from the array
+function forEachSelfRemovingDoCall(arr, fName) {
+	var l = arr.length
+	while (l > 0) {
+		arr[0][fName]()
+		console.assert(l === arr.length+1)
+		l = arr.length
+	}
 }
 
 onKeyDown.n = function() {
@@ -1392,6 +1004,7 @@ Command.prototype.shallowClone = function(scope) {
 //	console.assert(c.proxies === undefined)
 	
 	var c = new self.myConstructor()
+	console.assert(c instanceof self.myConstructor)
 	// root is not self's parent, so there is no chain of references if a clone is cloned
 	c.root = self.root
 	if (self.root !== self)
@@ -1410,33 +1023,64 @@ Command.prototype.shallowClone = function(scope) {
 	return c
 }
 
-// deletes the root, its proxies, visible elements and all references
+// deletes the root, its proxies, its visible elements, all commands it contains and all references
 Command.prototype.deleteCompletely = function() {
 	var root = this.root
+	if (root.canContainCommands()) {
+		// roots execCmds is always empty.
+		root.deleteCompletelyContainedCommands()
+		
+//		var oldLength = root.commands.length
+		// deleteCompletely splices from commands, so no normal looping here...
+		// TODO if branch ... has no "commands"
+//		while (root.commands.length > 0) {
+//			root.commands[0].deleteCompletely()
+//			console.assert(oldLength === root.commands.length+1)
+//			oldLength = root.commands.length
+//		}
+	}
 	if (root.proxies !== undefined) {
 		// "self" may be in proxies
-		root.proxies.forEach(function(p) {
+		forEachSelfRemovingDoCall(root.proxies, "deleteProxyCommand")
+		console.assert(root.proxies.length === 0)
+		
+//		var oldLength = root.proxies.length
+//		while (root.proxies.length > 0) {
+//			root.proxies[0].deleteProxyCommand()
+//			console.assert(oldLength === root.proxies.length+1)
+//			oldLength = root.proxies.length
+//		}
+		
+//		root.proxies.forEach(function(p) {
 			// remove proxy command from scope
-			console.assert(p.scope.canContainCommands())
-			console.assert(p.proxies === undefined) // -> is proxy
-			p.removeVisible()
-			var idx = p.scope.execCmds.indexOf(p)
-			console.assert(idx !== -1)
-			p.scope.execCmds.splice(idx, 1)
-			delete p.root
-			delete p.scope
-		})
-		delete root.proxies
+//			p.deleteProxyCommand()
+//			console.assert(p.scope.canContainCommands())
+//			console.assert(p.proxies === undefined) // -> is proxy
+//			p.removeVisible()
+//			var idx = p.scope.execCmds.indexOf(p)
+//			console.assert(idx !== -1)
+//			p.scope.execCmds.splice(idx, 1)
+//			delete p.root
+//			delete p.scope
+//		})
+//		delete root.proxies
 	}
-	// TODO if contains commands ...
-	root.removeVisible()
+	// root is never exec() so it has no visible elements
+//	root.removeVisible()
 	root.scope.fromRemoveRootCommand(root)
 	delete root.root
 	delete root.scope
 	delete root.mainParameter
 }
 
-Function.prototype.fromRemoveRootCommand = Command.prototype.fromRemoveRootCommand = function(cmd) {
+Command.prototype.deleteCompletelyContainedCommands = function() {
+	var root = this.root
+	// this also removes all proxies in root.execCmds
+	forEachSelfRemovingDoCall(root.commands, "deleteCompletely")
+	console.assert(root.execCmds.length === 0)
+}
+
+Command.prototype.fromRemoveRootCommand = function(cmd) {
 	var self = this
 	console.assert(cmd.root === cmd)
 	console.assert(self === cmd.scope)
@@ -1449,15 +1093,20 @@ Function.prototype.fromRemoveRootCommand = Command.prototype.fromRemoveRootComma
 Command.prototype.deleteProxyCommand = function() {
 	var self = this
 	console.assert(self.root !== self)
-//	console.assert(self.proxies === undefined)
-	if (self.proxies !== undefined)
-		console.log(self.proxies.length)
-
+	console.assert(self.proxies === undefined) // -> is proxy
 	console.assert(self.root.proxies.length > 0)
 	self.removeVisible()
+	
 	var idx = self.root.proxies.indexOf(self)
 	console.assert(idx !== -1)
 	self.root.proxies.splice(idx, 1)
+	
+	console.assert(self.scope.canContainCommands())
+	console.assert(self.scope.execCmds.length > 0)
+	idx = self.scope.execCmds.indexOf(self)
+	console.assert(idx !== -1)
+	self.scope.execCmds.splice(idx, 1)
+	
 	delete self.root
 	delete self.scope
 }
@@ -1479,29 +1128,31 @@ Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
 
 Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
 	var self = this
+	console.assert(self !== self.root)
+	// props is an array of strings. the strings are properties of self
 	props.forEach(function(p) {
 		// we have 3 cases: self[p] is
 		// 1) a simple d3 object
 		// 2) an array of simple d3 objects
 		// 3) an array of commands
-		var isArray = false
 		if (self[p] !== undefined) {
 			// cannot check for Array directly because any d3 object is also an Array
-			isArray = self[p].remove === undefined
-			if (isArray) {
-				self[p].forEach(function(e) {
-					if (e.remove === undefined) // 3
+			if (self[p].remove === undefined) { // is Array
+				for (var i=0; i<self[p].length; i++) {
+					if (self[p][i].remove === undefined) { // 3
 						fromMainSVG
-							? e.removeVisibleFromMainSVG()
-							: e.removeVisible()
-					else // 2
-						e.remove()
-				})
+							? self[p][i].removeVisibleFromMainSVG()
+							: self[p][i].removeVisible()
+					} else { // 2
+						self[p][i].remove()
+						self[p][i] = undefined
+					}
+				}
 			} else { // 1
 				self[p].remove()
+				self[p] = undefined
 			}
 		}
-		self[p] = isArray ? [] : undefined
 	})
 }
 
@@ -1523,7 +1174,7 @@ Command.prototype.toCode = function(scopeDepth) {
 		+"("+this.root.mainParameter.getWrapped()+")"
 }
 
-Function.prototype.canContainCommands = Command.prototype.canContainCommands = function() {
+Command.prototype.canContainCommands = function() {
 	return this.hasOwnProperty("execCmds")
 }
 
@@ -1534,8 +1185,409 @@ Command.prototype.exec = function(callerF) {
 	self.execInner(callerF)
 }
 
+function Function(name, args, commands, customPaintingG) {
+	var self = this
+	self.commonCommandConstructor()
+	self.state = new State()
+	self.setName(name)
+	self.args = {}
+	if (args !== undefined) {
+		self.args = args
+		for (var a in args) // wrap in expressions
+			if (!(self.args[a] instanceof Expression) && self.args[a] !== undefined)
+				self.args[a] = new Expression(self.args[a])
+	}
+	self.commands = []
+	self.execCmds = []
+	if (commands !== undefined)
+		self.setCommands(commands)
+	if (customPaintingG !== undefined)
+		self.paintingG = customPaintingG
+	return self
+}
+// actually, Function requires only few things from Command and only some methods work on Function
+Function.prototype = new Command(Function)
 
+Function.prototype.initUI = function() {
+	var self = this
+	self.svgViewboxWidth
+	self.svgViewboxHeight = defaultSvgViewboxHeight // fix on startup
+	self.svgViewboxX
+	self.svgViewboxY
+	self.svgWidth
+	self.svgHeight
+	
+	self.li_f = d3.select("#ul_f").append("li")//.attr("id", "f_"+self.name)
+	// this complicated wrapping is sadly necessary
+	// http://stackoverflow.com/questions/17175038/css-dynamic-length-text-input-field-and-submit-button-in-one-row
+	var titleRow = self.li_f.append("div").attr("class", "titleRow")
+	
+	self.nameInput = titleRow.append("div").attr("class", "titleRowCell")
+		.append("input")
+		.attr("class", "f_name")
+		.property("value", self.name)
+		.attr("type", "text")
+		.on("blur", function() {
+			self.setName(this.value)
+		})
+		.on("keypress", function() {
+			if (d3.event.keyCode === /*enter*/ 13)
+				self.setName(this.value)
+		})
+		.on("input", function() {
+			self.nameInput.classed({"inputInEditState": true})
+			self.checkName(this.value)
+		})
+	
+	titleRow.append("div").attr("class", "titleRowCell")
+		.append("button").attr("class", "f_remove").text("x")
+		.on("click", function() {
+			// TODO dependency check
+			if (functions.length > 1) {
+				self.remove()
+			} else {
+				updateNotification("There has to be at least one function.")
+			}
+		})
+	self.ul_args = self.li_f.append("ul").attr("class", "ul_args")
+	
+	self.svgContainer = self.li_f.append("div").attr("class", "fSVGcontainer")
+	var isDragged = false
+	self.svg = self.svgContainer.append("svg").attr("class", "fSVG")
+		.attr("xmlns", "http://www.w3.org/2000/svg")
+		.on("click", function() {
+			// dragstart and click are fired at the same time, so I have to check for myself
+			if (!isDragged) {
+				self.switchTo()
+			}
+		})
+		.call(d3.behavior.drag()
+			.on("dragstart", function (d) {
+			})
+			.on("drag", function (d) {
+				isDragged = true
+			})
+			.on("dragend", function (d) {
+				if (isDragged) {
+					isDragged = false
+//					if (self === F_) {
+//						// recursion!
+//					} else {
+						// TODO respect selection!
+						var fc = new FunctionCall(self)
+						fc.scope = F_
+						F_.commands.push(fc)
+						run()
+//					}
+				}
+			})
+		)
+	
+	self.svgInit()
+	return self
+}
 
+MainSVG.prototype.svgInit = Function.prototype.svgInit = function() {
+	var self = this
+	self.paintingG = self.svg.append("g").attr("class", "paintingG")
+	
+	self.turtleHomeCursor = self.svg.append("g").attr("class", "turtleHome")
+	self.turtleHomeCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleHomeStyle)
+	
+	self.turtleCursor = self.svg.append("g").attr("class", "turtle")
+	self.turtleCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleStyle)
+}
+
+MainSVG.prototype.updateTurtle = function() {
+	var self = this
+	self.turtleCursor.attr("transform", "translate("+F_.state.x+", "+F_.state.y+") rotate("+(F_.state.r/Math.PI*180)+")")
+}
+
+Function.prototype.updateTurtle = function() {
+	var self = this
+	if (self.turtleCursor !== undefined)
+		self.turtleCursor.attr("transform", "translate("+self.state.x+", "+self.state.y+") rotate("+(self.state.r/Math.PI*180)+")")
+}
+
+function updateViewboxFor(obj, ref, afterZoom) {
+	console.assert(ref !== undefined && !isNaN(ref.svgViewboxX) && !isNaN(ref.svgViewboxY)
+		&& ref.svgViewboxWidth > 0 && ref.svgViewboxHeight > 0)
+	console.assert(isFinite(ref.svgViewboxX) && isFinite(ref.svgViewboxY) && isFinite(ref.svgViewboxWidth) && isFinite(ref.svgViewboxHeight))
+	function applyTransition() {
+		return afterZoom === undefined ? obj : obj.transition().duration(zoomTransitionDuration)
+	}
+	applyTransition(obj).attr("viewBox", ref.svgViewboxX+" "+ref.svgViewboxY+" "+ref.svgViewboxWidth+" "+ref.svgViewboxHeight)
+}
+
+MainSVG.prototype.updateViewbox = function(afterZoom) {
+	if (F_ !== undefined)
+		updateViewboxFor(this.svg, F_, afterZoom)
+}
+
+Function.prototype.updateViewbox = function(afterZoom) {
+	var self = this
+		// [0][0] gets the dom element
+	// the preview svg aspect ratio is coupled to the main svg
+	self.svgWidth = self.svgContainer[0][0].getBoundingClientRect().width
+	self.svgHeight = self.svgWidth * mainSVG.svgHeight/mainSVG.svgWidth
+	self.svgContainer.style({height: self.svgHeight+"px"})
+	
+//	console.assert(self.svgWidth > 0 && self.svgViewboxHeight > 0 && mainSVG.svgWidth > 0 && mainSVG.svgHeight > 0)
+//	console.log(self.svgWidth+","+self.svgViewboxHeight+","+mainSVG.svgWidth+","+mainSVG.svgHeight)
+	console.assert(self.svgWidth > 0)
+	console.assert(self.svgViewboxHeight > 0)
+	console.assert(mainSVG.svgWidth > 0)
+	// there have be instances (occuring when resizing the window), when this failed
+	console.assert(mainSVG.svgHeight > 0)
+	
+	// keep height stable and center (on startup to 0,0)
+	var svgViewboxWidthPrevious = self.svgViewboxWidth
+	self.svgViewboxWidth = self.svgViewboxHeight * mainSVG.svgWidth/mainSVG.svgHeight
+	if (svgViewboxWidthPrevious !== undefined)
+		self.svgViewboxX -= (self.svgViewboxWidth - svgViewboxWidthPrevious)/2
+	if (self.svgViewboxX === undefined)
+		self.svgViewboxX = -self.svgViewboxWidth/2
+	if (self.svgViewboxY === undefined)
+		self.svgViewboxY = -self.svgViewboxHeight/2
+	
+	updateViewboxFor(self.svg, self, afterZoom)
+}
+
+Function.prototype.checkName = function(newName) {
+	var regEx = /^[a-zA-Zα-ω][a-zA-Zα-ω0-9]*$/
+	if (!newName.match(regEx)) {
+		this.nameInput.classed({"inputInWrongState": true})
+		updateNotification("The function name has to be alphanumeric and start with a letter: "+regEx)
+		return false
+	}
+	// check for duplicates
+	for (var i=0; i<functions.length; i++) {
+		if (functions[i] !== this && functions[i].name === newName) {
+			if (this.nameInput !== undefined) {
+				this.nameInput.classed({"inputInWrongState": true})
+				updateNotification("Function name duplication.")
+			}
+			return false
+		}
+	}
+	if (this.nameInput !== undefined) {
+		this.nameInput.classed({"inputInWrongState": false})
+		hideNotification()
+	}
+	return true
+}
+
+Function.prototype.searchForName = function(charCodeStart, range, checkFunction, s, depth) {
+	if (depth === 0)
+		return (checkFunction(s) ? s : false)
+	for (var i=0; i<range; i++) {
+		var r = this.searchForName(charCodeStart, range, checkFunction, s + String.fromCharCode(charCodeStart+i), depth-1)
+		if (r !== false)
+			return r
+	}
+	return this.searchForName(charCodeStart, range, checkFunction, s, depth+1)
+}
+
+Function.prototype.setName = function(newName) {
+	var self = this
+	if (newName === undefined) {
+		newName = self.searchForName(945/*=α*/, 26/*=ω*/, function (s) { return self.checkName(s) }, "", 1)
+	}
+	
+	var r = self.checkName(newName)
+	if (r)
+		self.name = newName
+	if (self.nameInput !== undefined) {
+		self.nameInput.property("value", self.name)
+		self.nameInput.classed({"inputInEditState": false, "inputInWrongState": false})
+		hideNotification()
+	}
+	return r
+}
+
+Function.prototype.checkArgumentName = function(newName) {
+	var regEx = /^[a-zA-Z][a-zA-Z0-9]*$/
+	if (!newName.match(regEx)) {
+		updateNotification("The argument name has to be alphanumeric and start with a letter: "+regEx)
+		return false
+	}
+	// check for duplicates
+	for (var name in this.args) {
+		if (name === newName) {
+			updateNotification("Argument name duplication.")
+			return false
+		}
+	}
+	hideNotification()
+	return true
+}
+
+Function.prototype.addArgument = function(defaultValue, argName) {
+	var self = this
+	if (argName === undefined)
+		argName = self.searchForName(97/*=a*/, 26/*=z*/, function (s) { return self.checkArgumentName(s) }, "", 1)
+	
+	console.assert(self.checkArgumentName(argName))
+	self.args[argName] = new Expression(defaultValue)
+	
+	function onChange(value) {
+		console.assert(typeof value == "string")
+		if (value === "") {
+			// TODO check dependencies
+			inputField.remove()
+			delete self.args[argName]
+		}
+		var regEx = /^([a-zA-Z][a-zA-Z0-9]*)=(.+)$/
+		var match = regEx.exec(value)
+		if (match !== null) { // match success
+			var newArgName = match[1]
+			var newValue = match[2]
+			if (argName !== newArgName) {
+				// TODO rename all occurences
+				self.args[newArgName] = self.args[argName]
+				delete self.args[argName] // dereference
+				argName = newArgName
+			}
+			self.args[argName].set(newValue)
+			run()
+		} else {
+			// restore field
+		}
+	}
+	
+	var inputField = this.ul_args.append("li")
+		.append("input")
+		.attr("class", "f_argument")
+		.attr("type", "text")
+		.on("blur", function() {
+			onChange(this.value)
+		})
+		.on("keypress", function() {
+			if (d3.event.keyCode === /*enter*/ 13) {
+				onChange(this.value)
+			}
+		})
+		.on("input", function() {
+			
+		})
+		.call(d3.behavior.drag()
+			.on("dragstart", function (d) {
+				self.args[argName].adjustDragstart(this)
+			})
+			.on("drag", function (d) {
+				self.args[argName].adjustDrag(this, argName+"=")
+			})
+			.on("dragend", function (d) {
+				
+			})
+		)
+		.property("value", argName+"="+self.args[argName].get())
+	
+	return argName
+}
+
+Function.prototype.setCommands = function(commands) {
+	console.assert(commands instanceof Array)
+	var self = this
+	console.assert(self.commands.length === 0)
+	self.commands = commands
+	self.commands.forEach(function (e) {
+		console.assert(e.root === e)
+		e.scope = self
+	})
+	// TODO could add a execCmds here and require every root cmd to be shallowCloned before exec()
+	// this would also allow Function to be shallowCloned and replace FunctionCall
+	console.assert(self.execCmds.length === 0)
+	
+	return self
+}
+
+// @override
+Function.prototype.exec = function(/*no caller here*/) {
+	var self = this
+	if (self.commands.length !== self.execCmds.length) {
+//		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
+//		self.execCmds = []
+		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
+		console.assert(self.execCmds.length === 0)
+		console.assert(self.canContainCommands())
+		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
+	}
+	self.execCmds.forEach(function(e) { e.exec(self) })
+	self.updateTurtle()
+	return self
+}
+
+Function.prototype.switchTo = function() {
+	var self = this
+	self.svgContainer.classed("fSVGselected", true)
+	if (F_ === self)
+		return
+	selection.removeAndDeselectAll()
+	if (F_ !== undefined) {
+		self.previousF_ = F_
+		F_.svgContainer.classed("fSVGselected", false)
+		F_.execCmds.forEach(function(e) { e.removeVisibleFromMainSVG() })
+	}
+	F_ = self
+	F_.updateViewbox()
+	mainSVG.updateViewbox()
+	run()
+	// this sets the active element back to body, which is required for drawing
+	document.activeElement.blur()
+}
+
+// TODO rename
+Function.prototype.remove = function() {
+	var self = this
+	functions.splice(functions.indexOf(self), 1)
+	if (F_ === self && functions.length > 0) { // switch to previous or last
+		(self.previousF_ !== undefined && functions.indexOf(self.previousF_) !== -1
+			? self.previousF_
+			: functions[functions.length-1])
+				.switchTo()
+	}
+	
+	self.deleteCompletelyContainedCommands()
+	
+//	self.commands.forEach(function(e) { e.deleteCompletely() })
+//	self.commands = []
+	
+	// contains everything
+	self.li_f.remove()
+	delete self.svg
+	delete self.nameInput
+	delete self.ul_args
+	delete self.svgContainer
+	delete self.li_f
+	delete self.previousF_
+}
+
+Function.prototype.setStateTo = function(idx) {
+	var self = this
+	// if idx is negative, counts backwards from last element
+	// idx = 0 -> first element
+	// idx = -1 -> last element
+	if ((idx >= 0 && idx >= self.commands.length) || (idx < 0 && -idx > self.commands.length)) {
+		self.state.reset()
+	} else {
+		var s = self.commands[(idx < 0 ? self.commands.length + idx : idx)].savedState
+		if (s)
+			self.state = s.clone()
+		else
+			console.log("setStateTo: savedState not set. doing nothing.")
+	}
+}
+
+// @override
+Function.prototype.toCode = function() {
+	var self = this
+	var result = "var "+self.name+" = new vogo.Function(\""+self.name+"\", "
+		+argsToCode(self.args)+");\n"
+		// the extra call will make recursion possible
+		+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+");"
+	return result
+}
 
 function Move(lineLength) {
 	var self = this
@@ -1558,9 +1610,18 @@ Move.prototype.execInner = function(callerF) {
 	var self = this
 	var lineLength = self.evalMainParameter()
 	
-	if (lastRotateExecuted !== undefined && lastRotateExecuted.arc !== undefined) {
+	// TODO this is a pretty ugly quick fix solution
+	if (lastRotateExecuted !== undefined
+		&& lastRotateExecuted.arc !== undefined
+		&& lastRotateExecuted.scope === self.scope) {
 		lastRotateScaleFactorCalculated = Math.min(rotationArcRadius, Math.abs(lineLength)*0.3)/rotationArcRadius
-		lastRotateExecuted.arc.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+") scale("+lastRotateScaleFactorCalculated+")")
+		// TODO do this more efficiently
+		// be aware of the fact that lastRotateExecuted may not be the last command executed or even be in the same function
+		var match = /^(translate\([^\)]*\))/.exec(lastRotateExecuted.arc.attr("transform"))
+		console.assert(match !== null)
+		lastRotateExecuted.arc.attr("transform", match[1]+" scale("+lastRotateScaleFactorCalculated+")")
+		// to avoid readjusting angle if (e.g.) two moves are in a row
+		lastRotateExecuted = undefined
 	}
 	
 	var x1 = callerF.state.x
@@ -1573,7 +1634,7 @@ Move.prototype.execInner = function(callerF) {
 		self.line = callerF.paintingG.append("line").style(lineStyle)
 	}
 	var drawOnMainSVG = callerF === F_
-	var drawIcons = drawOnMainSVG && self === self.root
+	var drawIcons = drawOnMainSVG && self.scopeDepth <= 1
 	
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
@@ -1697,7 +1758,7 @@ Rotate.prototype.execInner = function(callerF) {
 		.endAngle(callerF.state.r + angle)
 	callerF.state.addRadius(angle)
 	var drawIcons = callerF === F_
-	var drawLabel = callerF === F_ && self === self.root
+	var drawLabel = callerF === F_ && self.scopeDepth <= 1
 	
 	if (self.arc === undefined && drawIcons) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
@@ -1919,11 +1980,8 @@ Loop.prototype.execInner = function(callerF) {
 	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length
 		|| self.iconGs.length !== numberOfRepetitions
 	if (rebuild) {
-		self.execCmds.forEach(function(e) {
-			console.assert(e.proxies === undefined)
-			e.deleteProxyCommand()
-		})
-		self.execCmds = []
+		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
+		console.assert(self.execCmds.length === 0)
 		if (drawIcons)
 			if (0 <= numberOfRepetitions && numberOfRepetitions < self.iconGs.length) { // remove dangling
 				for (var k=numberOfRepetitions; k<self.iconGs.length; k++)
@@ -1943,6 +2001,8 @@ Loop.prototype.execInner = function(callerF) {
 		var cx = callerF.state.x + Math.sin(dir) * loopClockRadius * 1.4
 		var cy = callerF.state.y - Math.cos(dir) * loopClockRadius * 1.4
 		if (drawIcons) {
+			if (self.iconGs[i] === undefined)
+				self.iconGs[i] = createIcon()
 			updateIcon(self.iconGs[i])
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
 			self.applyCSSClass([self.iconGs[i].circleF], "selected", selection.contains(self))
@@ -2027,7 +2087,7 @@ FunctionCall.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	console.assert(root.f !== undefined)
-	var drawIcons = callerF === F_ && self.scopeDepth < 1
+	var drawIcons = callerF === F_ && self.scopeDepth <= 1
 	
 	if (self.icon === undefined && drawIcons) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
@@ -2133,8 +2193,10 @@ FunctionCall.prototype.execInner = function(callerF) {
 	}
 	
 	if (self.execCmds.length !== root.f.commands.length) {
-		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
-		self.execCmds = []
+//		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
+//		self.execCmds = []
+		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
+		console.assert(self.execCmds.length === 0)
 		root.f.commands.forEach(function(e) {
 			self.execCmds.push(e.shallowClone(self))
 		})
@@ -2190,6 +2252,11 @@ FunctionCall.prototype.toCode = function(scopeDepth) {
 	return result
 }
 
+// @override
+FunctionCall.prototype.deleteCompletelyContainedCommands = function() {
+	// do nothing. FunctionCall does not itself contain root commands, only execCmds.
+}
+
 
 function Branch(cond, ifTrueCmds, ifFalseCmds) {
 	var self = this
@@ -2226,7 +2293,7 @@ Branch.prototype.execInner = function(callerF) {
 		|| self.execCmds.length === 0
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
-	var drawIcons = callerF === F_ && self === self.root
+	var drawIcons = callerF === F_ && self.scopeDepth <= 1
 	
 	if (self.iconG === undefined && drawIcons) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
@@ -2276,8 +2343,10 @@ Branch.prototype.execInner = function(callerF) {
 	}
 	
 	if (rebuild) {
-		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
-		self.execCmds = []
+//		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
+//		self.execCmds = []
+		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
+		console.assert(self.execCmds.length === 0)
 		branchCmds.forEach(function(e) { self.execCmds.push(e.shallowClone(self)) })
 	}
 	
@@ -2332,6 +2401,25 @@ Branch.prototype.fromRemoveRootCommand = function(cmd) {
 	if (idx1 !== -1)
 		self.ifFalseCmds.splice(idx2, 1)
 	console.assert(idx1 !== -1 || idx2 !== -1)
+}
+
+// @override
+Branch.prototype.deleteCompletelyContainedCommands = function() {
+	var root = this.root
+	forEachSelfRemovingDoCall(root.ifTrueCmds, "deleteCompletely")
+	forEachSelfRemovingDoCall(root.ifFalseCmds, "deleteCompletely")
+//	var oldLength = root.ifTrueCmds.length
+//	while (root.ifTrueCmds.length > 0) {
+//		root.ifTrueCmds[0].deleteCompletely()
+//		console.assert(oldLength === root.ifTrueCmds.length+1)
+//		oldLength = root.ifTrueCmds.length
+//	}
+//	oldLength = root.ifFalseCmds.length
+//	while (root.ifFalseCmds.length > 0) {
+//		root.ifFalseCmds[0].deleteCompletely()
+//		console.assert(oldLength === root.ifFalseCmds.length+1)
+//		oldLength = root.ifFalseCmds.length
+//	}
 }
 
 

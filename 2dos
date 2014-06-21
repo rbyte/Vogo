@@ -52,9 +52,6 @@ big features
 
 bugs
 	### add proxies to functions (debug dependency checking) and improve run() performance
-	### fix delete command
-		make exec() require proxy cmd
-		make function inherit from Command (?)
 	if recursing, fc with a and b, setting both to be a|b*0.9 will create an endless loop
 		this is caused by the fact that to eval a, a and be are needed, creating a tree of evals, which explodes
 	dereference proxies!
@@ -67,3 +64,4 @@ bugs
 	remove loops when empty (e.g. removed last inner command)
 	allow white spaces in variable definition "a = 3"
 	2 subsequent moves cannot be distinguished
+	abstracting over selected element inside a functionCall creates errors
