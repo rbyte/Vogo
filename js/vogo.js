@@ -34,7 +34,7 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 4
-var scopeDepthLimit = 25 // for endless loops and recursion
+var scopeDepthLimit = 100 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 100
 var domSvg
@@ -81,8 +81,6 @@ var dragInProgress = false
 var lastRotateExecuted
 var lastRotateScaleFactorCalculated
 var mousePos = [0,0]
-var mousePosPrevious = [0,0]
-
 
 
 var selection = {
@@ -91,6 +89,7 @@ var selection = {
 		return this.e.length === 0
 	},
 	add: function(x) {
+		console.assert(x.root !== x) // only proxies can be selected
 		if (!keyPressed.shift) {
 			this.removeAndDeselectAll()
 			this.e.push(x)
@@ -136,7 +135,9 @@ vogo.init = function() {
 	window.onresize()
 	addNewFunctionToUI()
 	setupUIEventListeners()
-	test()
+	run()
+	manualTest()
+//	automaticTest()
 }
 
 // wraps a function for drawing it multiple times
@@ -144,7 +145,7 @@ function Drawing(f, args, paintingG) {
 	var func = new Function(f.name, {}, [new FunctionCall(f, args)], paintingG).exec()
 	paintingG[0][0].vogo = func
 	func.update = function(newArgs) {
-		console.assert(this.commands.length == 1)
+		console.assert(this.getRootCommandsRef().length == 1)
 		// TODO is this right?
 		var fc = this.execCmds[0]
 		console.assert(fc instanceof FunctionCall)
@@ -273,32 +274,33 @@ function setupUIEventListeners() {
 	)
 	
 	mainSVG.svg.on("mousemove", function (d, i) {
-		// TODO needed?
-		mousePosPrevious = mousePos
 		mousePos = d3.mouse(this)
 		if (manipulation.isCreating(Move))
-			manipulation.update(Move)
+			manipulation.update(Move, fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1]))
 		if (manipulation.isCreating(Rotate))
-			manipulation.update(Rotate)
+			manipulation.update(Rotate, fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1]))
     })
 	
 	mainSVG.svg.on("click", function (d, i) {
 //		mousePos = d3.mouse(this)
 		console.assert(d3.mouse(this)[0]-mousePos[0] === 0)
 		if (manipulation.isCreating(Move)) {
+			var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
 			if (keyPressed.d) {
-				manipulation.create(Move)
+				manipulation.create(Move, newLineLengthFUNC)
 			} else {
-				manipulation.finish(Move)
+				manipulation.finish(Move, newLineLengthFUNC)
 			}
 		} else if (manipulation.isCreating(Rotate)) {
+			var newRotateAngleFUNC = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
 			if (keyPressed.r) {
-				manipulation.create(Rotate)
+				manipulation.create(Rotate, newRotateAngleFUNC)
 			} else {
-				manipulation.finish(Rotate)
+				manipulation.finish(Rotate, newRotateAngleFUNC)
 			}
 		} else {
 			selection.removeAndDeselectAll()
+			run()
 		}
     })
 	
@@ -334,97 +336,13 @@ State.prototype.clone = function() {
 }
 
 
-var manipulation = {
-	insertedCommand: false
+function fromMousePosToRotateAngleFUNC(mx, my) {
+	return function() { return parseFloat(rotateAngleTo(mx, my).toFixed(3)) }
 }
 
-manipulation.isCreating = function(cmdType) {
-	return cmdType === undefined
-		? this.insertedCommand !== false
-		: this.insertedCommand instanceof cmdType
+function fromMousePosToLineLengthWithoutChangingDirectionFUNC(mx, my) {
+	return function() { return parseFloat(getLineLengthToWithoutChangingDirection(mx, my).toFixed(2)) }
 }
-
-manipulation.create = function(cmdType) {
-	if (this.isCreating(cmdType)) {
-		this.finish(cmdType)
-		this.createPreview(cmdType)
-	} else {
-		this.createPreview(cmdType)
-		this.finish(cmdType)
-	}
-}
-
-manipulation.createPreview = function(cmdType) {
-	console.assert(!this.isCreating(cmdType))
-	if (selection.isEmpty()) {
-		this.insertedCommand = new cmdType()
-		this.insertedCommand.scope = F_
-		this.savedState = F_.state.clone()
-		F_.commands.push(this.insertedCommand)
-	} else {
-		var selectedElem = selection.e[0]
-		var sScope = selectedElem.root.scope
-//		console.assert(sScope instanceof Function)
-		var cmdsRef = sScope.commands
-		var cmdSelIdx = cmdsRef.indexOf(selectedElem.root)
-		console.assert(cmdSelIdx !== -1)
-//		this.savedState = sScope.commands[cmdSelIdx].savedState.clone()
-		this.savedState = selectedElem.savedState.clone()
-		this.insertedCommand = new cmdType()
-		this.insertedCommand.scope = sScope
-		cmdsRef.splice(cmdSelIdx, 0, this.insertedCommand)
-	}
-	this.update(cmdType)
-}
-
-manipulation.update = function(cmdType) {
-	if (this.isCreating(cmdType)) {
-		F_.state = this.savedState.clone()
-		if (cmdType === Move)
-			this.insertedCommand.setMainParameter(parseFloat(getLineLengthToWithoutChangingDirection(mousePos[0], mousePos[1]).toFixed(2)))
-		else if (cmdType === Rotate)
-			this.insertedCommand.setMainParameter(parseFloat(rotateAngleTo(mousePos[0], mousePos[1]).toFixed(3)))
-		else
-			console.assert(false)
-		
-		// TODO optimisations may rather be done in run()
-//		if (selection.isEmpty()) {
-//			this.insertedCommand.exec(F_)
-//			F_.updateTurtle()
-//			mainSVG.updateTurtle()
-//		} else {
-			run()
-//		}
-	} else {
-		// this happens when update is called before draw, when body is not selected
-		// because update is called, but key press is supressed
-		this.createPreview(cmdType)
-		console.log("manipulation.update: warning: no preview exists yet")
-	}
-}
-
-manipulation.finish = function(cmdType) {
-	console.assert(this.isCreating(cmdType))
-	this.update(cmdType)
-	var ic = this.insertedCommand
-	this.insertedCommand = false
-	updateLabelVisibility(ic)
-}
-
-manipulation.remove = function(cmdType) {
-	console.assert(this.isCreating(cmdType))
-	this.insertedCommand.deleteCompletely()
-	this.insertedCommand = false
-	if (selection.isEmpty()) {
-		F_.state = this.savedState.clone()
-		F_.updateTurtle()
-		mainSVG.updateTurtle()
-	} else {
-		run()
-	}
-}
-
-
 
 function rotateAngleTo(x, y) {
 	return getAngleDeltaTo(x - F_.state.x, y - F_.state.y)
@@ -515,7 +433,8 @@ function updateLabelVisibility(self) {
 	if (self.label !== undefined)
 		self.label.classed("hide", !selection.contains(self)
 			&& manipulation.insertedCommand !== self.root
-			&& self.root.mainParameter.isStatic())
+//			&& self.root.mainParameter.isStatic()
+			)
 }
 
 function setTextOfInput(input, containingForeignObject, text) {
@@ -571,7 +490,7 @@ function determineFunctionDependencies() {
 				dependencies[i] = functions.indexOf(commands[k].root.f)
 			}
 			if (commands[k] instanceof Loop)
-				searchForFunctionCall(commands[k].commands)
+				searchForFunctionCall(commands[k].getRootCommandsRef())
 			if (commands[k] instanceof Branch) {
 				searchForFunctionCall(commands[k].ifTrueBranch)
 				searchForFunctionCall(commands[k].ifFalseBranch)
@@ -579,7 +498,7 @@ function determineFunctionDependencies() {
 		}
 	}
 	for (var i=0; k<functions.length; k++)
-		searchForFunctionCall(functions[i].commands)
+		searchForFunctionCall(functions[i].getRootCommandsRef())
 	if (false)
 		for (var d in dependencies)
 			console.log(functions[d].name+" depends on "+functions[dependencies[d]].name)
@@ -622,6 +541,43 @@ function forEachSelfRemovingDoCall(arr, fName) {
 	}
 }
 
+function insertCmdRespectingSelection(cmd) {
+	var stateAtInsertionPoint
+	if (selection.isEmpty()) { // append to end
+		cmd.scope = F_
+		stateAtInsertionPoint = F_.state.clone()
+		F_.commands.push(cmd)
+	} else {
+		var selectedElem = selection.e[0]
+		var cmdsRef, cmdSelIdx, rootScope
+		if (selectedElem.canContainCommands() && !(selectedElem instanceof FunctionCall)) { // append inside
+			rootScope = selectedElem.root
+			cmdsRef = selectedElem.getRootCommandsRef()
+			// cmdsRef may be empty. splicing at length appends.
+			cmdSelIdx = cmdsRef.length
+			// we append inside the sScope, so the state at the insertion point
+			// is the savedState of the element after the scope, or if there
+			// is non, F_ current state (final)
+			var cmdsRefOuter = selectedElem.scope.execCmds
+			var cmdSelIdxOuter = cmdsRefOuter.indexOf(selectedElem)
+			console.assert(cmdSelIdxOuter !== -1)
+			stateAtInsertionPoint = cmdSelIdxOuter+1 >= cmdsRefOuter.length
+				? F_.state.clone()
+				: cmdsRefOuter[cmdSelIdxOuter+1].savedState.clone()
+		} else {
+			// insert before selected command
+			rootScope = selectedElem.root.scope
+			cmdsRef = selectedElem.scope.getRootCommandsRef()
+			cmdSelIdx = cmdsRef.indexOf(selectedElem.root)
+			stateAtInsertionPoint = selectedElem.savedState.clone()
+			console.assert(cmdSelIdx !== -1)
+		}
+		cmd.scope = rootScope
+		cmdsRef.splice(cmdSelIdx, 0, cmd)
+	}
+	return stateAtInsertionPoint
+}
+
 onKeyDown.n = function() {
 	if (bodyIsSelected())
 		addNewFunctionToUI()
@@ -629,26 +585,26 @@ onKeyDown.n = function() {
 
 onKeyDown.d = function() {
 	if (bodyIsSelected()) {
+		var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
 		if (!manipulation.isCreating()) {
-			manipulation.createPreview(Move)
-		} else {
-			if (manipulation.isCreating(Rotate)) {
-				manipulation.finish(Rotate)
-				manipulation.createPreview(Move)
-			}
+			manipulation.createPreview(Move, newLineLengthFUNC)
+		} else if (manipulation.isCreating(Rotate)) {
+			var newRotateAngle = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
+			manipulation.finish(Rotate, newRotateAngle)
+			manipulation.createPreview(Move, newLineLengthFUNC)
 		}
 	}
 }
 
 onKeyDown.r = function() {
 	if (bodyIsSelected()) {
+		var newRotateAngleFUNC = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
 		if (!manipulation.isCreating()) {
-			manipulation.createPreview(Rotate)
-		} else {
-			if (manipulation.isCreating(Move)) {
-				manipulation.finish(Move)
-				manipulation.createPreview(Rotate)
-			}
+			manipulation.createPreview(Rotate, newRotateAngleFUNC)
+		} else if (manipulation.isCreating(Move)) {
+			var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
+			manipulation.finish(Move, newLineLengthFUNC)
+			manipulation.createPreview(Rotate, newRotateAngleFUNC)
 		}
 	}
 }
@@ -693,28 +649,17 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 		updateNotification("Select something to "+cmdName+".", 5000)
 		return
 	}
-	var selectedElem = selection.e[0].root
-	var scope = selectedElem.scope
-	var cmdsRef = scope.commands
-	// TODO this special case handling is ugly
-	if (cmdsRef === undefined) {
-		// Function and Loop have commands
-		// FC does not have root commands
-		// only Branch remains
-		console.assert(scope instanceof Branch)
-		// all selected elements are assumed to be in the same branch, true or false, not both
-		if (scope.ifTrueCmds.indexOf(selectedElem) !== -1) {
-			cmdsRef = scope.ifTrueCmds
-		} else {
-			console.assert(scope.ifFalseCmds.indexOf(selectedElem) !== -1)
-			cmdsRef = scope.ifFalseCmds
-		}
-	}
+	// notice that this is not the root elems scope
+	// this is important for determining the right branch (if the scope is a branch)
+	var scope = selection.e[0].scope
+	var rootScope = selection.e[0].root.scope
+	console.assert(scope !== scope.root || scope instanceof Function)
+	var cmdsRef = scope.getRootCommandsRef()
 	
 	console.assert(cmdsRef !== undefined)
 	var idxArr = []
 	for (var i=0; i<selection.e.length; i++) {
-		if (i !== 0 && scope !== selection.e[i].root.scope) {
+		if (i !== 0 && scope !== selection.e[i].scope) {
 			updateNotification("Can only "+cmdName+" elements from the same scope.", 5000)
 			return
 		}
@@ -734,13 +679,13 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 	}
 	var clonedCmdsList = []
 	cmdList.forEach(function(e) {
-		var r = e.clone()
+		var r = e.clone(rootScope)
 		console.assert(r.proxies === undefined)
 		clonedCmdsList.push(r)
 	})
 	selection.removeDeselectAndDeleteAllCompletely()
 	var cmdThatWrapped = doWithCmdList(clonedCmdsList)
-	cmdThatWrapped.scope = scope
+	cmdThatWrapped.scope = rootScope
 	cmdsRef.splice(first, 0, cmdThatWrapped)
 	run()
 }
@@ -816,8 +761,10 @@ Expression.prototype.eval = function(command) {
 	if (self.isStatic())
 		return self.cachedEvalFromStaticExp
 	
+	console.assert(typeof self.exp === "string")
+	
 	function evalWithChecks(toEval) {
-//		console.log(toEval+" -- "+self.exp)
+//		console.log(toEval)
 		var result
 		try {
 			result = eval(toEval)
@@ -882,12 +829,12 @@ Expression.prototype.eval = function(command) {
 		toEval += arg+(++i < argsCount ? ", " : "")
 	if (loopIndex !== undefined)
 		toEval += (argsCount > 0 ? ", " : "")+"l1" // loop 1 index
-	toEval +=") { return eval(self.exp) })("
+	toEval +=") { return "+self.exp+"; })("
 	i = 0
 	for (var arg in mainArgProvider) { // arguments itself are Expressions
 		toEval += (fc !== undefined && fc.root.customArguments[arg] !== undefined
-			? "fc.root.customArguments"+"[\""+arg+"\"].eval(fc)"
-			: "mainArgProvider"+"[\""+arg+"\"].eval()")
+			? fc.root.customArguments[arg].eval(fc)
+			: mainArgProvider[arg].eval())
 			+(++i < argsCount ? ", " : "")
 	}
 	// TODO for simplicity, lets just do the first loop...
@@ -935,6 +882,62 @@ Expression.prototype.adjustDrag = function(element, prefix) {
 	}
 }
 
+
+var manipulation = {
+	insertedCommand: false
+}
+
+manipulation.isCreating = function(cmdType) {
+	return cmdType === undefined
+		? this.insertedCommand !== false
+		: this.insertedCommand instanceof cmdType
+}
+
+manipulation.create = function(cmdType, newMainParameterFUNC) {
+	if (this.isCreating(cmdType)) {
+		this.finish(cmdType, newMainParameterFUNC)
+		this.createPreview(cmdType, newMainParameterFUNC)
+	} else {
+		this.createPreview(cmdType, newMainParameterFUNC)
+		this.finish(cmdType, newMainParameterFUNC)
+	}
+}
+
+manipulation.createPreview = function(cmdType, newMainParameterFUNC) {
+	console.assert(!this.isCreating(cmdType))
+	this.insertedCommand = new cmdType()
+	this.savedState = insertCmdRespectingSelection(this.insertedCommand)
+	this.update(cmdType, newMainParameterFUNC)
+}
+
+manipulation.update = function(cmdType, newMainParameterFUNC) {
+	if (this.isCreating(cmdType)) {
+		F_.state = this.savedState.clone()
+		// the new main parameter has to be calculated AFTER the state is reset
+		this.insertedCommand.setMainParameter(newMainParameterFUNC()/*calc here*/)
+		run()
+	} else {
+		// this happens when update is called before draw, when body is not selected
+		// because update is called, but key press is supressed
+		this.createPreview(cmdType, newMainParameterFUNC)
+		console.log("manipulation.update: warning: no preview exists yet")
+	}
+}
+
+manipulation.finish = function(cmdType, newMainParameterFUNC) {
+	console.assert(this.isCreating(cmdType))
+	this.update(cmdType, newMainParameterFUNC)
+	var ic = this.insertedCommand
+	this.insertedCommand = false
+	updateLabelVisibility(ic)
+}
+
+manipulation.remove = function(cmdType) {
+	console.assert(this.isCreating(cmdType))
+	this.insertedCommand.deleteCompletely()
+	this.insertedCommand = false
+	run()
+}
 
 
 
@@ -1014,6 +1017,7 @@ Command.prototype.shallowClone = function(scope) {
 	// scope is the initiator of the clone
 	console.assert(scope !== undefined)
 	console.assert(scope.canContainCommands())
+	console.assert(scope.root !== scope || scope instanceof Function)
 	c.scope = scope
 	c.scopeDepth = scope.scopeDepth + 1
 	if (self.scopeDepth > scopeDepthLimit+1)
@@ -1025,44 +1029,17 @@ Command.prototype.shallowClone = function(scope) {
 // deletes the root, its proxies, its visible elements, all commands it contains and all references
 Command.prototype.deleteCompletely = function() {
 	var root = this.root
+	if (root === undefined)
+		return // is already deleted. happens when a loop and one of its elements is selected and deleted.
+		// because deleting the loop already deleted the element
 	if (root.canContainCommands()) {
 		// roots execCmds is always empty.
 		root.deleteCompletelyContainedCommands()
-		
-//		var oldLength = root.commands.length
-		// deleteCompletely splices from commands, so no normal looping here...
-		// TODO if branch ... has no "commands"
-//		while (root.commands.length > 0) {
-//			root.commands[0].deleteCompletely()
-//			console.assert(oldLength === root.commands.length+1)
-//			oldLength = root.commands.length
-//		}
 	}
 	if (root.proxies !== undefined) {
 		// "self" may be in proxies
 		forEachSelfRemovingDoCall(root.proxies, "deleteProxyCommand")
 		console.assert(root.proxies.length === 0)
-		
-//		var oldLength = root.proxies.length
-//		while (root.proxies.length > 0) {
-//			root.proxies[0].deleteProxyCommand()
-//			console.assert(oldLength === root.proxies.length+1)
-//			oldLength = root.proxies.length
-//		}
-		
-//		root.proxies.forEach(function(p) {
-			// remove proxy command from scope
-//			p.deleteProxyCommand()
-//			console.assert(p.scope.canContainCommands())
-//			console.assert(p.proxies === undefined) // -> is proxy
-//			p.removeVisible()
-//			var idx = p.scope.execCmds.indexOf(p)
-//			console.assert(idx !== -1)
-//			p.scope.execCmds.splice(idx, 1)
-//			delete p.root
-//			delete p.scope
-//		})
-//		delete root.proxies
 	}
 	// root is never exec() so it has no visible elements
 //	root.removeVisible()
@@ -1075,7 +1052,7 @@ Command.prototype.deleteCompletely = function() {
 Command.prototype.deleteCompletelyContainedCommands = function() {
 	var root = this.root
 	// this also removes all proxies in root.execCmds
-	forEachSelfRemovingDoCall(root.commands, "deleteCompletely")
+	forEachSelfRemovingDoCall(root.getRootCommandsRef(), "deleteCompletely")
 	console.assert(root.execCmds.length === 0)
 }
 
@@ -1083,10 +1060,11 @@ Command.prototype.fromRemoveRootCommand = function(cmd) {
 	var self = this
 	console.assert(cmd.root === cmd)
 	console.assert(self === cmd.scope)
-	console.assert(self.commands !== undefined)
-	var idx = self.commands.indexOf(cmd)
+	var cmdsRef = self.getRootCommandsRef()
+	console.assert(cmdsRef !== undefined)
+	var idx = cmdsRef.indexOf(cmd)
 	console.assert(idx !== -1)
-	self.commands.splice(idx, 1)
+	cmdsRef.splice(idx, 1)
 }
 
 Command.prototype.deleteProxyCommand = function() {
@@ -1114,6 +1092,7 @@ Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
 	if (elements instanceof Array)
 		elements.forEach(function(e) {
 			if (e !== undefined) {
+				// TODO it seems d3.classed does regex which is VERY slow.
 				if (prop !== undefined) {
 					if (e[prop] !== undefined) {
 						e[prop].classed(cssName, on)
@@ -1269,15 +1248,8 @@ Function.prototype.initUI = function() {
 			.on("dragend", function (d) {
 				if (isDragged) {
 					isDragged = false
-//					if (self === F_) {
-//						// recursion!
-//					} else {
-						// TODO respect selection!
-						var fc = new FunctionCall(self)
-						fc.scope = F_
-						F_.commands.push(fc)
-						run()
-//					}
+					insertCmdRespectingSelection(new FunctionCall(self))
+					run()
 				}
 			})
 		)
@@ -1494,10 +1466,7 @@ Function.prototype.setCommands = function(commands) {
 		console.assert(e.root === e)
 		e.scope = self
 	})
-	// TODO could add a execCmds here and require every root cmd to be shallowCloned before exec()
-	// this would also allow Function to be shallowCloned and replace FunctionCall
 	console.assert(self.execCmds.length === 0)
-	
 	return self
 }
 
@@ -1505,11 +1474,8 @@ Function.prototype.setCommands = function(commands) {
 Function.prototype.exec = function(/*no caller here*/) {
 	var self = this
 	if (self.commands.length !== self.execCmds.length) {
-//		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
-//		self.execCmds = []
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 		console.assert(self.execCmds.length === 0)
-		console.assert(self.canContainCommands())
 		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
 	}
 	self.execCmds.forEach(function(e) { e.exec(self) })
@@ -1548,10 +1514,7 @@ Function.prototype.remove = function() {
 	}
 	
 	self.deleteCompletelyContainedCommands()
-	
-//	self.commands.forEach(function(e) { e.deleteCompletely() })
-//	self.commands = []
-	
+
 	// contains everything
 	self.li_f.remove()
 	delete self.svg
@@ -1588,6 +1551,10 @@ Function.prototype.toCode = function() {
 	return result
 }
 
+Function.prototype.getRootCommandsRef = function() {
+	return this.root.commands // .root, but functions can not have proxies anyway
+}
+
 function Move(lineLength) {
 	var self = this
 	self.commonCommandConstructor()
@@ -1612,7 +1579,7 @@ Move.prototype.execInner = function(callerF) {
 	// TODO this is a pretty ugly quick fix solution
 	if (lastRotateExecuted !== undefined
 		&& lastRotateExecuted.arc !== undefined
-		&& lastRotateExecuted.scope === self.scope) {
+		&& lastRotateExecuted.scope.root === self.scope.root) {
 		lastRotateScaleFactorCalculated = Math.min(rotationArcRadius, Math.abs(lineLength)*0.3)/rotationArcRadius
 		// TODO do this more efficiently
 		// be aware of the fact that lastRotateExecuted may not be the last command executed or even be in the same function
@@ -1683,6 +1650,11 @@ Move.prototype.execInner = function(callerF) {
 
 				})
 			)
+	}
+	
+	if (self.label !== undefined && !drawIcons) {
+		self.label.remove()
+		self.label = undefined
 	}
 	
 	var lines = [self.line]
@@ -1874,11 +1846,10 @@ function Loop(numberOfRepetitions, commands) {
 	var self = this
 	self.commonCommandConstructor()
 	self.setMainParameter(numberOfRepetitions)
-	// TODO scopeDepth is always 0 for root commands
 	self.commands = commands === undefined ? [] : commands
 	self.commands.forEach(function (e) {
 		console.assert(e.proxies === undefined)
-		e.scope = self
+		e.scope = self.root
 	})
 	// "unfolded" loop
 	self.execCmds = []
@@ -1891,8 +1862,9 @@ Loop.prototype.clone = function(scope) {
 	var self = this
 	console.assert(self.root === self)
 	var cmdsClone = []
-	self.commands.forEach(function (e) { cmdsClone.push(e.clone()) })
+	self.commands.forEach(function (e) { cmdsClone.push(e.clone(/*scope set afterwards*/)) })
 	var r = new Loop(self.mainParameter.get(), cmdsClone)
+	// TODO scopeDepth is always 0 for root commands
 	r.scope = scope
 	return r
 }
@@ -2053,6 +2025,10 @@ Loop.prototype.toCode = function(scopeDepth) {
 		+commandsToCodeString(this.root.commands, scopeDepth+1)+")"
 }
 
+Loop.prototype.getRootCommandsRef = function() {
+	return this.root.commands
+}
+
 function FunctionCall(func, args) {
 	var self = this
 	self.commonCommandConstructor()
@@ -2086,7 +2062,12 @@ FunctionCall.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	console.assert(root.f !== undefined)
-	var drawIcons = callerF === F_ && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
+	
+	var drawIcons = callerF === F_ && (
+		self.scopeDepth <= 3
+		|| selection.containsAsRoot(self)
+		|| root.proxies[0] === self
+	)
 	
 	if (self.icon === undefined && drawIcons) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
@@ -2101,6 +2082,11 @@ FunctionCall.prototype.execInner = function(callerF) {
 				d3.event.stopPropagation()
 			})
 		self.icon.argUl = self.icon.body.append("ul")
+	}
+	
+	if (self.icon !== undefined && !drawIcons) {
+		self.icon.remove()
+		self.icon = undefined
 	}
 	
 	function createInputField() {
@@ -2160,6 +2146,7 @@ FunctionCall.prototype.execInner = function(callerF) {
 	if (drawIcons) {
 		self.icon
 			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
+		// TODO select and mark
 		for (var a in root.f.args) {
 			if (self.icon.argF[a] === undefined) {
 				self.icon.argF[a] = self.icon.argUl.append("li").attr("class", "titleRow")
@@ -2256,6 +2243,11 @@ FunctionCall.prototype.deleteCompletelyContainedCommands = function() {
 	// do nothing. FunctionCall does not itself contain root commands, only execCmds.
 }
 
+FunctionCall.prototype.getRootCommandsRef = function() {
+	console.log("FunctionCall getRootCommandsRef: warning: editing function from referencing call. should be avoided.")
+	return this.root.f.commands
+}
+
 
 function Branch(cond, ifTrueCmds, ifFalseCmds) {
 	var self = this
@@ -2274,6 +2266,7 @@ Branch.prototype = new Command(Branch)
 Branch.prototype.clone = function(scope) {
 	var self = this
 	console.assert(self.root === self)
+	console.assert(scope.root === scope)
 	var ifTrueCmds = []
 	self.ifTrueCmds.forEach(function (e) { ifTrueCmds.push(e.clone()) })
 	var ifFalseCmds = []
@@ -2292,6 +2285,7 @@ Branch.prototype.execInner = function(callerF) {
 		|| self.execCmds.length === 0
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
+	rebuild |= branchCmds.length !== self.execCmds.length
 	var drawIcons = callerF === F_ && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
 	
 	if (self.iconG === undefined && drawIcons) {
@@ -2329,6 +2323,11 @@ Branch.prototype.execInner = function(callerF) {
 			.on("input", function() {
 				setTextOfInput(self.iconG.labelInput, self.iconG.fo)
 			})
+	}
+	
+	if (self.iconG !== undefined && !drawIcons) {
+		self.iconG.remove()
+		self.iconG = undefined
 	}
 	
 	if (drawIcons) {
@@ -2393,11 +2392,12 @@ Branch.prototype.fromRemoveRootCommand = function(cmd) {
 	var self = this
 	console.assert(cmd.root === cmd)
 	console.assert(self === cmd.scope)
+	console.assert(self === self.root)
 	var idx1 = self.ifTrueCmds.indexOf(cmd)
 	if (idx1 !== -1)
 		self.ifTrueCmds.splice(idx1, 1)
 	var idx2 = self.ifFalseCmds.indexOf(cmd)
-	if (idx1 !== -1)
+	if (idx2 !== -1)
 		self.ifFalseCmds.splice(idx2, 1)
 	console.assert(idx1 !== -1 || idx2 !== -1)
 }
@@ -2407,21 +2407,16 @@ Branch.prototype.deleteCompletelyContainedCommands = function() {
 	var root = this.root
 	forEachSelfRemovingDoCall(root.ifTrueCmds, "deleteCompletely")
 	forEachSelfRemovingDoCall(root.ifFalseCmds, "deleteCompletely")
-//	var oldLength = root.ifTrueCmds.length
-//	while (root.ifTrueCmds.length > 0) {
-//		root.ifTrueCmds[0].deleteCompletely()
-//		console.assert(oldLength === root.ifTrueCmds.length+1)
-//		oldLength = root.ifTrueCmds.length
-//	}
-//	oldLength = root.ifFalseCmds.length
-//	while (root.ifFalseCmds.length > 0) {
-//		root.ifFalseCmds[0].deleteCompletely()
-//		console.assert(oldLength === root.ifFalseCmds.length+1)
-//		oldLength = root.ifFalseCmds.length
-//	}
+}
+
+Branch.prototype.getRootCommandsRef = function() {
+	var self = this
+	console.assert(self.root !== self) // because only proxies have a lastCondEvalResult
+	return self.lastCondEvalResult ? self.root.ifTrueCmds : self.root.ifFalseCmds
 }
 
 
+// export
 vogo.Drawing = Drawing
 vogo.Function = Function
 vogo.Move = Move
@@ -2430,7 +2425,7 @@ vogo.Loop = Loop
 vogo.FunctionCall = FunctionCall
 vogo.Branch = Branch
 
-function test() {
+function manualTest() {
 	
 	if (false) {
 		addNewFunctionToUI("nEck")
@@ -2511,10 +2506,10 @@ function test() {
 	
 	if (false) {
 		addNewFunctionToUI("spirale")
-		F_.addArgument(1, "a")
+		F_.addArgument(10, "a")
 		F_.setCommands([
 			new Move("a"),
-			new Rotate("10/180*Math.PI"),
+			new Rotate("25/180*Math.PI"),
 			new Branch("a<40", [
 				new FunctionCall(F_, {a: "a*1.02"})
 			], [])
@@ -2617,11 +2612,90 @@ saege 25 15
 }
 
 function automaticTest() {
+	console.assert(F_.commands.length === 0)
 	
-	mousePos = [10,10]
+	manipulation.createPreview(Move, function() { return 10 })
+	console.assert(F_.execCmds.length === 1)
+	console.assert(F_.commands.length === 1)
+	console.assert(F_.canContainCommands())
+	var mv = F_.commands[0]
+	// P = Proxy
+	var mvP = F_.execCmds[0]
+	console.assert(mv instanceof Move)
+	console.assert(mvP instanceof Move)
+	console.assert(mv.myConstructor === Move)
+	console.assert(mvP.myConstructor === Move)
+	console.assert(mv.constructor === Command)
+	console.assert(mvP.constructor === Command)
+	console.assert(mv === mvP.root)
+	console.assert(mv === mv.root)
+	console.assert(mv !== mvP)
+	console.assert(mv.scope === F_)
+	console.assert(mvP.scope === F_)
+	console.assert(mv.scopeDepth === 0)
+	console.assert(mvP.scopeDepth === 1)
+	console.assert(mv.proxies.length === 1)
+	console.assert(mv.proxies[0] === mvP)
+	console.assert(mvP.proxies === undefined)
+	console.assert(mvP.evalMainParameter() === 10)
+	console.assert(mv.mainParameter.get() === 10)
+	console.assert(mv.mainParameter.getWrapped() === 10) // Numbers are not wrapped
+	console.assert(mv.mainParameter.isConst())
+	console.assert(mv.mainParameter.isStatic())
+	console.assert(mv.toCode() === "new vogo.Move(10)")
+	console.assert(mvP.savedState.x === 0)
+	console.assert(mvP.savedState.y === 0)
+	console.assert(mvP.savedState.r === 0)
+	console.assert(F_.state.x === 0)
+	console.assert(F_.state.y === -10)
+	console.assert(F_.state.r === 0)
 	
+	manipulation.finish(Move, function() { return 10 })
+	mvP.select()
+	manipulation.createPreview(Rotate, function() { return 1 })
+	manipulation.finish(Rotate, function() { return 1 })
+	var rtP = F_.execCmds[0]
+	mvP = F_.execCmds[1]
+	mvP.select()
+	rtP.select() // previous is deselected without pressed shift
+	console.assert(selection.e.length === 1)
+	console.assert(selection.e[0] === rtP)
+	keyPressed.shift = true
+	mvP.select()
+	console.assert(selection.e.length === 2)
+	console.assert(selection.e[1] === mvP)
+	keyPressed.shift = false
+	onKeyDown.l() // loop
+	console.assert(selection.e.length === 0)
+	console.assert(F_.execCmds.length === 1)
+	var lpP = F_.execCmds[0]
+	lpP.root.mainParameter.set(3)
+	run()
+	console.assert(lpP.scope === F_)
+	console.assert(lpP.commands.length === 0) // is unused
+	console.assert(lpP.root.commands === lpP.getRootCommandsRef())
+	console.assert(lpP.root.commands.length === 2)
+	console.assert(lpP.root.execCmds.length === 0) // is unused
+	console.assert(lpP.execCmds.length === 6)
+	rtP = lpP.execCmds[0]
+	mvP = lpP.execCmds[1]
+	console.assert(rtP.scope === lpP)
+	// proxies only reference scopes that are proxies, with the only exception
+	// being functions, because functions are always in global scope
+	console.assert(rtP.root.scope === lpP.root)
+	console.assert(mvP.scope === lpP)
+	console.assert(mvP.root.scope === lpP.root)
+	console.assert(mvP.root.proxies.length === 3)
+	console.assert(mvP.root.proxies[0] === mvP)
 	
+	lpP.select()
+	onKeyDown.a() // abstract over; parameterise loop
+	console.assert(Object.keys(F_.args).length === 1)
+	// ...
 	
+	lpP.select()
+	selection.removeDeselectAndDeleteAllCompletely()
+	run()
 	
 }
 

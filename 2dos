@@ -4,11 +4,11 @@ small features
 	### angles in degrees
 	### hide duplicate expressions (in loops or recursion)
 		simplification of visual steps (with increased number of steps)
+	### mark all commands in selected scope
 	pointer to hand for dragging canvas
 	cursor to right-left arrow on input field
 	improve function call look -> context menu for args
 	direct creation of variables ("a" also works if nothing is selected)
-	mark all commands in selected scope
 	hide function call interna
 		How can a function call be "inlined" into the current context (stepping down into its definition, maintaining context)?
 	handling endless recursion by checking line-length or out of bounds
@@ -16,7 +16,7 @@ small features
 	rotate icon arc radius is limited by subsequent line length (no overshoot)
 	adjust existing line length by select + d
 	selection
-		select with rect
+		### select with rect
 		copy and paste selection
 		move selection
 		z-order-handling
@@ -54,7 +54,6 @@ bugs
 	### add proxies to functions (debug dependency checking) and improve run() performance
 	if recursing, fc with a and b, setting both to be a|b*0.9 will create an endless loop
 		this is caused by the fact that to eval a, a and be are needed, creating a tree of evals, which explodes
-	allow adding commands at the end inside a loop by selecting non-1 loop iteration
 	foreignObject relative width and height
 	fix: rotation manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
