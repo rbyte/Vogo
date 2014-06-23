@@ -93,8 +93,12 @@ var selection = {
 		if (!keyPressed.shift) {
 			this.removeAndDeselectAll()
 			this.e.push(x)
-		} else if (!this.contains(x)) { // accumulate multiple
-			this.e.push(x)
+		} else { // accumulate multiple
+			if (this.contains(x)) {
+				this.removeAndDeselect(x)
+			} else {
+				this.e.push(x)
+			}
 		}
 		run()
 	},
@@ -1163,6 +1167,17 @@ Command.prototype.exec = function(callerF) {
 	self.execInner(callerF)
 }
 
+Command.prototype.isInsideAnySelectedCommandsScope = function(includingProxies) {
+	var self = this
+	var scp = self.scope
+	// traverse scope up to see if self is somewhere inside the selection
+	var checKr = includingProxies === undefined ? "contains" : "containsAsRoot"
+	if (!selection.isEmpty())
+		while (!(scp instanceof Function) && !selection[checKr](scp))
+			scp = scp.scope
+	return selection[checKr](scp)
+}
+
 function Function(name, args, commands, customPaintingG) {
 	var self = this
 	self.commonCommandConstructor()
@@ -1658,8 +1673,10 @@ Move.prototype.execInner = function(callerF) {
 	}
 	
 	var lines = [self.line]
-	if (drawOnMainSVG)
+	if (drawOnMainSVG) {
 		lines.push(self.lineMainSVG)
+		self.indicateIfInsideAnySelectedCommandsScope()
+	}
 	if (drawIcons) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r)
@@ -1675,11 +1692,24 @@ Move.prototype.execInner = function(callerF) {
 			.attr("x2", x2).attr("y2", y2)
 }
 
+Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
+	var self = this
+	self.lineMainSVG.style({"stroke-opacity":
+		self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
+		? 0.5 //(self.isInsideAnySelectedCommandsScope() ? 0.25 : 0.5)
+		: 1.0})
+}
+
+Move.prototype.mark = function(on) {
+	var self = this
+	self.applyCSSClass(self.root.proxies, "mark", on, "lineMainSVG")
+}
+
 Move.prototype.select = function() {
 	var self = this
 	selection.add(self)
 	self.applyCSSClass([self.lineMainSVG], "selected", true)
-	self.applyCSSClass(self.root.proxies, "mark", true, "lineMainSVG")
+	self.mark(true)
 	if (self.label !== undefined) {
 		self.label.classed("hide", false)
 		setTextOfInput(self.labelInput, self.label)
@@ -1690,7 +1720,7 @@ Move.prototype.deselect = function() {
 	var self = this
 	updateLabelVisibility(self)
 	self.applyCSSClass([self.lineMainSVG], "selected", false)
-	self.applyCSSClass(self.root.proxies, "mark", false, "lineMainSVG")
+	self.mark(false)
 }
 
 Move.prototype.getVisibleElementsFromMainSVG = function() {
@@ -1811,15 +1841,29 @@ Rotate.prototype.execInner = function(callerF) {
 		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
 				+(lastRotateScaleFactorCalculated ? " scale("+lastRotateScaleFactorCalculated+")" : ""))
+		self.indicateIfInsideAnySelectedCommandsScope()
 		lastRotateExecuted = self
 	}
+}
+
+Rotate.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
+	var self = this
+	self.arc.style({"fill-opacity":
+		self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
+		? 0.05
+		: arcStyle["fill-opacity"]})
+}
+
+Rotate.prototype.mark = function(on) {
+	var self = this
+	self.applyCSSClass(self.root.proxies, "mark", on, "arc")
 }
 
 Rotate.prototype.select = function() {
 	var self = this
 	selection.add(self)
 	self.applyCSSClass([self.arc], "selected", true)
-	self.applyCSSClass(self.root.proxies, "mark", true, "arc")
+	self.mark(true)
 	if (self.label !== undefined) {
 		self.label.classed("hide", false)
 		setTextOfInput(self.labelInput, self.label)
@@ -1830,7 +1874,7 @@ Rotate.prototype.deselect = function() {
 	var self = this
 	updateLabelVisibility(self)
 	self.applyCSSClass([self.arc], "selected", false)
-	self.applyCSSClass(self.root.proxies, "mark", false, "arc")
+	self.mark(false)
 }
 
 Rotate.prototype.getVisibleElementsFromMainSVG = function() {
@@ -1975,6 +2019,7 @@ Loop.prototype.execInner = function(callerF) {
 			if (self.iconGs[i] === undefined)
 				self.iconGs[i] = createIcon()
 			updateIcon(self.iconGs[i])
+			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
 			self.applyCSSClass([self.iconGs[i].circleF], "selected", selection.contains(self))
 			self.applyCSSClass([self.iconGs[i].circleF], "mark", selection.containsAsRoot(self))
@@ -1988,6 +2033,14 @@ Loop.prototype.execInner = function(callerF) {
 			self.execCmds[pos].exec(callerF)
 		}
 	}
+}
+
+Loop.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
+	var self = this
+	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
+	self.iconGs.forEach(function(e) {
+		e.style({"opacity": on ? 0.4 : 1.0})
+	})
 }
 
 Loop.prototype.mark = function(on) {
@@ -2053,7 +2106,7 @@ FunctionCall.prototype.clone = function(scope) {
 	var customArguments = {}
 	for (var a in self.customArguments)
 		customArguments[a] = new Expression(self.customArguments[a].get())
-	var r = new FunctionCall(self.func, customArguments)
+	var r = new FunctionCall(self.f, customArguments)
 	r.scope = scope
 	return r
 }
@@ -2146,6 +2199,7 @@ FunctionCall.prototype.execInner = function(callerF) {
 	if (drawIcons) {
 		self.icon
 			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
+		self.indicateIfInsideAnySelectedCommandsScope()
 		// TODO select and mark
 		for (var a in root.f.args) {
 			if (self.icon.argF[a] === undefined) {
@@ -2194,6 +2248,12 @@ FunctionCall.prototype.execInner = function(callerF) {
 //		console.log("exec fc with scopeDepth: "+self.scopeDepth)
 		self.execCmds.forEach(function(e) { e.exec(callerF) })
 	}
+}
+
+FunctionCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
+	var self = this
+	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
+	self.icon.style({"opacity": on ? 0.5 : 1.0})
 }
 
 FunctionCall.prototype.mark = function(on) {
@@ -2286,7 +2346,10 @@ Branch.prototype.execInner = function(callerF) {
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
 	rebuild |= branchCmds.length !== self.execCmds.length
-	var drawIcons = callerF === F_ && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
+	var drawIcons = callerF === F_ && (
+		self.scopeDepth <= 1
+		|| selection.containsAsRoot(self)
+		|| root.proxies[0] === self)
 	
 	if (self.iconG === undefined && drawIcons) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
@@ -2337,18 +2400,23 @@ Branch.prototype.execInner = function(callerF) {
 		self.iconG.falseL.style({stroke: condEval ? "#000" : takenBranchColor})
 		self.iconG.fo.attr("transform", "translate("+2.4+","+0+") scale(0.1)")
 		self.iconG.labelInput.property("value", root.mainParameter.get())
+		self.indicateIfInsideAnySelectedCommandsScope()
 		setTextOfInput(self.iconG.labelInput, self.iconG.fo)
 	}
 	
 	if (rebuild) {
-//		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
-//		self.execCmds = []
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 		console.assert(self.execCmds.length === 0)
 		branchCmds.forEach(function(e) { self.execCmds.push(e.shallowClone(self)) })
 	}
 	
 	self.execCmds.forEach(function(e) { e.exec(callerF) })
+}
+
+Branch.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
+	var self = this
+	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
+	self.iconG.style({"opacity": on ? 0.5 : 1.0})
 }
 
 Branch.prototype.mark = function(on) {
@@ -2361,12 +2429,14 @@ Branch.prototype.select = function() {
 	selection.add(self)
 	self.applyCSSClass([self.iconG], "selected", true)
 	self.mark(true)
+//	self.execCmds.forEach(function(e) { e.mark(true) })
 }
 
 Branch.prototype.deselect = function() {
 	var self = this
 	self.applyCSSClass([self.iconG], "selected", false)
 	self.mark(false)
+//	self.execCmds.forEach(function(e) { e.mark(false) })
 }
 
 Branch.prototype.getVisibleElementsFromMainSVG = function() {

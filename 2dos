@@ -2,9 +2,8 @@ see also TODOs in code
 
 small features
 	### angles in degrees
-	### hide duplicate expressions (in loops or recursion)
-		simplification of visual steps (with increased number of steps)
-	### mark all commands in selected scope
+	more intelligent icon hiding
+	indicateIfInsideAnySelectedCommandsScope on hover
 	pointer to hand for dragging canvas
 	cursor to right-left arrow on input field
 	improve function call look -> context menu for args
@@ -28,6 +27,7 @@ small features
 	add acknowledgements (back to me)
 
 performance
+	d3.classed performance low
 	for one run cycle and the same stack position, only evaluate variables once
 	store which expression requires which variables, so I only eval those
 	put svg styles in svg css (inkscape compatibility?)
@@ -51,7 +51,7 @@ big features
 	allow much more dragging between elements
 
 bugs
-	### add proxies to functions (debug dependency checking) and improve run() performance
+	add proxies to functions (debug dependency checking) and improve run() performance
 	if recursing, fc with a and b, setting both to be a|b*0.9 will create an endless loop
 		this is caused by the fact that to eval a, a and be are needed, creating a tree of evals, which explodes
 	foreignObject relative width and height
