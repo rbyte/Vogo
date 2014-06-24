@@ -28,6 +28,7 @@ small features
 
 performance
 	d3.classed performance low
+	cache arguments eval
 	for one run cycle and the same stack position, only evaluate variables once
 	store which expression requires which variables, so I only eval those
 	put svg styles in svg css (inkscape compatibility?)

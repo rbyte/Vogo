@@ -33,10 +33,10 @@ var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px",
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
-var rotationArcRadius = 4
+var rotationArcRadius = 3
 var scopeDepthLimit = 100 // for endless loops and recursion
 // this determines the default zoom level
-var defaultSvgViewboxHeight = 100
+var defaultSvgViewboxHeight = 70
 var domSvg
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
@@ -137,7 +137,7 @@ vogo.init = function() {
 	mainSVG = new MainSVG()
 	window.onresize = function(event) { updateScreenElemsSize()}
 	window.onresize()
-	addNewFunctionToUI()
+	addNewFuncToUI()
 	setupUIEventListeners()
 	run()
 	manualTest()
@@ -146,13 +146,13 @@ vogo.init = function() {
 
 // wraps a function for drawing it multiple times
 function Drawing(f, args, paintingG) {
-	var func = new Function(f.name, {}, [new FunctionCall(f, args)], paintingG).exec()
+	var func = new Func(f.name, {}, [new FuncCall(f, args)], paintingG).exec()
 	paintingG[0][0].vogo = func
 	func.update = function(newArgs) {
 		console.assert(this.getRootCommandsRef().length == 1)
 		// TODO is this right?
 		var fc = this.execCmds[0]
-		console.assert(fc instanceof FunctionCall)
+		console.assert(fc instanceof FuncCall)
 		if (newArgs !== undefined) {
 			// leave old, just override
 			for (var a in newArgs)
@@ -222,7 +222,7 @@ function MainSVG() {
 
 function setupUIEventListeners() {
 	d3.select("#f_addNew").on("click", function() {
-		addNewFunctionToUI()
+		addNewFuncToUI()
 	})
 	
 	d3.select("#border").call(d3.behavior.drag()
@@ -454,15 +454,15 @@ function setTextOfInput(input, containingForeignObject, text) {
 	}
 }
 
-function addNewFunctionToUI(name) {
-	var f = new Function(name)
+function addNewFuncToUI(name) {
+	var f = new Func(name)
 	f.initUI()
 	functions.push(f)
 	f.switchTo()
 }
 
 function exportAll() {
-	var fDep = determineFunctionDependencies()
+	var fDep = determineFuncDependencies()
 	var fProcessed = {}
 	var result = ""
 	outer: while (Object.keys(fProcessed).length < functions.length) {
@@ -484,25 +484,25 @@ function exportAll() {
 	return result
 }
 
-function determineFunctionDependencies() {
+function determineFuncDependencies() {
 	// TODO big bug in here: the dependencies are actually a tree, not just a list!
 	// store proxies in function? let fc take care of removing it. shallowClone for function = functionCall ?
 	var dependencies = {}
-	function searchForFunctionCall(commands) {
+	function searchForFuncCall(commands) {
 		for (var k=0; k<commands.length; k++) {
-			if (commands[k] instanceof FunctionCall) {
+			if (commands[k] instanceof FuncCall) {
 				dependencies[i] = functions.indexOf(commands[k].root.f)
 			}
 			if (commands[k] instanceof Loop)
-				searchForFunctionCall(commands[k].getRootCommandsRef())
+				searchForFuncCall(commands[k].getRootCommandsRef())
 			if (commands[k] instanceof Branch) {
-				searchForFunctionCall(commands[k].ifTrueBranch)
-				searchForFunctionCall(commands[k].ifFalseBranch)
+				searchForFuncCall(commands[k].ifTrueBranch)
+				searchForFuncCall(commands[k].ifFalseBranch)
 			}
 		}
 	}
 	for (var i=0; k<functions.length; k++)
-		searchForFunctionCall(functions[i].getRootCommandsRef())
+		searchForFuncCall(functions[i].getRootCommandsRef())
 	if (false)
 		for (var d in dependencies)
 			console.log(functions[d].name+" depends on "+functions[dependencies[d]].name)
@@ -554,7 +554,7 @@ function insertCmdRespectingSelection(cmd) {
 	} else {
 		var selectedElem = selection.e[0]
 		var cmdsRef, cmdSelIdx, rootScope
-		if (selectedElem.canContainCommands() && !(selectedElem instanceof FunctionCall)) { // append inside
+		if (selectedElem.canContainCommands() && !(selectedElem instanceof FuncCall)) { // append inside
 			rootScope = selectedElem.root
 			cmdsRef = selectedElem.getRootCommandsRef()
 			// cmdsRef may be empty. splicing at length appends.
@@ -584,7 +584,7 @@ function insertCmdRespectingSelection(cmd) {
 
 onKeyDown.n = function() {
 	if (bodyIsSelected())
-		addNewFunctionToUI()
+		addNewFuncToUI()
 }
 
 onKeyDown.d = function() {
@@ -640,12 +640,14 @@ onKeyDown.esc = function() {
 }
 
 onKeyDown.a = function() {
-	if (!selection.isEmpty()) {
+	if (selection.isEmpty()) {
+		F_.addArgument("1")
+	} else {
 		// TODO if exp isStatic
 		var argName = F_.addArgument(selection.e[0].evalMainParameter())
 		selection.e[0].setMainParameter(argName)
-		run()
 	}
+	run()
 }
 
 function wrapSelectionInCommand(cmdName, doWithCmdList) {
@@ -657,7 +659,7 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 	// this is important for determining the right branch (if the scope is a branch)
 	var scope = selection.e[0].scope
 	var rootScope = selection.e[0].root.scope
-	console.assert(scope !== scope.root || scope instanceof Function)
+	console.assert(scope !== scope.root || scope instanceof Func)
 	var cmdsRef = scope.getRootCommandsRef()
 	
 	console.assert(cmdsRef !== undefined)
@@ -752,7 +754,7 @@ Expression.prototype.isStatic = function() {
 }
 
 Expression.prototype.isNormalResult = function(result) {
-	return isRegularNumber(result) || result === true || result === false
+	return isRegularNumber(result) || result === true || result === false || result instanceof Array
 }
 
 // THIS IS WELL THOUGHT THROUGH. do not mess with it, unless you know what you do
@@ -768,15 +770,14 @@ Expression.prototype.eval = function(command) {
 	console.assert(typeof self.exp === "string")
 	
 	function evalWithChecks(toEval) {
-//		console.log(toEval)
 		var result
 		try {
 			result = eval(toEval)
 		} catch(e) {
+			console.log(toEval)
 			console.log(e)
 			return 1 // be a bit robust
 		}
-		// TODO if arg is array, it is evaluated each time, but fails
 		console.assert(self.isNormalResult(result), "eval result is bullshit: "+result)
 		return result
 	}
@@ -788,14 +789,14 @@ Expression.prototype.eval = function(command) {
 	var sc = command.scope
 	var loopIndex // currently, only the innermost loop is considered
 	while (sc !== undefined /*should not be false before one of the other two: */
-		&& !(sc instanceof FunctionCall) && !(sc instanceof Function)) {
+		&& !(sc instanceof FuncCall) && !(sc instanceof Func)) {
 		// also, check whether there is a loop on the way (because it has an index)
 		if (loopIndex === undefined && sc.i !== undefined)
 			loopIndex = sc.i
 		sc = sc.scope // traverse scope chain up
 	}
 	var fc, mainArgProvider
-	if (sc instanceof FunctionCall) {
+	if (sc instanceof FuncCall) {
 		// this is important for recusion. each proxy has to take the arguments from the previous level
 		// the eval call has to take the fc, not fc.root, but the cargs and f have to come from fc.root
 		fc = sc
@@ -809,14 +810,14 @@ Expression.prototype.eval = function(command) {
 	} else {
 		// each command, up its scope chain, has to have a function at its end
 		// all functions are in the global scope
-		console.assert(sc instanceof Function)
+		console.assert(sc instanceof Func)
 		mainArgProvider = sc.args
 	}
 	
 	var argsCount = Object.keys(mainArgProvider).length
 	if (argsCount === 0 && loopIndex === undefined)
 		return evalWithChecks(self.exp)
-
+	
 	var shortCut = mainArgProvider[self.exp]
 	if (shortCut !== undefined) { // exp is just a variable
 	// shortCut here is an argument of the global scope (a function)
@@ -825,8 +826,41 @@ Expression.prototype.eval = function(command) {
 		return shortCut.eval()
 	}
 	
-	// TODO speed up further. eval() is a major performance sink.
-	// construct function that has all the arguments for expression eval
+	// TODO speed up further.
+	var argsKeys = Object.keys(mainArgProvider)
+	var argsValues = []
+	for (var arg in mainArgProvider) { // arguments itself are Expressions
+		argsValues.push(fc !== undefined && fc.root.customArguments[arg] !== undefined
+			? fc.root.customArguments[arg].eval(fc)
+			: mainArgProvider[arg].eval())
+	}
+	if (loopIndex !== undefined) {
+		argsKeys.push("i")
+		argsValues.push(loopIndex)
+	}
+	
+	var result
+	function errorMsg(e) {
+		console.log("Error in eval. Following: result, keys, values, expression, message:")
+		console.log(result)
+		console.log(argsKeys)
+		console.log(argsValues)
+		console.log(self.exp)
+		console.log(e)
+	}
+	try {
+		// THIS IS THE CRUCIAL LINE. construct function that has all the arguments for expression eval
+		result = new Function(argsKeys, "return "+self.exp).apply(this, argsValues)
+	} catch(e) {
+		errorMsg(e)
+		return 1 // be a bit robust
+	}
+	if (!self.isNormalResult(result))
+		errorMsg("is not a normal result.")
+	return result
+}
+
+/*
 	var toEval = "(function("
 	var i = 0
 	for (var arg in mainArgProvider)
@@ -836,17 +870,22 @@ Expression.prototype.eval = function(command) {
 	toEval +=") { return "+self.exp+"; })("
 	i = 0
 	for (var arg in mainArgProvider) { // arguments itself are Expressions
-		toEval += (fc !== undefined && fc.root.customArguments[arg] !== undefined
+		var a = (fc !== undefined && fc.root.customArguments[arg] !== undefined
 			? fc.root.customArguments[arg].eval(fc)
 			: mainArgProvider[arg].eval())
-			+(++i < argsCount ? ", " : "")
+		if (a instanceof Array)
+			a = "["+a+"]"
+		toEval += a +(++i < argsCount ? ", " : "")
 	}
 	// TODO for simplicity, lets just do the first loop...
 	if (loopIndex !== undefined)
 		toEval += (argsCount > 0 ? ", " : "")+loopIndex
 	toEval +=")"
 	return evalWithChecks(toEval)
-}
+
+ **/
+
+
 
 Expression.prototype.adjustDragstart = function(element, dragPrecision) {
 	var self = this
@@ -1021,7 +1060,7 @@ Command.prototype.shallowClone = function(scope) {
 	// scope is the initiator of the clone
 	console.assert(scope !== undefined)
 	console.assert(scope.canContainCommands())
-	console.assert(scope.root !== scope || scope instanceof Function)
+	console.assert(scope.root !== scope || scope instanceof Func)
 	c.scope = scope
 	c.scopeDepth = scope.scopeDepth + 1
 	if (self.scopeDepth > scopeDepthLimit+1)
@@ -1173,12 +1212,12 @@ Command.prototype.isInsideAnySelectedCommandsScope = function(includingProxies) 
 	// traverse scope up to see if self is somewhere inside the selection
 	var checKr = includingProxies === undefined ? "contains" : "containsAsRoot"
 	if (!selection.isEmpty())
-		while (!(scp instanceof Function) && !selection[checKr](scp))
+		while (!(scp instanceof Func) && !selection[checKr](scp))
 			scp = scp.scope
 	return selection[checKr](scp)
 }
 
-function Function(name, args, commands, customPaintingG) {
+function Func(name, args, commands, customPaintingG) {
 	var self = this
 	self.commonCommandConstructor()
 	self.state = new State()
@@ -1198,10 +1237,10 @@ function Function(name, args, commands, customPaintingG) {
 		self.paintingG = customPaintingG
 	return self
 }
-// actually, Function requires only few things from Command and only some methods work on Function
-Function.prototype = new Command(Function)
+// actually, Func requires only few things from Command and only some methods work on Func
+Func.prototype = new Command(Func)
 
-Function.prototype.initUI = function() {
+Func.prototype.initUI = function() {
 	var self = this
 	self.svgViewboxWidth
 	self.svgViewboxHeight = defaultSvgViewboxHeight // fix on startup
@@ -1263,7 +1302,7 @@ Function.prototype.initUI = function() {
 			.on("dragend", function (d) {
 				if (isDragged) {
 					isDragged = false
-					insertCmdRespectingSelection(new FunctionCall(self))
+					insertCmdRespectingSelection(new FuncCall(self))
 					run()
 				}
 			})
@@ -1273,7 +1312,7 @@ Function.prototype.initUI = function() {
 	return self
 }
 
-MainSVG.prototype.svgInit = Function.prototype.svgInit = function() {
+MainSVG.prototype.svgInit = Func.prototype.svgInit = function() {
 	var self = this
 	self.paintingG = self.svg.append("g").attr("class", "paintingG")
 	
@@ -1289,7 +1328,7 @@ MainSVG.prototype.updateTurtle = function() {
 	self.turtleCursor.attr("transform", "translate("+F_.state.x+", "+F_.state.y+") rotate("+(F_.state.r/Math.PI*180)+")")
 }
 
-Function.prototype.updateTurtle = function() {
+Func.prototype.updateTurtle = function() {
 	var self = this
 	if (self.turtleCursor !== undefined)
 		self.turtleCursor.attr("transform", "translate("+self.state.x+", "+self.state.y+") rotate("+(self.state.r/Math.PI*180)+")")
@@ -1310,7 +1349,7 @@ MainSVG.prototype.updateViewbox = function(afterZoom) {
 		updateViewboxFor(this.svg, F_, afterZoom)
 }
 
-Function.prototype.updateViewbox = function(afterZoom) {
+Func.prototype.updateViewbox = function(afterZoom) {
 	var self = this
 		// [0][0] gets the dom element
 	// the preview svg aspect ratio is coupled to the main svg
@@ -1339,7 +1378,7 @@ Function.prototype.updateViewbox = function(afterZoom) {
 	updateViewboxFor(self.svg, self, afterZoom)
 }
 
-Function.prototype.checkName = function(newName) {
+Func.prototype.checkName = function(newName) {
 	var regEx = /^[a-zA-Zα-ω][a-zA-Zα-ω0-9]*$/
 	if (!newName.match(regEx)) {
 		this.nameInput.classed({"inputInWrongState": true})
@@ -1363,18 +1402,18 @@ Function.prototype.checkName = function(newName) {
 	return true
 }
 
-Function.prototype.searchForName = function(charCodeStart, range, checkFunction, s, depth) {
+Func.prototype.searchForName = function(charCodeStart, range, checkFunc, s, depth) {
 	if (depth === 0)
-		return (checkFunction(s) ? s : false)
+		return (checkFunc(s) ? s : false)
 	for (var i=0; i<range; i++) {
-		var r = this.searchForName(charCodeStart, range, checkFunction, s + String.fromCharCode(charCodeStart+i), depth-1)
+		var r = this.searchForName(charCodeStart, range, checkFunc, s + String.fromCharCode(charCodeStart+i), depth-1)
 		if (r !== false)
 			return r
 	}
-	return this.searchForName(charCodeStart, range, checkFunction, s, depth+1)
+	return this.searchForName(charCodeStart, range, checkFunc, s, depth+1)
 }
 
-Function.prototype.setName = function(newName) {
+Func.prototype.setName = function(newName) {
 	var self = this
 	if (newName === undefined) {
 		newName = self.searchForName(945/*=α*/, 26/*=ω*/, function (s) { return self.checkName(s) }, "", 1)
@@ -1391,7 +1430,7 @@ Function.prototype.setName = function(newName) {
 	return r
 }
 
-Function.prototype.checkArgumentName = function(newName) {
+Func.prototype.checkArgumentName = function(newName) {
 	var regEx = /^[a-zA-Z][a-zA-Z0-9]*$/
 	if (!newName.match(regEx)) {
 		updateNotification("The argument name has to be alphanumeric and start with a letter: "+regEx)
@@ -1408,7 +1447,7 @@ Function.prototype.checkArgumentName = function(newName) {
 	return true
 }
 
-Function.prototype.addArgument = function(defaultValue, argName) {
+Func.prototype.addArgument = function(defaultValue, argName) {
 	var self = this
 	if (argName === undefined)
 		argName = self.searchForName(97/*=a*/, 26/*=z*/, function (s) { return self.checkArgumentName(s) }, "", 1)
@@ -1472,7 +1511,7 @@ Function.prototype.addArgument = function(defaultValue, argName) {
 	return argName
 }
 
-Function.prototype.setCommands = function(commands) {
+Func.prototype.setCommands = function(commands) {
 	console.assert(commands instanceof Array)
 	var self = this
 	console.assert(self.commands.length === 0)
@@ -1486,7 +1525,7 @@ Function.prototype.setCommands = function(commands) {
 }
 
 // @override
-Function.prototype.exec = function(/*no caller here*/) {
+Func.prototype.exec = function(/*no caller here*/) {
 	var self = this
 	if (self.commands.length !== self.execCmds.length) {
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
@@ -1498,7 +1537,7 @@ Function.prototype.exec = function(/*no caller here*/) {
 	return self
 }
 
-Function.prototype.switchTo = function() {
+Func.prototype.switchTo = function() {
 	var self = this
 	self.svgContainer.classed("fSVGselected", true)
 	if (F_ === self)
@@ -1518,7 +1557,7 @@ Function.prototype.switchTo = function() {
 }
 
 // TODO rename
-Function.prototype.remove = function() {
+Func.prototype.remove = function() {
 	var self = this
 	functions.splice(functions.indexOf(self), 1)
 	if (F_ === self && functions.length > 0) { // switch to previous or last
@@ -1540,7 +1579,7 @@ Function.prototype.remove = function() {
 	delete self.previousF_
 }
 
-Function.prototype.setStateTo = function(idx) {
+Func.prototype.setStateTo = function(idx) {
 	var self = this
 	// if idx is negative, counts backwards from last element
 	// idx = 0 -> first element
@@ -1557,16 +1596,16 @@ Function.prototype.setStateTo = function(idx) {
 }
 
 // @override
-Function.prototype.toCode = function() {
+Func.prototype.toCode = function() {
 	var self = this
-	var result = "var "+self.name+" = new vogo.Function(\""+self.name+"\", "
+	var result = "var "+self.name+" = new vogo.Func(\""+self.name+"\", "
 		+argsToCode(self.args)+");\n"
 		// the extra call will make recursion possible
 		+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+");"
 	return result
 }
 
-Function.prototype.getRootCommandsRef = function() {
+Func.prototype.getRootCommandsRef = function() {
 	return this.root.commands // .root, but functions can not have proxies anyway
 }
 
@@ -2082,7 +2121,7 @@ Loop.prototype.getRootCommandsRef = function() {
 	return this.root.commands
 }
 
-function FunctionCall(func, args) {
+function FuncCall(func, args) {
 	var self = this
 	self.commonCommandConstructor()
 	// normally, I would use setMainParameter(func), but func is currently not an Expression and not editable
@@ -2098,26 +2137,26 @@ function FunctionCall(func, args) {
 	self.execCmds = []
 	self.icon
 }
-FunctionCall.prototype = new Command(FunctionCall)
+FuncCall.prototype = new Command(FuncCall)
 
-FunctionCall.prototype.clone = function(scope) {
+FuncCall.prototype.clone = function(scope) {
 	var self = this
 	console.assert(self.root === self)
 	var customArguments = {}
 	for (var a in self.customArguments)
 		customArguments[a] = new Expression(self.customArguments[a].get())
-	var r = new FunctionCall(self.f, customArguments)
+	var r = new FuncCall(self.f, customArguments)
 	r.scope = scope
 	return r
 }
 
-FunctionCall.prototype.execInner = function(callerF) {
+FuncCall.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	console.assert(root.f !== undefined)
 	
 	var drawIcons = callerF === F_ && (
-		self.scopeDepth <= 3
+		self.scopeDepth <= 1
 		|| selection.containsAsRoot(self)
 		|| root.proxies[0] === self
 	)
@@ -2250,13 +2289,13 @@ FunctionCall.prototype.execInner = function(callerF) {
 	}
 }
 
-FunctionCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
+FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
 	self.icon.style({"opacity": on ? 0.5 : 1.0})
 }
 
-FunctionCall.prototype.mark = function(on) {
+FuncCall.prototype.mark = function(on) {
 	var self = this
 	// .icon is undefined ? ... when recursing
 //	if (self.root.proxies !== undefined)
@@ -2264,7 +2303,7 @@ FunctionCall.prototype.mark = function(on) {
 //			self.applyCSSClass([self.root.proxies[i].icon.body.text], "mark", on)
 }
 
-FunctionCall.prototype.select = function() {
+FuncCall.prototype.select = function() {
 	var self = this
 	selection.add(self)
 	if (self.icon !== undefined)
@@ -2272,39 +2311,39 @@ FunctionCall.prototype.select = function() {
 	self.mark(true)
 }
 
-FunctionCall.prototype.deselect = function() {
+FuncCall.prototype.deselect = function() {
 	var self = this
 	if (self.icon !== undefined)
 		self.applyCSSClass([self.icon.body.text], "selected", false)
 	self.mark(false)
 }
 
-FunctionCall.prototype.getVisibleElementsFromMainSVG = function() {
+FuncCall.prototype.getVisibleElementsFromMainSVG = function() {
 	return ["icon", "execCmds"]
 }
 
-FunctionCall.prototype.getVisibleElements = function() {
+FuncCall.prototype.getVisibleElements = function() {
 	return ["execCmds"]
 }
 
 // @override
-FunctionCall.prototype.toCode = function(scopeDepth) {
+FuncCall.prototype.toCode = function(scopeDepth) {
 	var self = this
 	console.assert(self === self.root)
 	// the f.name is not wrapped. it is assumed to exist as a variable
-	var result = "new vogo.FunctionCall("+self.f.name+", "
+	var result = "new vogo.FuncCall("+self.f.name+", "
 	+argsToCode(self.customArguments)
 	+")"
 	return result
 }
 
 // @override
-FunctionCall.prototype.deleteCompletelyContainedCommands = function() {
-	// do nothing. FunctionCall does not itself contain root commands, only execCmds.
+FuncCall.prototype.deleteCompletelyContainedCommands = function() {
+	// do nothing. FuncCall does not itself contain root commands, only execCmds.
 }
 
-FunctionCall.prototype.getRootCommandsRef = function() {
-	console.log("FunctionCall getRootCommandsRef: warning: editing function from referencing call. should be avoided.")
+FuncCall.prototype.getRootCommandsRef = function() {
+	console.log("FuncCall getRootCommandsRef: warning: editing function from referencing call. should be avoided.")
 	return this.root.f.commands
 }
 
@@ -2488,17 +2527,17 @@ Branch.prototype.getRootCommandsRef = function() {
 
 // export
 vogo.Drawing = Drawing
-vogo.Function = Function
+vogo.Func = Func
 vogo.Move = Move
 vogo.Rotate = Rotate
 vogo.Loop = Loop
-vogo.FunctionCall = FunctionCall
+vogo.FuncCall = FuncCall
 vogo.Branch = Branch
 
 function manualTest() {
 	
 	if (false) {
-		addNewFunctionToUI("nEck")
+		addNewFuncToUI("nEck")
 		F_.addArgument(4, "n")
 		F_.setCommands([
 			new Loop("n", [
@@ -2507,7 +2546,7 @@ function manualTest() {
 	}
 	
 	if (false) {
-		addNewFunctionToUI("multiSquare")
+		addNewFuncToUI("multiSquare")
 		F_.setCommands([
 			new Loop(36, [
 				new Loop(4, [
@@ -2518,7 +2557,7 @@ function manualTest() {
 	
 	// this is a performance bummer!
 	if (false) {
-		addNewFunctionToUI("tree")
+		addNewFuncToUI("tree")
 		F_.addArgument(150, "size")
 		F_.setCommands([
 			new Branch("size<5", [
@@ -2527,15 +2566,15 @@ function manualTest() {
 				[
 				new Move("size/3"),
 				new Rotate(-30/180*Math.PI),
-				new FunctionCall(F_, {size: "size*2/3"}),
+				new FuncCall(F_, {size: "size*2/3"}),
 				new Rotate(30/180*Math.PI),
 				new Move("size/6"),
 				new Rotate(25/180*Math.PI),
-				new FunctionCall(F_, {size: "size/2"}),
+				new FuncCall(F_, {size: "size/2"}),
 				new Rotate(-25/180*Math.PI),
 				new Move("size/3"),
 				new Rotate(25/180*Math.PI),
-				new FunctionCall(F_, {size: "size/2"}),
+				new FuncCall(F_, {size: "size/2"}),
 				new Rotate(-25/180*Math.PI),
 				new Move("size/6"),
 				new Move("-size")
@@ -2544,20 +2583,20 @@ function manualTest() {
 	}
 	
 	if (false) {
-		addNewFunctionToUI("fern")
+		addNewFuncToUI("fern")
 		F_.addArgument(10, "size")
 		F_.addArgument(1, "sign")
 		F_.setCommands([
 			new Branch("size>=1", [
 				new Move("size"),
 				new Rotate("70*sign/180*Math.PI"),
-				new FunctionCall(F_, {size: "size*0.5", sign: "-sign"}),
+				new FuncCall(F_, {size: "size*0.5", sign: "-sign"}),
 				new Rotate("-70*sign/180*Math.PI"),
 				new Move("size"),
 				new Rotate("-70*sign/180*Math.PI"),
-				new FunctionCall(F_, {size: "size*0.5", sign: "sign"}),
+				new FuncCall(F_, {size: "size*0.5", sign: "sign"}),
 				new Rotate("77*sign/180*Math.PI"),
-				new FunctionCall(F_, {size: "size-1", sign: "sign"}),
+				new FuncCall(F_, {size: "size-1", sign: "sign"}),
 				new Rotate("-7*sign/180*Math.PI"),
 				new Move("-2*size")
 			], [])
@@ -2565,7 +2604,7 @@ function manualTest() {
 	}
 	
 	if (false) {
-		addNewFunctionToUI("circle")
+		addNewFuncToUI("circle")
 		F_.setCommands([
 			new Loop(360, [
 				new Rotate("1/180*Math.PI"),
@@ -2575,28 +2614,28 @@ function manualTest() {
 	}
 	
 	if (false) {
-		addNewFunctionToUI("spirale")
+		addNewFuncToUI("spirale")
 		F_.addArgument(10, "a")
 		F_.setCommands([
 			new Move("a"),
 			new Rotate("25/180*Math.PI"),
 			new Branch("a<40", [
-				new FunctionCall(F_, {a: "a*1.02"})
+				new FuncCall(F_, {a: "a*1.02"})
 			], [])
 		])
 	}
 	
 	if (false) {
-		addNewFunctionToUI("meinBaum")
+		addNewFuncToUI("meinBaum")
 		F_.addArgument(6, "tiefe")
 		F_.addArgument(30, "winkel")
 		F_.setCommands([
 			new Branch("tiefe>=0", [
 				new Move("tiefe*5"),
 				new Rotate("winkel"),
-				new FunctionCall(F_, {tiefe: "tiefe-1"}),
+				new FuncCall(F_, {tiefe: "tiefe-1"}),
 				new Rotate("-winkel*2"),
-				new FunctionCall(F_, {tiefe: "tiefe-1"}),
+				new FuncCall(F_, {tiefe: "tiefe-1"}),
 				new Rotate("winkel"),
 				new Move("-tiefe*5")
 			], [])
@@ -2604,7 +2643,7 @@ function manualTest() {
 	}
 	
 	if (false) {
-		addNewFunctionToUI("KreisC")
+		addNewFuncToUI("KreisC")
 		F_.addArgument(4, "winkel")
 		F_.setCommands([
 			
