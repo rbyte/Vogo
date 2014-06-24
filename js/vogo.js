@@ -29,12 +29,13 @@ var arcStyle = {fill: "#000", "fill-opacity": 0.1}
 var clockStyle = {fill: "#fff", "fill-opacity": 0.01 /*for clickability*/, stroke: "#777", "stroke-width": ".05"}
 var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
+var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
 
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 3
-var scopeDepthLimit = 100 // for endless loops and recursion
+var scopeDepthLimit = 6 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 70
 var domSvg
@@ -178,6 +179,8 @@ vogo.update = function(args) {
 function run() {
 //	console.log("RUNNING")
 	F_.state.reset()
+	lastRotateExecuted = undefined
+	lastRotateScaleFactorCalculated = undefined
 	F_.exec()
 	F_.updateTurtle()
 	mainSVG.updateTurtle()
@@ -185,6 +188,8 @@ function run() {
 	functions.forEach(function(f) {
 		if (f !== F_) {
 			f.state.reset()
+			lastRotateExecuted = undefined
+			lastRotateScaleFactorCalculated = undefined
 			f.exec()
 		}
 	})
@@ -286,8 +291,7 @@ function setupUIEventListeners() {
     })
 	
 	mainSVG.svg.on("click", function (d, i) {
-//		mousePos = d3.mouse(this)
-		console.assert(d3.mouse(this)[0]-mousePos[0] === 0)
+		mousePos = d3.mouse(this)
 		if (manipulation.isCreating(Move)) {
 			var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
 			if (keyPressed.d) {
@@ -303,8 +307,10 @@ function setupUIEventListeners() {
 				manipulation.finish(Rotate, newRotateAngleFUNC)
 			}
 		} else {
-			selection.removeAndDeselectAll()
-			run()
+			if (!selection.isEmpty()) {
+				selection.removeAndDeselectAll()
+				run()
+			}
 		}
     })
 	
@@ -830,9 +836,23 @@ Expression.prototype.eval = function(command) {
 	var argsKeys = Object.keys(mainArgProvider)
 	var argsValues = []
 	for (var arg in mainArgProvider) { // arguments itself are Expressions
-		argsValues.push(fc !== undefined && fc.root.customArguments[arg] !== undefined
-			? fc.root.customArguments[arg].eval(fc)
-			: mainArgProvider[arg].eval())
+		// TODO args are evaluated in a chain -> this is very slow! it spans a tree
+		var argV
+		if (fc !== undefined) {
+			argV = fc.cachedArguments[arg]
+			if (argV === undefined) {
+				argV = fc.root.customArguments[arg] !== undefined
+					? fc.root.customArguments[arg].eval(fc)
+					: mainArgProvider[arg].eval()
+				fc.cachedArguments[arg] = argV
+			}
+		} else {
+			argV = mainArgProvider[arg].eval()
+		}
+//		fc !== undefined && fc.root.customArguments[arg] !== undefined
+//			? fc.root.customArguments[arg].eval(fc)
+//			: mainArgProvider[arg].eval()
+		argsValues.push(argV)
 	}
 	if (loopIndex !== undefined) {
 		argsKeys.push("i")
@@ -2128,6 +2148,7 @@ function FuncCall(func, args) {
 	// func may be undefined if it is a shallowClone
 	self.f = func
 	self.customArguments = {}
+	self.cachedArguments = {}
 	if (args !== undefined) {
 		self.customArguments = args
 		for (var a in self.customArguments)
@@ -2173,7 +2194,7 @@ FuncCall.prototype.execInner = function(callerF) {
 				self.select()
 				d3.event.stopPropagation()
 			})
-		self.icon.argUl = self.icon.body.append("ul")
+		self.icon.argUl = self.icon.body.append("xhtml:ul")
 	}
 	
 	if (self.icon !== undefined && !drawIcons) {
@@ -2181,17 +2202,18 @@ FuncCall.prototype.execInner = function(callerF) {
 		self.icon = undefined
 	}
 	
-	function createInputField() {
+	function createInputField(a) {
 		console.assert(self.icon.argF[a] !== undefined)
 		console.assert(self.icon.argF[a].text !== undefined)
 		console.assert(self.icon.argF[a].input === undefined)
-		self.icon.argF[a].text.text(a+"←")
+		self.icon.argF[a].text
+			.text(a+"←").style({"font-size": "16px"})
 		var value = root.customArguments[a] === undefined ? root.f.args[a].get() : root.customArguments[a].get()
 		if (root.customArguments[a] === undefined)
 			root.customArguments[a] = new Expression(value)
-		self.icon.argF[a].input = self.icon.argF[a].append("div")
+		self.icon.argF[a].inputDiv = self.icon.argF[a].append("xhtml:div")
 			.attr("class", "titleRowCellLast")
-			.append("xhtml:input")
+		self.icon.argF[a].input = self.icon.argF[a].inputDiv.append("xhtml:input")
 			.attr("type", "text")
 			.property("value", value)
 			.attr("size", 6)
@@ -2225,13 +2247,14 @@ FuncCall.prototype.execInner = function(callerF) {
 	
 	function switchInputFieldForArg() {
 		if (self.icon.argF[a].input !== undefined) {
-			self.icon.argF[a].text.text(a+"↑")
-			self.icon.argF[a].input.remove()
+			self.icon.argF[a].text.text(a).style(fcArgTextStyle)
+			self.icon.argF[a].inputDiv.remove() // input is inside inputDiv
 			self.icon.argF[a].input = undefined
+			self.icon.argF[a]
 			delete root.customArguments[a]
 			run()
 		} else {
-			createInputField()
+			createInputField(a)
 		}
 	}
 	
@@ -2242,13 +2265,12 @@ FuncCall.prototype.execInner = function(callerF) {
 		// TODO select and mark
 		for (var a in root.f.args) {
 			if (self.icon.argF[a] === undefined) {
-				self.icon.argF[a] = self.icon.argUl.append("li").attr("class", "titleRow")
-				self.icon.argF[a].text = self.icon.argF[a].append("div")
+				self.icon.argF[a] = self.icon.argUl.append("xhtml:li").attr("class", "titleRow")
+				self.icon.argF[a].text = self.icon.argF[a].append("xhtml:div")
 					.attr("class", "titleRowCellLast")
-					.text(a+"↑")
-					.style({cursor: "pointer"})
+					.text(a).style(fcArgTextStyle)
 					.on("click", function() {
-						// beware! "a" changed due until click is called.
+						// beware! "a" changed until click is called.
 						// so we need to retrieve the original "a"
 						a = this.a
 						switchInputFieldForArg()
@@ -2256,7 +2278,7 @@ FuncCall.prototype.execInner = function(callerF) {
 				self.icon.argF[a].text[0][0].a = a
 				
 				if (root.customArguments[a] !== undefined)
-					createInputField()
+					createInputField(a)
 			}
 		}
 		for (var a in root.customArguments) {
@@ -2287,6 +2309,8 @@ FuncCall.prototype.execInner = function(callerF) {
 //		console.log("exec fc with scopeDepth: "+self.scopeDepth)
 		self.execCmds.forEach(function(e) { e.exec(callerF) })
 	}
+	// clear cache
+	self.cachedArguments = {}
 }
 
 FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {

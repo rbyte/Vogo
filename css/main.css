@@ -57,7 +57,7 @@ path.mark:not(.selected), line.mark:not(.selected), circle.mark:not(.selected) {
 	stroke-opacity: 1;
 }
 text.mark:not(.selected) {
-	color: #00f;
+	color: #44f;
 }
 .branch line {
 	stroke: #666;

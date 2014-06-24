@@ -16,9 +16,9 @@ small features
 	adjust existing line length by select + d
 	selection
 		### select with rect
+		z-order-handling (ALT selects below)
 		copy and paste selection
 		move selection
-		z-order-handling
 	show results of expressions beneath input field "=..."
 	more tooltips, more sanity checks
 	variables can reference variables (on global scope)
@@ -28,7 +28,7 @@ small features
 
 performance
 	d3.classed performance low
-	cache arguments eval
+	further cache arguments eval
 	for one run cycle and the same stack position, only evaluate variables once
 	store which expression requires which variables, so I only eval those
 	put svg styles in svg css (inkscape compatibility?)
@@ -64,3 +64,4 @@ bugs
 	allow white spaces in variable definition "a = 3"
 	2 subsequent moves cannot be distinguished
 	abstracting over selected element inside a functionCall creates errors
+	chrome only: the input fields inside foreign objects do not update
