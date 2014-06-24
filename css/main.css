@@ -41,6 +41,9 @@ body {
 	fill: #f00 !important;
 	fill-opacity: 0.3 !important;
 }
+svg line {
+	cursor: pointer;
+}
 path.selected, line.selected, circle.selected {
 	stroke: #f00 !important;
 	stroke-opacity: 1;
@@ -82,7 +85,9 @@ text.mark:not(.selected) {
 	padding-bottom: 7%;
 	/*border: 1px solid rgba(0, 0, 0, 0.1);*/
 }
-
+.fSVG {
+	cursor: pointer;
+}
 #functions .fSVGcontainer {
 /*	height: 180px;*/
 	width: 100%;
@@ -175,6 +180,7 @@ button::-moz-focus-inner {
 	border: 0 none;
 	background-color: transparent;
 	width: 100%;
+	cursor: col-resize;
 }
 #functions .f_remove {
 	/*float: right;*/
@@ -225,6 +231,7 @@ svg input {
 	background-color: rgba(0,0,0,0.05);
 	border-radius: 4px;
 	transition: background-color 300ms ease-in-out;
+	cursor: col-resize;
 }
 svg input:focus {
 	background-color: rgba(255,0,0,0.1);

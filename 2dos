@@ -2,13 +2,10 @@ see also TODOs in code
 
 small features
 	### angles in degrees
-	more intelligent icon hiding
 	indicateIfInsideAnySelectedCommandsScope on hover
 	pointer to hand for dragging canvas
-	cursor to right-left arrow on input field
 	improve function call look -> context menu for args
-	direct creation of variables ("a" also works if nothing is selected)
-	hide function call interna
+	function call interna uneditable
 		How can a function call be "inlined" into the current context (stepping down into its definition, maintaining context)?
 	handling endless recursion by checking line-length or out of bounds
 	new command: goto, go home, go to point in past, close path

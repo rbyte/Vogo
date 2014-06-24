@@ -30,6 +30,7 @@ var clockStyle = {fill: "#fff", "fill-opacity": 0.01 /*for clickability*/, strok
 var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
 var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
+var fcTextStyle = {cursor: "pointer"}
 
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
@@ -272,14 +273,26 @@ function setupUIEventListeners() {
 	document.body.onmouseup = function(evt) { switchMouseButton(evt, false) }
 	
 	mainSVG.svg.call(d3.behavior.drag()
+		.on("dragstart", function (d) {
+			// mousePressed.middle press it not yet registered here
+		})
 		.on("drag", function (d) {
 			if (mousePressed.middle) {
+				if (!dragInProgress)
+					mainSVG.svg.style({cursor: "move"})
+				dragInProgress = true
 				F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/mainSVG.svgWidth)
 				F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/mainSVG.svgHeight)
 				F_.updateViewbox()
 				mainSVG.updateViewbox()
 			}
 		})
+		.on("dragend", function (d) {
+			dragInProgress = false
+			// mousePressed.middle is already released here
+			mainSVG.svg.style({cursor: "default"})
+		})
+		
 	)
 	
 	mainSVG.svg.on("mousemove", function (d, i) {
@@ -1317,11 +1330,14 @@ Func.prototype.initUI = function() {
 			.on("dragstart", function (d) {
 			})
 			.on("drag", function (d) {
+				if (!isDragged)
+					mainSVG.svg.style({cursor: "move"})
 				isDragged = true
 			})
 			.on("dragend", function (d) {
 				if (isDragged) {
 					isDragged = false
+					mainSVG.svg.style({cursor: "default"})
 					insertCmdRespectingSelection(new FuncCall(self))
 					run()
 				}
@@ -1753,10 +1769,8 @@ Move.prototype.execInner = function(callerF) {
 
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
-	self.lineMainSVG.style({"stroke-opacity":
-		self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-		? 0.5 //(self.isInsideAnySelectedCommandsScope() ? 0.25 : 0.5)
-		: 1.0})
+	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
+	self.lineMainSVG.style({"stroke-opacity": on ? 0.4 : 1.0, "stroke": on ? "#500" : lineStyle.stroke})
 }
 
 Move.prototype.mark = function(on) {
@@ -1808,6 +1822,7 @@ Rotate.prototype.clone = function(scope) {
 
 Rotate.prototype.execInner = function(callerF) {
 	var self = this
+	var root = self.root
 	var angle = correctRadius(self.evalMainParameter())
 	var dragStartState
 	
@@ -1840,6 +1855,7 @@ Rotate.prototype.execInner = function(callerF) {
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
 					dragInProgress = true
+					mainSVG.svg.style({cursor: "move"})
 					dragStartState = self.savedState.clone()
 					d3.select(this).classed("dragging", true)
 					// to prevent drag on background
@@ -1856,6 +1872,7 @@ Rotate.prototype.execInner = function(callerF) {
 				})
 				.on("dragend", function (d) {
 					dragInProgress = false
+					mainSVG.svg.style({cursor: "default"})
 					d3.select(this).classed("dragging", false)
 				})
 			)
@@ -1885,6 +1902,18 @@ Rotate.prototype.execInner = function(callerF) {
 			.on("input", function() {
 				setTextOfInput(self.labelInput, self.label)
 			})
+			.call(d3.behavior.drag()
+				.on("dragstart", function (d) {
+					root.mainParameter.adjustDragstart(this)
+					d3.event.sourceEvent.stopPropagation()
+				})
+				.on("drag", function (d) {
+					root.mainParameter.adjustDrag(this)
+				})
+				.on("dragend", function (d) {
+					
+				})
+			)
 	}
 	
 	if (drawLabel) {
@@ -1893,7 +1922,7 @@ Rotate.prototype.execInner = function(callerF) {
 		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
 		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 - 1 // vertical alignment
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
-		setTextOfInput(self.labelInput, self.label, self.root.mainParameter.get())
+		setTextOfInput(self.labelInput, self.label, root.mainParameter.get())
 			//+"="+Math.round(angle/Math.PI*180)+"°"
 	}
 	if (drawIcons) {
@@ -1907,10 +1936,9 @@ Rotate.prototype.execInner = function(callerF) {
 
 Rotate.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
-	self.arc.style({"fill-opacity":
-		self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-		? 0.05
-		: arcStyle["fill-opacity"]})
+	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
+	self.arc.style({"fill-opacity": on ? 0.05 : arcStyle["fill-opacity"]
+		, "fill": on ? "#500" : arcStyle.stroke})
 }
 
 Rotate.prototype.mark = function(on) {
@@ -2190,6 +2218,7 @@ FuncCall.prototype.execInner = function(callerF) {
 		self.icon.body = self.icon.append("xhtml:body")
 		self.icon.body.text = self.icon.body.append("xhtml:text")
 			.text("ƒ"+root.f.name)
+			.style(fcTextStyle)
 			.on("click", function() {
 				self.select()
 				d3.event.stopPropagation()
@@ -2316,7 +2345,7 @@ FuncCall.prototype.execInner = function(callerF) {
 FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-	self.icon.style({"opacity": on ? 0.5 : 1.0})
+	self.icon.style({"opacity": on ? 0.3 : 1.0})
 }
 
 FuncCall.prototype.mark = function(on) {
