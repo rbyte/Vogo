@@ -8,7 +8,6 @@ small features
 	function call interna uneditable
 		How can a function call be "inlined" into the current context (stepping down into its definition, maintaining context)?
 	handling endless recursion by checking line-length or out of bounds
-	new command: goto, go home, go to point in past, close path
 	rotate icon arc radius is limited by subsequent line length (no overshoot)
 	adjust existing line length by select + d
 	selection
@@ -18,7 +17,6 @@ small features
 		move selection
 	show results of expressions beneath input field "=..."
 	more tooltips, more sanity checks
-	variables can reference variables (on global scope)
 	cycle (select) through elements (as in code) with arrow keys
 	simple! Embedding of results in web pages (should remain dynamic)
 	add acknowledgements (back to me)
@@ -34,10 +32,12 @@ performance
 big features
 	### hotkeys sidebar
 	### automatic tests (adjust for testability)
+	new command: goto, go home, go to point in past, close path
 	constraint solving
 		snapping/line end handles
 	Collision-Free positioning
 		check same state of commands, then shift y ?
+	variables can reference variables (on global scope)
 	How can the program flow be visualised (stepping through)?
 		Map a parameter to space (show multiple "shadow instances" of it)
 	Logo output
@@ -56,9 +56,9 @@ bugs
 	fix: rotation manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
 	svg output does not work (input tag error)
-	chrome fix input field text select not visible
 	remove loops when empty (e.g. removed last inner command)
 	allow white spaces in variable definition "a = 3"
 	2 subsequent moves cannot be distinguished
 	abstracting over selected element inside a functionCall creates errors
 	chrome only: the input fields inside foreign objects do not update
+		chrome fix input field text select not visible

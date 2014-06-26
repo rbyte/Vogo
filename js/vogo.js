@@ -95,11 +95,13 @@ var selection = {
 		if (!keyPressed.shift) {
 			this.removeAndDeselectAll()
 			this.e.push(x)
+			x.select()
 		} else { // accumulate multiple
 			if (this.contains(x)) {
 				this.removeAndDeselect(x)
 			} else {
 				this.e.push(x)
+				x.select()
 			}
 		}
 		run()
@@ -143,7 +145,7 @@ vogo.init = function() {
 	setupUIEventListeners()
 	run()
 	manualTest()
-//	automaticTest()
+	automaticTest()
 }
 
 // wraps a function for drawing it multiple times
@@ -291,6 +293,8 @@ function setupUIEventListeners() {
 			dragInProgress = false
 			// mousePressed.middle is already released here
 			mainSVG.svg.style({cursor: "default"})
+			// prevent click triggered after dragend
+			d3.event.sourceEvent.stopPropagation()
 		})
 		
 	)
@@ -478,6 +482,7 @@ function addNewFuncToUI(name) {
 	f.initUI()
 	functions.push(f)
 	f.switchTo()
+	return f
 }
 
 function exportAll() {
@@ -1042,6 +1047,7 @@ function Command(myConstructor) {
 }
 
 // this is called for every instance of command
+// another important aspect is that this increases hidden class performance
 Command.prototype.commonCommandConstructor = function() {
 	var self = this
 	self.root = self
@@ -1106,7 +1112,7 @@ Command.prototype.shallowClone = function(scope) {
 Command.prototype.deleteCompletely = function() {
 	var root = this.root
 	if (root === undefined)
-		return // is already deleted. happens when a loop and one of its elements is selected and deleted.
+		return // is already deleted. happens when a loop AND one of its elements is selected and deleted.
 		// because deleting the loop already deleted the element
 	if (root.canContainCommands()) {
 		// roots execCmds is always empty.
@@ -1164,17 +1170,34 @@ Command.prototype.deleteProxyCommand = function() {
 	delete self.scope
 }
 
-Command.prototype.applyCSSClass = function(elements, cssName, on, prop) {
+Command.prototype.classMark = function(elements, on, prop) {
+	this.applyCSSClass(elements, on, prop, true, false)
+}
+
+Command.prototype.classSelected = function(elements, on, prop) {
+	this.applyCSSClass(elements, on, prop, false, true)
+}
+
+Command.prototype.applyCSSClass = function(elements, on, prop, mark, selected) {
 	if (elements instanceof Array)
 		elements.forEach(function(e) {
 			if (e !== undefined) {
-				// TODO it seems d3.classed does regex which is VERY slow.
+				// this is a broad simplification
+				// it assumes that "selected" is always set after "mark"
+				// because selected is a special case of marked
+				// and that elements are either marked, selected or neither
+				var cssName = !on ? "" : (mark ? "mark" : "selected")
+				
 				if (prop !== undefined) {
 					if (e[prop] !== undefined) {
-						e[prop].classed(cssName, on)
+						e[prop].attr("class", cssName)
+				// TODO MAJOR PERFORMANCE BUMMER: 90% time in d3.classed()
+				// it seems d3.classed does regex which is VERY slow.
+//						e[prop].classed(cssName, on)
 					}
 				} else {
-					e.classed(cssName, on)
+					e.attr("class", cssName)
+//					e.classed(cssName, on)
 				}
 			}
 		})
@@ -1193,13 +1216,19 @@ Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
 			// cannot check for Array directly because any d3 object is also an Array
 			if (self[p].remove === undefined) { // is Array
 				for (var i=0; i<self[p].length; i++) {
-					if (self[p][i].remove === undefined) { // 3
-						fromMainSVG
-							? self[p][i].removeVisibleFromMainSVG()
-							: self[p][i].removeVisible()
-					} else { // 2
-						self[p][i].remove()
-						self[p][i] = undefined
+//					console.assert(self[p][i] !== undefined)
+					if (self[p][i] === undefined) {
+						// TODO unfixed bug: repeated removal. happens when removing fc for f that contains a loop
+						console.log(":( "+(fromMainSVG ? "fromMainSVG" : "")+self.myConstructor.name+" "+p+" ")
+					} else {
+						if (self[p][i].remove === undefined) { // 3
+							fromMainSVG
+								? self[p][i].removeVisibleFromMainSVG()
+								: self[p][i].removeVisible()
+						} else { // 2
+							self[p][i].remove()
+							self[p][i] = undefined
+						}
 					}
 				}
 			} else { // 1
@@ -1213,14 +1242,15 @@ Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
 // does not change the program. may become visible again after reexecution.
 // this always deselects without removing from selection!
 Command.prototype.removeVisible = function() {
-	this.removeVisibleElements(this.getVisibleElements())
-	this.removeVisibleFromMainSVG()
+	var self = this
+	self.removeVisibleElements(self.getVisibleElements())
+	self.removeVisibleFromMainSVG()
 }
 
 Command.prototype.removeVisibleFromMainSVG = function() {
-	selection.removeAndDeselect(this)
-//	this.deselect()
-	this.removeVisibleElements(this.getVisibleElementsFromMainSVG(), true)
+	var self = this
+	selection.removeAndDeselect(self)
+	self.removeVisibleElements(self.getVisibleElementsFromMainSVG(), true)
 }
 
 Command.prototype.toCode = function(scopeDepth) {
@@ -1248,6 +1278,21 @@ Command.prototype.isInsideAnySelectedCommandsScope = function(includingProxies) 
 		while (!(scp instanceof Func) && !selection[checKr](scp))
 			scp = scp.scope
 	return selection[checKr](scp)
+}
+
+// traverses the scope chain up, looking for the first FuncCall, and if none, returns Func
+Command.prototype.getInnermostFuncCallOrFunc = function() {
+	var self = this
+	var sc = self.scope
+	while (!(sc instanceof Func) && !(sc instanceof FuncCall)) {
+		sc = sc.scope
+		console.assert(sc !== undefined)
+	}
+	return sc
+}
+
+Command.prototype.isInsideFuncCall = function() {
+	return (this.getInnermostFuncCallOrFunc() instanceof FuncCall)
 }
 
 function Func(name, args, commands, customPaintingG) {
@@ -1568,6 +1613,7 @@ Func.prototype.exec = function(/*no caller here*/) {
 		console.assert(self.execCmds.length === 0)
 		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
 	}
+	
 	self.execCmds.forEach(function(e) { e.exec(self) })
 	self.updateTurtle()
 	return self
@@ -1690,18 +1736,26 @@ Move.prototype.execInner = function(callerF) {
 		self.line = callerF.paintingG.append("line").style(lineStyle)
 	}
 	var drawOnMainSVG = callerF === F_
-	var drawIcons = drawOnMainSVG && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
-	
+	var isInsideFuncCall = self.isInsideFuncCall()
+	var drawIcons = drawOnMainSVG
+		&& (self.scopeDepth <= 1
+			|| selection.containsAsRoot(self))
+		&& !isInsideFuncCall
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
 		self.lineMainSVG.on("click", function(d, i) {
 			if (!manipulation.isCreating()) {
-				self.select()
+				if (isInsideFuncCall) {
+					selection.add(self.getInnermostFuncCallOrFunc())
+				} else {
+					selection.add(self)
+				}
 				// to prevent click on background
 				d3.event.stopPropagation()
 			}
 		})
 	}
+	
 	
 	if (self.label === undefined && drawIcons) {
 		self.label = mainSVG.paintingG.append("foreignObject")
@@ -1746,7 +1800,6 @@ Move.prototype.execInner = function(callerF) {
 		self.label.remove()
 		self.label = undefined
 	}
-	
 	var lines = [self.line]
 	if (drawOnMainSVG) {
 		lines.push(self.lineMainSVG)
@@ -1775,14 +1828,13 @@ Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 
 Move.prototype.mark = function(on) {
 	var self = this
-	self.applyCSSClass(self.root.proxies, "mark", on, "lineMainSVG")
+	self.classMark(self.root.proxies, on, "lineMainSVG")
 }
 
 Move.prototype.select = function() {
 	var self = this
-	selection.add(self)
-	self.applyCSSClass([self.lineMainSVG], "selected", true)
 	self.mark(true)
+	self.classSelected([self.lineMainSVG], true)
 	if (self.label !== undefined) {
 		self.label.classed("hide", false)
 		setTextOfInput(self.labelInput, self.label)
@@ -1791,9 +1843,9 @@ Move.prototype.select = function() {
 
 Move.prototype.deselect = function() {
 	var self = this
-	updateLabelVisibility(self)
-	self.applyCSSClass([self.lineMainSVG], "selected", false)
 	self.mark(false)
+	self.classSelected([self.lineMainSVG], false)
+	updateLabelVisibility(self)
 }
 
 Move.prototype.getVisibleElementsFromMainSVG = function() {
@@ -1832,8 +1884,10 @@ Rotate.prototype.execInner = function(callerF) {
 		.startAngle(callerF.state.r)
 		.endAngle(callerF.state.r + angle)
 	callerF.state.addRadius(angle)
-	var drawIcons = callerF === F_
-	var drawLabel = callerF === F_ && (self.scopeDepth <= 1 || selection.containsAsRoot(self))
+	var drawIcons = callerF === F_ && !self.isInsideFuncCall()
+	var drawLabel = drawIcons
+		&&  (self.scopeDepth <= 1
+			|| selection.containsAsRoot(self))
 	
 	if (self.arc === undefined && drawIcons) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
@@ -1847,7 +1901,7 @@ Rotate.prototype.execInner = function(callerF) {
 			})
 			.on("click", function (d, i) {
 				if (!manipulation.isCreating()) {
-					self.select()
+					selection.add(self)
 					// to prevent click on background
 					d3.event.stopPropagation()
 				}
@@ -1943,14 +1997,13 @@ Rotate.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 
 Rotate.prototype.mark = function(on) {
 	var self = this
-	self.applyCSSClass(self.root.proxies, "mark", on, "arc")
+	self.classMark(self.root.proxies, on, "arc")
 }
 
 Rotate.prototype.select = function() {
 	var self = this
-	selection.add(self)
-	self.applyCSSClass([self.arc], "selected", true)
 	self.mark(true)
+	self.classSelected([self.arc], true)
 	if (self.label !== undefined) {
 		self.label.classed("hide", false)
 		setTextOfInput(self.labelInput, self.label)
@@ -1959,9 +2012,9 @@ Rotate.prototype.select = function() {
 
 Rotate.prototype.deselect = function() {
 	var self = this
-	updateLabelVisibility(self)
-	self.applyCSSClass([self.arc], "selected", false)
 	self.mark(false)
+	self.classSelected([self.arc], false)
+	updateLabelVisibility(self)
 }
 
 Rotate.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2006,7 +2059,7 @@ Loop.prototype.execInner = function(callerF) {
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius * Math.pow(0.7, self.refDepthOfSameType+1)
-	var drawIcons = callerF === F_
+	var drawIcons = callerF === F_ && !self.isInsideFuncCall()
 	
 	function createIcon() {
 		var iconG = mainSVG.paintingG.append("g")
@@ -2052,7 +2105,7 @@ Loop.prototype.execInner = function(callerF) {
 			.attr("cx", 0).attr("cy", 0)
 		iconG.on("click", function () {
 			if (!manipulation.isCreating()) {
-				self.select()
+				selection.add(self)
 				// to prevent click on background
 				d3.event.stopPropagation()
 			}
@@ -2080,19 +2133,22 @@ Loop.prototype.execInner = function(callerF) {
 	}
 	
 	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length
-		|| self.iconGs.length !== numberOfRepetitions
 	if (rebuild) {
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 		console.assert(self.execCmds.length === 0)
-		if (drawIcons)
-			if (0 <= numberOfRepetitions && numberOfRepetitions < self.iconGs.length) { // remove dangling
-				for (var k=numberOfRepetitions; k<self.iconGs.length; k++)
-					self.iconGs[k].remove()
-				self.iconGs.splice(numberOfRepetitions, self.iconGs.length-numberOfRepetitions)
-			} else {
-				for (var i=self.iconGs.length; i<numberOfRepetitions; i++)
-					self.iconGs.push(createIcon())
-			}
+	}
+	
+	if (drawIcons) {
+		if (0 <= numberOfRepetitions && numberOfRepetitions < self.iconGs.length) {
+			// remove dangling
+			for (var k=numberOfRepetitions; k<self.iconGs.length; k++)
+				self.iconGs[k].remove()
+			self.iconGs.splice(numberOfRepetitions, self.iconGs.length-numberOfRepetitions)
+		} else {
+			// add new
+			for (var i=self.iconGs.length; i<numberOfRepetitions; i++)
+				self.iconGs.push(createIcon())
+		}
 	}
 	
 	for (var i=0; i<numberOfRepetitions; i++) {
@@ -2108,8 +2164,8 @@ Loop.prototype.execInner = function(callerF) {
 			updateIcon(self.iconGs[i])
 			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
-			self.applyCSSClass([self.iconGs[i].circleF], "selected", selection.contains(self))
-			self.applyCSSClass([self.iconGs[i].circleF], "mark", selection.containsAsRoot(self))
+			self.classMark([self.iconGs[i].circleF], selection.containsAsRoot(self))
+			self.classSelected([self.iconGs[i].circleF], selection.contains(self))
 		}
 		
 		for (var k=0; k<self.root.commands.length; k++) {
@@ -2126,7 +2182,9 @@ Loop.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
 	self.iconGs.forEach(function(e) {
-		e.style({"opacity": on ? 0.4 : 1.0})
+		if (e !== undefined)
+			// TODO too slow for doing on this scale.
+			e.style({"opacity": on ? 0.4 : 1.0})
 	})
 }
 
@@ -2134,21 +2192,20 @@ Loop.prototype.mark = function(on) {
 	var self = this
 	if (self.root.proxies !== undefined)
 		self.root.proxies.forEach(function(e) {
-			self.applyCSSClass(e.iconGs, "mark", on, "circleF")
+			self.classMark(e.iconGs, on, "circleF")
 		})
 }
 
 Loop.prototype.select = function() {
 	var self = this
-	selection.add(self)
-	self.applyCSSClass(self.iconGs, "selected", true, "circleF")
 	self.mark(true)
+	self.classSelected(self.iconGs, true, "circleF")
 }
 
 Loop.prototype.deselect = function() {
 	var self = this
-	self.applyCSSClass(self.iconGs, "selected", false, "circleF")
 	self.mark(false)
+	self.classSelected(self.iconGs, false, "circleF")
 }
 
 Loop.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2220,7 +2277,7 @@ FuncCall.prototype.execInner = function(callerF) {
 			.text("ƒ"+root.f.name)
 			.style(fcTextStyle)
 			.on("click", function() {
-				self.select()
+				selection.add(self)
 				d3.event.stopPropagation()
 			})
 		self.icon.argUl = self.icon.body.append("xhtml:ul")
@@ -2353,22 +2410,21 @@ FuncCall.prototype.mark = function(on) {
 	// .icon is undefined ? ... when recursing
 //	if (self.root.proxies !== undefined)
 //		for (var i=0; i<self.root.proxies.length; i++)
-//			self.applyCSSClass([self.root.proxies[i].icon.body.text], "mark", on)
+//			self.classMark([self.root.proxies[i].icon.body.text], on)
 }
 
 FuncCall.prototype.select = function() {
 	var self = this
-	selection.add(self)
 	if (self.icon !== undefined)
-		self.applyCSSClass([self.icon.body.text], "selected", true)
+		self.classSelected([self.icon.body.text], true)
 	self.mark(true)
 }
 
 FuncCall.prototype.deselect = function() {
 	var self = this
-	if (self.icon !== undefined)
-		self.applyCSSClass([self.icon.body.text], "selected", false)
 	self.mark(false)
+	if (self.icon !== undefined)
+		self.classSelected([self.icon.body.text], false)
 }
 
 FuncCall.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2392,7 +2448,7 @@ FuncCall.prototype.toCode = function(scopeDepth) {
 
 // @override
 FuncCall.prototype.deleteCompletelyContainedCommands = function() {
-	// do nothing. FuncCall does not itself contain root commands, only execCmds.
+	// do nothing. FuncCall does not itself contain root commands.
 }
 
 FuncCall.prototype.getRootCommandsRef = function() {
@@ -2449,10 +2505,10 @@ Branch.prototype.execInner = function(callerF) {
 //		callerF.paintingG
 		self.iconG.trueL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 0)
 		self.iconG.falseL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 2)
-		self.iconG.append("line").attr("x1", 0).attr("y1", 1).attr("x2", 1).attr("y2", 1)
+		self.iconG.baseL = self.iconG.append("line").attr("x1", 0).attr("y1", 1).attr("x2", 1).attr("y2", 1)
 			.on("click", function() {
 				if (!manipulation.isCreating()) {
-					self.select()
+					selection.add(self)
 					d3.event.stopPropagation()
 				}
 			})
@@ -2513,22 +2569,19 @@ Branch.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 
 Branch.prototype.mark = function(on) {
 	var self = this
-	self.applyCSSClass([self.iconG], "mark", on)
+	self.classMark([self.iconG.baseL], on)
 }
 
 Branch.prototype.select = function() {
 	var self = this
-	selection.add(self)
-	self.applyCSSClass([self.iconG], "selected", true)
 	self.mark(true)
-//	self.execCmds.forEach(function(e) { e.mark(true) })
+	self.classSelected([self.iconG.baseL], true)
 }
 
 Branch.prototype.deselect = function() {
 	var self = this
-	self.applyCSSClass([self.iconG], "selected", false)
 	self.mark(false)
-//	self.execCmds.forEach(function(e) { e.mark(false) })
+	self.classSelected([self.iconG.baseL], false)
 }
 
 Branch.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2696,6 +2749,26 @@ function manualTest() {
 	}
 	
 	if (false) {
+		var nEck = addNewFuncToUI("nEck")
+		F_.addArgument(36, "ne")
+		F_.addArgument(5, "sz")
+		F_.setCommands([
+			new Loop("ne", [
+				new Rotate("Math.PI*2/ne"),
+				new Move("sz")])])
+		
+		addNewFuncToUI("mnEck")
+		F_.addArgument(36, "ne")
+		F_.addArgument(7, "sz")
+		F_.setCommands([
+			new Loop("ne", [
+				new Rotate("Math.PI*2/ne"),
+				new FuncCall(nEck, {ne: "ne", sz: "sz"})
+			])
+		])
+	}
+	
+	if (false) {
 		addNewFuncToUI("KreisC")
 		F_.addArgument(4, "winkel")
 		F_.setCommands([
@@ -2703,7 +2776,24 @@ function manualTest() {
 		])
 	}
 	
+	
 /*
+to   n_eck :ne :sz
+    repeat :ne [
+        rt 360 / :ne
+        fd :sz
+    ]
+end
+
+to   mn_eck :ne :sz
+    repeat :ne [
+        rt 360 / :ne
+        n_eck :ne :sz
+    ]
+end
+
+mn_eck 36 20
+	
 reset
 
 to KreisC :winkel :nachRechts :groesze
@@ -2774,6 +2864,9 @@ saege 25 15
 }
 
 function automaticTest() {
+	if (true)
+		return
+	
 	console.assert(F_.commands.length === 0)
 	
 	manipulation.createPreview(Move, function() { return 10 })
@@ -2813,17 +2906,17 @@ function automaticTest() {
 	console.assert(F_.state.r === 0)
 	
 	manipulation.finish(Move, function() { return 10 })
-	mvP.select()
+	selection.add(mvP)
 	manipulation.createPreview(Rotate, function() { return 1 })
 	manipulation.finish(Rotate, function() { return 1 })
 	var rtP = F_.execCmds[0]
 	mvP = F_.execCmds[1]
-	mvP.select()
-	rtP.select() // previous is deselected without pressed shift
+	selection.add(mvP)
+	selection.add(rtP) // previous is deselected without pressed shift
 	console.assert(selection.e.length === 1)
 	console.assert(selection.e[0] === rtP)
 	keyPressed.shift = true
-	mvP.select()
+	selection.add(mvP)
 	console.assert(selection.e.length === 2)
 	console.assert(selection.e[1] === mvP)
 	keyPressed.shift = false
@@ -2850,14 +2943,33 @@ function automaticTest() {
 	console.assert(mvP.root.proxies.length === 3)
 	console.assert(mvP.root.proxies[0] === mvP)
 	
-	lpP.select()
-	onKeyDown.a() // abstract over; parameterise loop
-	console.assert(Object.keys(F_.args).length === 1)
-	// ...
-	
-	lpP.select()
+	var prevF = F_
+	var nf = addNewFuncToUI()
+	console.assert(F_ === nf)
+	console.assert(nf.previousF_ === prevF)
+	insertCmdRespectingSelection(new FuncCall(prevF))
+	run()
+	console.assert(nf.execCmds.length === 1)
+	var fcP = nf.execCmds[0]
+	console.assert(fcP.execCmds.length === 1)
+	var lpP = fcP.execCmds[0]
+	console.assert(lpP.execCmds.length === 6)
+	selection.add(fcP)
+	// triggers bug in removeVisibleElements
 	selection.removeDeselectAndDeleteAllCompletely()
 	run()
+	
+	
+//	selection.add(lpP)
+//	onKeyDown.a() // abstract over; parameterise loop
+//	console.assert(Object.keys(F_.args).length === 1)
+//	// ...
+//	
+//	selection.add(lpP)
+//	selection.removeDeselectAndDeleteAllCompletely()
+//	run()
+	
+	
 	
 }
 
