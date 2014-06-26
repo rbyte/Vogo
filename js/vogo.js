@@ -95,13 +95,13 @@ var selection = {
 		if (!keyPressed.shift) {
 			this.removeAndDeselectAll()
 			this.e.push(x)
-			x.select()
+			x.select(true)
 		} else { // accumulate multiple
 			if (this.contains(x)) {
 				this.removeAndDeselect(x)
 			} else {
 				this.e.push(x)
-				x.select()
+				x.select(true)
 			}
 		}
 		run()
@@ -118,12 +118,12 @@ var selection = {
 	removeAndDeselect: function(x) {
 		if (this.contains(x))
 			this.e.splice(this.e.indexOf(x), 1)
-		x.deselect()
+		x.select(false) // deselect
 	},
 	removeAndDeselectAll: function() {
 		var detach = this.e
 		this.e = []
-		detach.forEach(function(x) { x.deselect() })
+		detach.forEach(function(x) { x.select(false) })
 		return detach
 	},
 	// remove means splice from selection
@@ -1178,26 +1178,28 @@ Command.prototype.classSelected = function(elements, on, prop) {
 	this.applyCSSClass(elements, on, prop, false, true)
 }
 
+//Command.prototype.applyCSSClass = function(elements, on, prop, mark, selected) {
+//	// NADA
+//}
+
 Command.prototype.applyCSSClass = function(elements, on, prop, mark, selected) {
 	if (elements instanceof Array)
 		elements.forEach(function(e) {
 			if (e !== undefined) {
-				// this is a broad simplification
-				// it assumes that "selected" is always set after "mark"
-				// because selected is a special case of marked
-				// and that elements are either marked, selected or neither
-				var cssName = !on ? "" : (mark ? "mark" : "selected")
-				
-				if (prop !== undefined) {
-					if (e[prop] !== undefined) {
-						e[prop].attr("class", cssName)
-				// TODO MAJOR PERFORMANCE BUMMER: 90% time in d3.classed()
-				// it seems d3.classed does regex which is VERY slow.
-//						e[prop].classed(cssName, on)
-					}
-				} else {
-					e.attr("class", cssName)
-//					e.classed(cssName, on)
+				var p = prop !== undefined ? e[prop] : e
+				if (p !== undefined) {
+					// this is a broad simplification
+					// it assumes that "selected" is always set after "mark"
+					// because selected is a special case of marked
+					// and that elements are either marked, selected or neither
+					var cssName = !on ? "" : (mark ? "mark" : "selected")
+					if (!on && p[0][0].getAttribute("class") === "")
+						return
+					p[0][0].setAttribute("class", cssName)
+//					p.attr("class", cssName)
+					// TODO MAJOR PERFORMANCE BUMMER: 90% time in d3.classed()
+					// it seems d3.classed does regex which is VERY slow.
+//					p.classed(cssName, on)
 				}
 			}
 		})
@@ -1831,22 +1833,20 @@ Move.prototype.mark = function(on) {
 	self.classMark(self.root.proxies, on, "lineMainSVG")
 }
 
-Move.prototype.select = function() {
+Move.prototype.select = function(on) {
 	var self = this
-	self.mark(true)
-	self.classSelected([self.lineMainSVG], true)
-	if (self.label !== undefined) {
-		self.label.classed("hide", false)
-		setTextOfInput(self.labelInput, self.label)
+	self.mark(on)
+	self.classSelected([self.lineMainSVG], on)
+	if (on) {
+		if (self.label !== undefined) {
+			self.label.classed("hide", false)
+			setTextOfInput(self.labelInput, self.label)
+		}
+	} else {
+		updateLabelVisibility(self)
 	}
 }
 
-Move.prototype.deselect = function() {
-	var self = this
-	self.mark(false)
-	self.classSelected([self.lineMainSVG], false)
-	updateLabelVisibility(self)
-}
 
 Move.prototype.getVisibleElementsFromMainSVG = function() {
 	return ["lineMainSVG", "label"]
@@ -2000,21 +2000,18 @@ Rotate.prototype.mark = function(on) {
 	self.classMark(self.root.proxies, on, "arc")
 }
 
-Rotate.prototype.select = function() {
+Rotate.prototype.select = function(on) {
 	var self = this
-	self.mark(true)
-	self.classSelected([self.arc], true)
-	if (self.label !== undefined) {
-		self.label.classed("hide", false)
-		setTextOfInput(self.labelInput, self.label)
+	self.mark(on)
+	self.classSelected([self.arc], on)
+	if (on) {
+		if (self.label !== undefined) {
+			self.label.classed("hide", false)
+			setTextOfInput(self.labelInput, self.label)
+		}
+	} else {
+		updateLabelVisibility(self)
 	}
-}
-
-Rotate.prototype.deselect = function() {
-	var self = this
-	self.mark(false)
-	self.classSelected([self.arc], false)
-	updateLabelVisibility(self)
 }
 
 Rotate.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2165,7 +2162,8 @@ Loop.prototype.execInner = function(callerF) {
 			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
 			self.classMark([self.iconGs[i].circleF], selection.containsAsRoot(self))
-			self.classSelected([self.iconGs[i].circleF], selection.contains(self))
+			if (selection.contains(self))
+				self.classSelected([self.iconGs[i].circleF], true)
 		}
 		
 		for (var k=0; k<self.root.commands.length; k++) {
@@ -2196,16 +2194,10 @@ Loop.prototype.mark = function(on) {
 		})
 }
 
-Loop.prototype.select = function() {
+Loop.prototype.select = function(on) {
 	var self = this
-	self.mark(true)
-	self.classSelected(self.iconGs, true, "circleF")
-}
-
-Loop.prototype.deselect = function() {
-	var self = this
-	self.mark(false)
-	self.classSelected(self.iconGs, false, "circleF")
+	self.mark(on)
+//	self.classSelected(self.iconGs, on, "circleF")
 }
 
 Loop.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2407,24 +2399,14 @@ FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 
 FuncCall.prototype.mark = function(on) {
 	var self = this
-	// .icon is undefined ? ... when recursing
-//	if (self.root.proxies !== undefined)
-//		for (var i=0; i<self.root.proxies.length; i++)
-//			self.classMark([self.root.proxies[i].icon.body.text], on)
+	// TODO .icon is undefined ? ... when recursing
 }
 
-FuncCall.prototype.select = function() {
+FuncCall.prototype.select = function(on) {
 	var self = this
+	// TODO mark
 	if (self.icon !== undefined)
-		self.classSelected([self.icon.body.text], true)
-	self.mark(true)
-}
-
-FuncCall.prototype.deselect = function() {
-	var self = this
-	self.mark(false)
-	if (self.icon !== undefined)
-		self.classSelected([self.icon.body.text], false)
+		self.classSelected([self.icon.body.text], on)
 }
 
 FuncCall.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2572,16 +2554,9 @@ Branch.prototype.mark = function(on) {
 	self.classMark([self.iconG.baseL], on)
 }
 
-Branch.prototype.select = function() {
+Branch.prototype.select = function(on) {
 	var self = this
-	self.mark(true)
-	self.classSelected([self.iconG.baseL], true)
-}
-
-Branch.prototype.deselect = function() {
-	var self = this
-	self.mark(false)
-	self.classSelected([self.iconG.baseL], false)
+	self.classSelected([self.iconG.baseL], on)
 }
 
 Branch.prototype.getVisibleElementsFromMainSVG = function() {

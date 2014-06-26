@@ -5,10 +5,7 @@ small features
 	indicateIfInsideAnySelectedCommandsScope on hover
 	pointer to hand for dragging canvas
 	improve function call look -> context menu for args
-	function call interna uneditable
-		How can a function call be "inlined" into the current context (stepping down into its definition, maintaining context)?
 	handling endless recursion by checking line-length or out of bounds
-	rotate icon arc radius is limited by subsequent line length (no overshoot)
 	adjust existing line length by select + d
 	selection
 		### select with rect
@@ -22,7 +19,6 @@ small features
 	add acknowledgements (back to me)
 
 performance
-	d3.classed performance low
 	further cache arguments eval
 	for one run cycle and the same stack position, only evaluate variables once
 	store which expression requires which variables, so I only eval those
@@ -50,8 +46,6 @@ big features
 
 bugs
 	add proxies to functions (debug dependency checking) and improve run() performance
-	if recursing, fc with a and b, setting both to be a|b*0.9 will create an endless loop
-		this is caused by the fact that to eval a, a and be are needed, creating a tree of evals, which explodes
 	foreignObject relative width and height
 	fix: rotation manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
@@ -59,6 +53,5 @@ bugs
 	remove loops when empty (e.g. removed last inner command)
 	allow white spaces in variable definition "a = 3"
 	2 subsequent moves cannot be distinguished
-	abstracting over selected element inside a functionCall creates errors
-	chrome only: the input fields inside foreign objects do not update
-		chrome fix input field text select not visible
+	chromium only (chrome works): the input fields inside foreign objects do not update
+	
