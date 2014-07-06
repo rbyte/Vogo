@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   version="1.2"
+   width="100%"
+   height="100%"
+   viewBox="0 0 170 170"
+   id="svg2">
+  <metadata
+     id="metadata32">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs561">
+    <linearGradient
+       id="linearGradient607">
+      <stop
+         id="stop608"
+         style="stop-color:#cfcfcf;stop-opacity:1"
+         offset="0" />
+      <stop
+         id="stop609"
+         style="stop-color:#efefef;stop-opacity:1"
+         offset="1" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient565">
+      <stop
+         id="stop566"
+         style="stop-color:#9d9d9f;stop-opacity:1"
+         offset="0" />
+      <stop
+         id="stop567"
+         style="stop-color:#e5e5e5;stop-opacity:1"
+         offset="1" />
+    </linearGradient>
+    <linearGradient
+       x1="354.62042"
+       y1="188.0451"
+       x2="466.34125"
+       y2="80.461929"
+       id="linearGradient2435"
+       xlink:href="#linearGradient565"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(1.1586117,0,0,1.0882796,-391.63127,-68.246382)"
+       spreadMethod="pad" />
+    <linearGradient
+       x1="393.59711"
+       y1="174.85307"
+       x2="458.7175"
+       y2="95.033302"
+       id="linearGradient2437"
+       xlink:href="#linearGradient607"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(1.126027,0,0,1.1197719,-391.63127,-74.729433)"
+       spreadMethod="pad" />
+    <linearGradient
+       x1="367.74789"
+       y1="136.23061"
+       x2="477.60736"
+       y2="136.23061"
+       id="linearGradient2439"
+       xlink:href="#linearGradient607"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(1.126027,0,0,1.1197719,-391.63127,-74.729433)" />
+  </defs>
+  <path
+     d="m 24.994954,7.5675088 120.381056,0 c 12.8579,0 23.2092,10.3512962 23.2092,23.2091862 l 0,110.186135 c 0,12.85789 -10.3513,23.20919 -23.2092,23.20919 l -120.381056,0 c -12.857901,0 -23.2091977,-10.3513 -23.2091977,-23.20919 l 0,-110.186135 c 0,-12.85789 10.3512967,-23.2091862 23.2091977,-23.2091862 z"
+     id="rect621"
+     style="font-size:12px;fill:url(#linearGradient2435);fill-rule:evenodd;stroke:#acb0b0;stroke-width:0.91694498pt" />
+  <path
+     d="m 32.307122,17.712614 104.016058,0 c 4.67615,0 8.44072,5.171022 8.44072,11.59423 l 0,97.021846 c 0,6.42321 -3.76457,11.59424 -8.44072,11.59424 l -104.016058,0 c -4.676165,0 -8.440722,-5.17103 -8.440722,-11.59424 l 0,-97.021846 c 0,-6.423208 3.764557,-11.59423 8.440722,-11.59423 z"
+     id="rect622"
+     style="font-size:12px;fill:url(#linearGradient2437);fill-rule:evenodd;stroke:url(#linearGradient2439);stroke-width:2.80723786" />
+  <text
+     x="84.315147"
+     y="110.62296"
+     id="text3777"
+     xml:space="preserve"
+     style="font-size:20px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-indent:0;text-align:start;text-decoration:none;line-height:125%;letter-spacing:0px;word-spacing:0.01px;text-transform:none;direction:ltr;block-progression:tb;writing-mode:lr-tb;text-anchor:start;baseline-shift:baseline;color:#000000;fill:#484848;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1px;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate;font-family:Linux Libertine;-inkscape-font-specification:Linux Libertine"><tspan
+       x="84.315147"
+       y="110.62296"
+       id="tspan3779"
+       style="font-size:90px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;text-anchor:middle;fill:#484848;fill-opacity:1;font-family:Sans;-inkscape-font-specification:Sans">A</tspan></text>
+</svg>

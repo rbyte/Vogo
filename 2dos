@@ -27,6 +27,7 @@ performance
 
 big features
 	### hotkeys sidebar
+		a,b,l,r,d,new,export,svg
 	### automatic tests (adjust for testability)
 	new command: goto, go home, go to point in past, close path
 	constraint solving

@@ -40,6 +40,7 @@ var scopeDepthLimit = 6 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 70
 var domSvg
+var pi = Math.PI // for use in UI
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
@@ -139,6 +140,7 @@ var selection = {
 vogo.init = function() {
 	domSvg = document.getElementById("turtleSVG")
 	mainSVG = new MainSVG()
+	addKeysToToolbar()
 	window.onresize = function(event) { updateScreenElemsSize()}
 	window.onresize()
 	addNewFuncToUI()
@@ -211,7 +213,7 @@ function updateScreenElemsSize() {
 }
 
 function updatePanelSize() {
-	d3.select("#border").style("left", functionPanelSizePercentOfBodyWidth*100+"%", "important")
+	d3.select("#borderL").style("left", functionPanelSizePercentOfBodyWidth*100+"%", "important")
 	d3.select("#functions").style("width", functionPanelSizePercentOfBodyWidth*100+"%", "important")
 	d3.select("#turtleSVGcontainer").style("width", (1-functionPanelSizePercentOfBodyWidth)*100+"%", "important")
 	window.onresize()
@@ -228,12 +230,40 @@ function MainSVG() {
 	self.svgInit()
 }
 
+function addKeysToToolbar() {
+	var xhr = new XMLHttpRequest()
+	xhr.onreadystatechange = function() {
+		if (xhr.readyState === 4 && xhr.status === 200) {
+			var svgText = xhr.responseText
+			var toolbar = document.getElementById("ul_toolbar")
+			console.assert(toolbar.hasChildNodes())
+			var nodeList = toolbar.childNodes
+			for (var i=0; i<nodeList.length; i++) {
+				var node = nodeList[i] // this could be a whitespace text node
+				if (node.nodeType === 1 /* = element node*/) {
+//					console.log(node)
+					console.assert(node.hasAttribute("key"))
+					var key = node.getAttribute("key")
+//					node.setAttribute("onclick", "vogo.onKeyDown[this.getAttribute('key')]()")
+					node.onclick = onKeyDown[key]
+					var svgTextNew = svgText.replace(">A</tspan>", ">"+key+"</tspan>")
+//					console.log(svgTextNew)
+					var doc = new DOMParser().parseFromString(svgTextNew, "application/xml")
+					node.appendChild(node.ownerDocument.importNode(doc.documentElement, true))
+				}
+			}
+		}
+	}
+	xhr.open("GET", "images/keyStripped.svg")
+	xhr.send()
+}
+
 function setupUIEventListeners() {
 	d3.select("#f_addNew").on("click", function() {
 		addNewFuncToUI()
 	})
 	
-	d3.select("#border").call(d3.behavior.drag()
+	d3.select("#borderL").call(d3.behavior.drag()
 		.on("drag", function (d) {
 			functionPanelSizePercentOfBodyWidth = Math.max(0.1, Math.min(0.4,
 				d3.event.x / document.body.clientWidth))
@@ -2323,7 +2353,7 @@ FuncCall.prototype.execInner = function(callerF) {
 			)
 	}
 	
-	function switchInputFieldForArg() {
+	function switchInputFieldForArg(a) {
 		if (self.icon.argF[a].input !== undefined) {
 			self.icon.argF[a].text.text(a).style(fcArgTextStyle)
 			self.icon.argF[a].inputDiv.remove() // input is inside inputDiv
@@ -2347,14 +2377,10 @@ FuncCall.prototype.execInner = function(callerF) {
 				self.icon.argF[a].text = self.icon.argF[a].append("xhtml:div")
 					.attr("class", "titleRowCellLast")
 					.text(a).style(fcArgTextStyle)
-					.on("click", function() {
-						// beware! "a" changed until click is called.
-						// so we need to retrieve the original "a"
-						a = this.a
-						switchInputFieldForArg()
-					})
-				self.icon.argF[a].text[0][0].a = a
-				
+					// need to closure in "a" because when click is called, a changed
+					.on("click", (function(a) {
+						return function() { switchInputFieldForArg(a) }
+					})(a))
 				if (root.customArguments[a] !== undefined)
 					createInputField(a)
 			}
@@ -2614,6 +2640,7 @@ vogo.Rotate = Rotate
 vogo.Loop = Loop
 vogo.FuncCall = FuncCall
 vogo.Branch = Branch
+vogo.onKeyDown = onKeyDown
 
 function manualTest() {
 	

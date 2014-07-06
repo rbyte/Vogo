@@ -19,10 +19,22 @@
 			<button id="f_addNew">+</button>
 		</div>
 	</div>
-	<div id="border"></div>
+	<div id="borderL" class="border"></div>
 	<div id="turtleSVGcontainer">
 		<svg id="turtleSVG"></svg>
 		<p id="notification" class="opacity0"></p>
+	</div>
+	<div id="borderR" class="border"></div>
+	<div id="toolbar">
+		<ul id="ul_toolbar">
+			<li key="d"><img src="images/Move.svg"></li>
+			<li key="r"><img src="images/Rotate.svg"></li>
+			<li key="l"><img src="images/Loop.svg"></li>
+			<li key="b"><img src="images/Branch.svg"></li>
+			<li key="a"><img src="images/Abstract.svg"></li>
+			<li key="e"><img src="images/Export.svg"></li>
+			<li key="s"><img src="images/Svg.svg"></li>
+		</ul>
 	</div>
 	
 	<script>
