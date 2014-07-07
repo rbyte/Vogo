@@ -2691,7 +2691,7 @@ function manualTest() {
 		F_.addArgument(4, "n")
 		F_.setCommands([
 			new Loop("n", [
-				new Rotate("Math.PI*2/n"),
+				new Rotate("360/n"),
 				new Move("100/n")])])
 	}
 	
@@ -2700,9 +2700,9 @@ function manualTest() {
 		F_.setCommands([
 			new Loop(36, [
 				new Loop(4, [
-					new Rotate("Math.PI/2"),
+					new Rotate("90"),
 					new Move(20)]),
-				new Rotate("Math.PI/2/10")])])
+				new Rotate("10")])])
 	}
 	
 	// this is a performance bummer!
@@ -2715,17 +2715,17 @@ function manualTest() {
 				new Move("-size")],
 				[
 				new Move("size/3"),
-				new Rotate(-30/180*Math.PI),
+				new Rotate(-30),
 				new FuncCall(F_, {size: "size*2/3"}),
-				new Rotate(30/180*Math.PI),
+				new Rotate(30),
 				new Move("size/6"),
-				new Rotate(25/180*Math.PI),
+				new Rotate(25),
 				new FuncCall(F_, {size: "size/2"}),
-				new Rotate(-25/180*Math.PI),
+				new Rotate(-25),
 				new Move("size/3"),
-				new Rotate(25/180*Math.PI),
+				new Rotate(25),
 				new FuncCall(F_, {size: "size/2"}),
-				new Rotate(-25/180*Math.PI),
+				new Rotate(-25),
 				new Move("size/6"),
 				new Move("-size")
 			])
@@ -2739,15 +2739,15 @@ function manualTest() {
 		F_.setCommands([
 			new Branch("size>=1", [
 				new Move("size"),
-				new Rotate("70*sign/180*Math.PI"),
+				new Rotate("70*sign"),
 				new FuncCall(F_, {size: "size*0.5", sign: "-sign"}),
-				new Rotate("-70*sign/180*Math.PI"),
+				new Rotate("-70*sign"),
 				new Move("size"),
-				new Rotate("-70*sign/180*Math.PI"),
+				new Rotate("-70*sign"),
 				new FuncCall(F_, {size: "size*0.5", sign: "sign"}),
-				new Rotate("77*sign/180*Math.PI"),
+				new Rotate("77*sign"),
 				new FuncCall(F_, {size: "size-1", sign: "sign"}),
-				new Rotate("-7*sign/180*Math.PI"),
+				new Rotate("-7*sign"),
 				new Move("-2*size")
 			], [])
 		])
@@ -2757,7 +2757,7 @@ function manualTest() {
 		addNewFuncToUI("circle")
 		F_.setCommands([
 			new Loop(360, [
-				new Rotate("1/180*Math.PI"),
+				new Rotate("1"),
 				new Move(1),
 			])
 		])
@@ -2768,7 +2768,7 @@ function manualTest() {
 		F_.addArgument(10, "a")
 		F_.setCommands([
 			new Move("a"),
-			new Rotate("25/180*Math.PI"),
+			new Rotate("25"),
 			new Branch("a<40", [
 				new FuncCall(F_, {a: "a*1.02"})
 			], [])
@@ -2798,7 +2798,7 @@ function manualTest() {
 		F_.addArgument(5, "sz")
 		F_.setCommands([
 			new Loop("ne", [
-				new Rotate("Math.PI*2/ne"),
+				new Rotate("360/ne"),
 				new Move("sz")])])
 		
 		addNewFuncToUI("mnEck")
@@ -2806,7 +2806,7 @@ function manualTest() {
 		F_.addArgument(7, "sz")
 		F_.setCommands([
 			new Loop("ne", [
-				new Rotate("Math.PI*2/ne"),
+				new Rotate("360/ne"),
 				new FuncCall(nEck, {ne: "ne", sz: "sz"})
 			])
 		])
@@ -2951,8 +2951,8 @@ function automaticTest() {
 	
 	manipulation.finish(Move, function() { return 10 })
 	selection.add(mvP)
-	manipulation.createPreview(Rotate, function() { return 1 })
-	manipulation.finish(Rotate, function() { return 1 })
+	manipulation.createPreview(Rotate, function() { return 90 })
+	manipulation.finish(Rotate, function() { return 90 })
 	var rtP = F_.execCmds[0]
 	mvP = F_.execCmds[1]
 	selection.add(mvP)
@@ -2963,6 +2963,10 @@ function automaticTest() {
 	selection.add(mvP)
 	console.assert(selection.e.length === 2)
 	console.assert(selection.e[1] === mvP)
+	console.assert(rtP.evalMainParameter() === 90)
+	console.assert(rtP.mainParameter === undefined)
+	console.assert(rtP.root.mainParameter.isConst())
+	console.assert(rtP.root.mainParameter.isStatic())
 	keyPressed.shift = false
 	onKeyDown.l() // loop
 	console.assert(selection.e.length === 0)
