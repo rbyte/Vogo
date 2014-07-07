@@ -3,7 +3,6 @@ see also TODOs in code
 small features
 	### angles in degrees
 	indicateIfInsideAnySelectedCommandsScope on hover
-	pointer to hand for dragging canvas
 	improve function call look -> context menu for args
 	handling endless recursion by checking line-length or out of bounds
 	adjust existing line length by select + d
@@ -26,8 +25,6 @@ performance
 	round dom numbers
 
 big features
-	### hotkeys sidebar
-		a,b,l,r,d,new,export,svg
 	### automatic tests (adjust for testability)
 	new command: goto, go home, go to point in past, close path
 	constraint solving
@@ -52,7 +49,6 @@ bugs
 	rotate/move/loop with 0 is non-selectable/visible
 	svg output does not work (input tag error)
 	remove loops when empty (e.g. removed last inner command)
-	allow white spaces in variable definition "a = 3"
 	2 subsequent moves cannot be distinguished
 	chromium only (chrome works): the input fields inside foreign objects do not update
-	
+

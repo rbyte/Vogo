@@ -26,8 +26,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.98994949"
-     inkscape:cx="67.826155"
-     inkscape:cy="193.41703"
+     inkscape:cx="57.72463"
+     inkscape:cy="174.22413"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -56,7 +56,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -67,13 +67,14 @@
      transform="translate(-142.5838,-216.86331)">
     <g
        id="g3875"
-       transform="matrix(1.0797973,0,0,1.0797973,-18.752744,-31.231365)">
+       transform="matrix(1.0507801,0,0,1.0507801,-10.096923,-20.241833)"
+       style="stroke-width:28.55021712;stroke-miterlimit:4;stroke-dasharray:none">
       <path
          sodipodi:nodetypes="cc"
          inkscape:connector-curvature="0"
          id="path3861"
          d="m 180.42141,378.72467 235.75634,0"
-         style="fill:none;stroke:#000000;stroke-width:27.78299223;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none" />
+         style="fill:none;stroke:#464646;stroke-width:28.55021711999999923;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none" />
       <path
          transform="translate(197.13204,225.95468)"
          d="m 8.0812225,152.76999 c 0,12.74741 -10.3338153,23.08122 -23.0812225,23.08122 -12.747407,0 -23.081223,-10.33381 -23.081223,-23.08122 0,-12.74741 10.333816,-23.08122 23.081223,-23.08122 12.7474072,0 23.0812225,10.33381 23.0812225,23.08122 z"
@@ -82,7 +83,7 @@
          sodipodi:cy="152.76999"
          sodipodi:cx="-15"
          id="path3863"
-         style="color:#000000;fill:#484848;fill-opacity:1;stroke:none;stroke-width:30;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         style="color:#000000;fill:#646464;fill-opacity:1;stroke:none;stroke-width:28.55021711999999923;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate;stroke-miterlimit:4;stroke-dasharray:none"
          sodipodi:type="arc" />
       <use
          height="317.76999"
@@ -91,7 +92,8 @@
          id="use3873"
          xlink:href="#path3863"
          y="0"
-         x="0" />
+         x="0"
+         style="stroke-width:28.55021712;stroke-miterlimit:4;stroke-dasharray:none" />
     </g>
     <use
        x="0"

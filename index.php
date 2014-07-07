@@ -16,7 +16,7 @@
 	<div id="functions">
 		<ul id="ul_f"></ul>
 		<div class="centerDiv">
-			<button id="f_addNew">+</button>
+			<button id="f_addNew" title="Add new function">+</button>
 		</div>
 	</div>
 	<div id="borderL" class="border"></div>
@@ -27,13 +27,13 @@
 	<div id="borderR" class="border"></div>
 	<div id="toolbar">
 		<ul id="ul_toolbar">
-			<li key="d"><img src="images/Move.svg"></li>
-			<li key="r"><img src="images/Rotate.svg"></li>
-			<li key="l"><img src="images/Loop.svg"></li>
-			<li key="b"><img src="images/Branch.svg"></li>
-			<li key="a"><img src="images/Abstract.svg"></li>
-			<li key="e"><img src="images/Export.svg"></li>
-			<li key="s"><img src="images/Svg.svg"></li>
+			<li key="d" title="Draw straight line"><img src="images/Move.svg"></li>
+			<li key="r" title="Rotate/add angle"><img src="images/Rotate.svg"></li>
+			<li key="l" title="Loop/iterate current selection"><img src="images/Loop.svg"></li>
+			<li key="b" title="Branch/condition current selection"><img src="images/Branch.svg"></li>
+			<li key="a" title="Abstract/create new function parameter"><img src="images/Abstract.svg"></li>
+			<li key="e" title="Export to code"><img src="images/Export.svg"></li>
+			<li key="s" title="SVG output"><img src="images/Svg.svg"></li>
 		</ul>
 	</div>
 	

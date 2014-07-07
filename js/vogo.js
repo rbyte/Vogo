@@ -79,6 +79,7 @@ var functions = []
 var F_
 
 var functionPanelSizePercentOfBodyWidth = 0.15 /* also change in css */
+var toolbarPanelSizePercentOfBodyWidth = 0.07 /* also change in css */
 var lastNotificationUpdateTime
 var dragInProgress = false
 var lastRotateExecuted
@@ -213,9 +214,13 @@ function updateScreenElemsSize() {
 }
 
 function updatePanelSize() {
-	d3.select("#borderL").style("left", functionPanelSizePercentOfBodyWidth*100+"%", "important")
-	d3.select("#functions").style("width", functionPanelSizePercentOfBodyWidth*100+"%", "important")
-	d3.select("#turtleSVGcontainer").style("width", (1-functionPanelSizePercentOfBodyWidth)*100+"%", "important")
+	d3.select("#borderL").style("left", functionPanelSizePercentOfBodyWidth*100+"%")
+	d3.select("#functions").style("width", functionPanelSizePercentOfBodyWidth*100+"%")
+	d3.select("#borderR").style("right", toolbarPanelSizePercentOfBodyWidth*100+"%")
+	d3.select("#toolbar").style("width", toolbarPanelSizePercentOfBodyWidth*100+"%")
+	d3.select("#turtleSVGcontainer").style({
+		"right": toolbarPanelSizePercentOfBodyWidth*100+"%", 
+		"width": (1-functionPanelSizePercentOfBodyWidth-toolbarPanelSizePercentOfBodyWidth)*100+"%"})
 	window.onresize()
 }
 
@@ -235,23 +240,25 @@ function addKeysToToolbar() {
 	xhr.onreadystatechange = function() {
 		if (xhr.readyState === 4 && xhr.status === 200) {
 			var svgText = xhr.responseText
-			var toolbar = document.getElementById("ul_toolbar")
-			console.assert(toolbar.hasChildNodes())
-			var nodeList = toolbar.childNodes
-			for (var i=0; i<nodeList.length; i++) {
-				var node = nodeList[i] // this could be a whitespace text node
-				if (node.nodeType === 1 /* = element node*/) {
-//					console.log(node)
-					console.assert(node.hasAttribute("key"))
-					var key = node.getAttribute("key")
-//					node.setAttribute("onclick", "vogo.onKeyDown[this.getAttribute('key')]()")
-					node.onclick = onKeyDown[key]
-					var svgTextNew = svgText.replace(">A</tspan>", ">"+key+"</tspan>")
-//					console.log(svgTextNew)
-					var doc = new DOMParser().parseFromString(svgTextNew, "application/xml")
-					node.appendChild(node.ownerDocument.importNode(doc.documentElement, true))
-				}
-			}
+			// sadly, doing all this wrapping is necessary because chrome is too stupid to scale
+			// embedded svgs correctly according to its viewBox aspect ratio
+			// http://stackoverflow.com/questions/22015867/scale-embedded-svg-without-white-space-in-chrome
+			// the vertical white space would fill the page. in order to prevent this, the svg is boxed
+			// with a fixed aspect ratio set (1:1), as in the svg viewBox
+			d3.selectAll("#ul_toolbar li")
+				.append("div").classed("container-box", true)
+				.append("div").classed("aspect-box", true)
+				.append("div").classed("content-box", true)
+				.call(function() { // is called once
+					this[0].forEach(function(node) {
+						var li = node.parentNode.parentNode.parentNode
+						var key = li.getAttribute("key")
+						li.onclick = onKeyDown[key]
+						var svgTextNew = svgText.replace(">A</tspan>", ">"+key+"</tspan>")
+						var doc = new DOMParser().parseFromString(svgTextNew, "application/xml")
+						node.appendChild(node.ownerDocument.importNode(doc.documentElement, true))
+					})
+				})
 		}
 	}
 	xhr.open("GET", "images/keyStripped.svg")
@@ -263,11 +270,22 @@ function setupUIEventListeners() {
 		addNewFuncToUI()
 	})
 	
-	d3.select("#borderL").call(d3.behavior.drag()
+	d3.selectAll("#borderL, #borderR").call(d3.behavior.drag()
+		.on("dragstart", function (d) {
+			d3.selectAll("#functions, #turtleSVGcontainer, #toolbar").style({cursor: "col-resize"})
+		})
 		.on("drag", function (d) {
-			functionPanelSizePercentOfBodyWidth = Math.max(0.1, Math.min(0.4,
-				d3.event.x / document.body.clientWidth))
+			var id = d3.select(this).attr("id")
+			if (id === "borderL")
+				functionPanelSizePercentOfBodyWidth = Math.max(0.1, Math.min(0.4,
+					d3.event.x / document.body.clientWidth))
+			if (id === "borderR")
+				toolbarPanelSizePercentOfBodyWidth = Math.max(0.03, Math.min(0.18,
+					(1 - d3.event.x / document.body.clientWidth)))
 			updatePanelSize()
+		})
+		.on("dragend", function (d) {
+			d3.selectAll("#functions, #turtleSVGcontainer, #toolbar").style({cursor: null /*remove style prop*/})
 		})
 	)
 	
@@ -371,6 +389,7 @@ function State() {
 }
 
 State.prototype.addRadius = function(rr) {
+	
 	if (rr > Math.PI || rr < -Math.PI)
 		console.log("Warning: addRadius: rr out of [-Pi, Pi]")
 	this.r += rr
@@ -515,6 +534,18 @@ function addNewFuncToUI(name) {
 	return f
 }
 
+function removeFunction(self) {
+	// TODO dependency check
+	if (functions.length > 1) {
+		if (self === undefined)
+			F_.remove()
+		else
+			self.remove()
+	} else {
+		updateNotification("There has to be at least one function.")
+	}
+}
+
 function exportAll() {
 	var fDep = determineFuncDependencies()
 	var fProcessed = {}
@@ -636,9 +667,14 @@ function insertCmdRespectingSelection(cmd) {
 	return stateAtInsertionPoint
 }
 
-onKeyDown.n = function() {
+onKeyDown["+"] = function() {
 	if (bodyIsSelected())
 		addNewFuncToUI()
+}
+
+onKeyDown["-"] = function() {
+	if (bodyIsSelected())
+		removeFunction(F_)
 }
 
 onKeyDown.d = function() {
@@ -1384,12 +1420,7 @@ Func.prototype.initUI = function() {
 	titleRow.append("div").attr("class", "titleRowCell")
 		.append("button").attr("class", "f_remove").text("x")
 		.on("click", function() {
-			// TODO dependency check
-			if (functions.length > 1) {
-				self.remove()
-			} else {
-				updateNotification("There has to be at least one function.")
-			}
+			removeFunction(self)
 		})
 	self.ul_args = self.li_f.append("ul").attr("class", "ul_args")
 	
@@ -1575,7 +1606,7 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 			inputField.remove()
 			delete self.args[argName]
 		}
-		var regEx = /^([a-zA-Z][a-zA-Z0-9]*)=(.+)$/
+		var regEx = /^([a-zA-Z][a-zA-Z0-9]*) *= *(.+)$/
 		var match = regEx.exec(value)
 		if (match !== null) { // match success
 			var newArgName = match[1]
@@ -1589,7 +1620,7 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 			self.args[argName].set(newValue)
 			run()
 		} else {
-			// restore field
+			// TODO restore field
 		}
 	}
 	
