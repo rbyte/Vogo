@@ -41,6 +41,7 @@ var scopeDepthLimit = 6 // for endless loops and recursion
 var defaultSvgViewboxHeight = 70
 var domSvg
 var pi = Math.PI // for use in UI
+var radiusInDegrees = true
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
@@ -388,11 +389,8 @@ function State() {
 	this.reset()
 }
 
-State.prototype.addRadius = function(rr) {
-	
-	if (rr > Math.PI || rr < -Math.PI)
-		console.log("Warning: addRadius: rr out of [-Pi, Pi]")
-	this.r += rr
+State.prototype.addRadius = function(angle) {
+	this.r += angle
 	this.r = correctRadius(this.r)
 }
 
@@ -413,7 +411,11 @@ State.prototype.clone = function() {
 
 
 function fromMousePosToRotateAngleFUNC(mx, my) {
-	return function() { return parseFloat(rotateAngleTo(mx, my).toFixed(3)) }
+	return function() { return angleToString(rotateAngleTo(mx, my)) }
+}
+
+function angleToString(angle) {
+	return parseFloat(convertToDegrees(angle).toFixed(radiusInDegrees ? 1 : 3 /*decimal places*/))
 }
 
 function fromMousePosToLineLengthWithoutChangingDirectionFUNC(mx, my) {
@@ -665,6 +667,14 @@ function insertCmdRespectingSelection(cmd) {
 		cmdsRef.splice(cmdSelIdx, 0, cmd)
 	}
 	return stateAtInsertionPoint
+}
+
+function convertToRadian(angle) {
+	return radiusInDegrees && isRegularNumber(angle) ? angle/180*Math.PI : angle
+}
+
+function convertToDegrees(angle) {
+	return radiusInDegrees && isRegularNumber(angle) ? angle/Math.PI *180: angle
 }
 
 onKeyDown["+"] = function() {
@@ -1005,7 +1015,7 @@ Expression.prototype.adjustDragstart = function(element, dragPrecision) {
 	}
 }
 
-Expression.prototype.adjustDrag = function(element, prefix) {
+Expression.prototype.adjustDrag = function(element, prefix, alterElementValueFunc) {
 	var self = this
 	console.assert(element instanceof HTMLInputElement)
 	if (self.isConst()) {
@@ -1023,7 +1033,8 @@ Expression.prototype.adjustDrag = function(element, prefix) {
 		var newValue = parseFloat((self.originalValue+mouseDiff).toFixed(Math.max(0, -self.dragPrecision)))
 		if (self.eval(/*const!*/) !== newValue) {
 			self.set(newValue)
-			element.value = (prefix !== undefined ? prefix : "") + newValue
+			element.value = (prefix !== undefined ? prefix : "")
+				+ (alterElementValueFunc !== undefined ? alterElementValueFunc(newValue) : newValue)
 			run()
 		}
 	}
@@ -1936,7 +1947,7 @@ Rotate.prototype.clone = function(scope) {
 Rotate.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
-	var angle = correctRadius(self.evalMainParameter())
+	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
 	var dragStartState
 	
 	var arc = d3.svg.arc()
@@ -1952,15 +1963,15 @@ Rotate.prototype.execInner = function(callerF) {
 	
 	if (self.arc === undefined && drawIcons) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
-			.on("mouseenter", function (d, i) {
+			.on("mouseenter", function(d, i) {
 				if (!dragInProgress && !manipulation.isCreating(Rotate))
 					self.arc.style({fill: "#f00"})
 			})
-			.on("mouseleave", function (d, i) {
+			.on("mouseleave", function(d, i) {
 				// TODO self.arc is sometimes undefined
 				self.arc.style(arcStyle)
 			})
-			.on("click", function (d, i) {
+			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
 					selection.add(self)
 					// to prevent click on background
@@ -1968,7 +1979,7 @@ Rotate.prototype.execInner = function(callerF) {
 				}
 			})
 			.call(d3.behavior.drag()
-				.on("dragstart", function (d) {
+				.on("dragstart", function(d) {
 					dragInProgress = true
 					mainSVG.svg.style({cursor: "move"})
 					dragStartState = self.savedState.clone()
@@ -1976,16 +1987,16 @@ Rotate.prototype.execInner = function(callerF) {
 					// to prevent drag on background
 					d3.event.sourceEvent.stopPropagation()
 				})
-				.on("drag", function (d) {
+				.on("drag", function(d) {
 					var x = d3.event.x
 					var y = d3.event.y
 					var dx = x-dragStartState.x
 					var dy = y-dragStartState.y
 					var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
-					self.setMainParameter(parseFloat(angleDelta.toFixed(3)))
+					self.setMainParameter(angleToString(angleDelta))
 					run()
 				})
-				.on("dragend", function (d) {
+				.on("dragend", function(d) {
 					dragInProgress = false
 					mainSVG.svg.style({cursor: "default"})
 					d3.select(this).classed("dragging", false)
