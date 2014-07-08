@@ -31,6 +31,7 @@ var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
 var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
 var fcTextStyle = {cursor: "pointer"}
+var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity": 1, "fill-opacity": 0}
 
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
@@ -99,24 +100,33 @@ var selection = {
 			this.removeAndDeselectAll()
 			this.e.push(x)
 			x.select(true)
-		} else { // accumulate multiple
-			if (this.contains(x)) {
-				this.removeAndDeselect(x)
-			} else {
-				this.e.push(x)
-				x.select(true)
-			}
+		} else {
+			this.addAccumulate(x)
 		}
-		run()
+	},
+	addAccumulate: function(x) {
+		console.assert(x.root !== x) // only proxies can be selected
+		if (this.contains(x)) {
+			this.removeAndDeselect(x)
+		} else {
+			// do not allow selection of multiple with same root
+			if (this.containsAsRoot(x))
+				this.removeAndDeselect(this.e[this.indexOfSelectedProxyOf(x)])
+			this.e.push(x)
+			x.select(true)
+		}
 	},
 	contains: function(x) {
 		return this.e.indexOf(x) !== -1
 	},
-	containsAsRoot: function(x) {
+	indexOfSelectedProxyOf: function(x) {
 		for (var i=0; i<this.e.length; i++)
 			if (this.e[i].root === x.root)
-				return true
-		return false
+				return i
+		return -1
+	},
+	containsAsRoot: function(x) {
+		return this.indexOfSelectedProxyOf(x) !== -1
 	},
 	removeAndDeselect: function(x) {
 		if (this.contains(x))
@@ -323,62 +333,110 @@ function setupUIEventListeners() {
 	document.body.onmousedown = function(evt) { switchMouseButton(evt, true) }
 	document.body.onmouseup = function(evt) { switchMouseButton(evt, false) }
 	
-	mainSVG.svg.call(d3.behavior.drag()
-		.on("dragstart", function (d) {
-			// mousePressed.middle press it not yet registered here
+	var dragStart
+	var selectionRect
+	
+	mainSVG.svg
+		.on("mousemove", function (d, i) {
+			mousePos = d3.mouse(this)
+			if (manipulation.isCreating(Move))
+				manipulation.update(Move, fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1]))
+			if (manipulation.isCreating(Rotate))
+				manipulation.update(Rotate, fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1]))
 		})
-		.on("drag", function (d) {
-			if (mousePressed.middle) {
-				if (!dragInProgress)
-					mainSVG.svg.style({cursor: "move"})
-				dragInProgress = true
-				F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/mainSVG.svgWidth)
-				F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/mainSVG.svgHeight)
-				F_.updateViewbox()
-				mainSVG.updateViewbox()
-			}
-		})
-		.on("dragend", function (d) {
-			dragInProgress = false
-			// mousePressed.middle is already released here
-			mainSVG.svg.style({cursor: "default"})
+		.on("click", function (d, i) {
 			// prevent click triggered after dragend
-			d3.event.sourceEvent.stopPropagation()
+			if (d3.event.defaultPrevented)
+				return
+			mousePos = d3.mouse(this)
+			if (manipulation.isCreating(Move)) {
+				var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
+				if (keyPressed.d) {
+					manipulation.create(Move, newLineLengthFUNC)
+				} else {
+					manipulation.finish(Move, newLineLengthFUNC)
+				}
+			} else if (manipulation.isCreating(Rotate)) {
+				var newRotateAngleFUNC = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
+				if (keyPressed.r) {
+					manipulation.create(Rotate, newRotateAngleFUNC)
+				} else {
+					manipulation.finish(Rotate, newRotateAngleFUNC)
+				}
+			} else {
+				if (!selection.isEmpty()) {
+					selection.removeAndDeselectAll()
+					run()
+				}
+			}
 		})
-		
-	)
-	
-	mainSVG.svg.on("mousemove", function (d, i) {
-		mousePos = d3.mouse(this)
-		if (manipulation.isCreating(Move))
-			manipulation.update(Move, fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1]))
-		if (manipulation.isCreating(Rotate))
-			manipulation.update(Rotate, fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1]))
-    })
-	
-	mainSVG.svg.on("click", function (d, i) {
-		mousePos = d3.mouse(this)
-		if (manipulation.isCreating(Move)) {
-			var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
-			if (keyPressed.d) {
-				manipulation.create(Move, newLineLengthFUNC)
-			} else {
-				manipulation.finish(Move, newLineLengthFUNC)
-			}
-		} else if (manipulation.isCreating(Rotate)) {
-			var newRotateAngleFUNC = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
-			if (keyPressed.r) {
-				manipulation.create(Rotate, newRotateAngleFUNC)
-			} else {
-				manipulation.finish(Rotate, newRotateAngleFUNC)
-			}
-		} else {
-			if (!selection.isEmpty()) {
-				selection.removeAndDeselectAll()
-				run()
-			}
-		}
-    })
+		.call(d3.behavior.drag()
+			.on("dragstart", function (d) {
+				dragStart = mousePos
+				// mousePressed.middle press it not yet registered here
+			})
+			.on("drag", function (d) {
+				if (mousePressed.middle) {
+					if (!dragInProgress)
+						mainSVG.svg.style({cursor: "move"})
+					dragInProgress = true
+					F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/mainSVG.svgWidth)
+					F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/mainSVG.svgHeight)
+					F_.updateViewbox()
+					mainSVG.updateViewbox()
+				} else {
+					if (!dragInProgress) {
+						selectionRect = mainSVG.paintingG.append("rect")
+							.attr("x", dragStart[0])
+							.attr("y", dragStart[1])
+							.attr("width", 0)
+							.attr("height", 0)
+							.style(selectionRectStyle)
+					}
+					dragInProgress = true
+					var w = mousePos[0]-dragStart[0]
+					var h = mousePos[1]-dragStart[1]
+					selectionRect // rect is not displayed if w || h < 0
+						.attr("width", Math.abs(w))
+						.attr("height", Math.abs(h))
+						.attr("x", w < 0 ? dragStart[0]+w : dragStart[0])
+						.attr("y", h < 0 ? dragStart[1]+h : dragStart[1])
+				}
+			})
+			.on("dragend", function (d) {
+				// mousePressed.middle is already released here
+				if (dragInProgress) {
+					dragInProgress = false
+					mainSVG.svg.style({cursor: null})
+					if (selectionRect !== undefined) {
+						var x = parseFloat(selectionRect.attr("x"))
+						var y = parseFloat(selectionRect.attr("y"))
+						var w = parseFloat(selectionRect.attr("width"))
+						var h = parseFloat(selectionRect.attr("height"))
+						var list = resolveSelectionRect(F_, [], x, y, w, h)
+						if (!keyPressed.shift)
+							selection.removeAndDeselectAll()
+						/* Inkscapes Shift-Selection works differently: if the
+						 * rect-selection contains elements already selected,
+						 * those are not deselected, but vogo does so. I think
+						 * this behaviour is more consistent, but may be
+						 * unexpected.
+						 * 
+						 * Also, adding multiple with the same root will let
+						 * the last added proxy to be the lucky one.
+						 **/
+						list.forEach(function(le) {
+							selection.addAccumulate(le)
+						})
+						selectionRect.remove()
+						selectionRect = undefined
+						run()
+					}
+				}
+				// prevent click triggered after dragend
+				d3.event.sourceEvent.stopPropagation()
+			})
+		)
 	
 	d3.select("body")
 		.on("keydown", function() { updateKeyDownAndUp(d3.event.keyCode, true) })
@@ -675,6 +733,31 @@ function convertToRadian(angle) {
 
 function convertToDegrees(angle) {
 	return radiusInDegrees && isRegularNumber(angle) ? angle/Math.PI *180: angle
+}
+
+function resolveSelectionRect(e, selectionList, x, y, w, h) {
+	var allIn = true
+	if (e.canContainCommands()) {
+		var tempList = []
+		e.execCmds.forEach(function(c) {
+			var list = resolveSelectionRect(c, [], x, y, w, h)
+			list.forEach(function(le) { tempList.push(le) })
+			allIn &= list.length === 1 && list[0] === c
+		})
+		if (!allIn || e === F_)
+			tempList.forEach(function(le) { selectionList.push(le) })
+	} else {
+		if (e.getPointsRequiredForSelection !== undefined) {
+			e.getPointsRequiredForSelection().forEach(function(p) {
+				allIn = allIn && x <= p[0] && p[0] <= x+w
+				allIn = allIn && y <= p[1] && p[1] <= y+h
+			})
+		}
+	}
+	if (allIn && e !== F_)
+		selectionList.push(e)
+//	console.log(selectionList)
+	return selectionList
 }
 
 onKeyDown["+"] = function() {
@@ -1824,6 +1907,7 @@ Move.prototype.execInner = function(callerF) {
 				} else {
 					selection.add(self)
 				}
+				run()
 				// to prevent click on background
 				d3.event.stopPropagation()
 			}
@@ -1928,6 +2012,12 @@ Move.prototype.getVisibleElements = function() {
 	return ["line"]
 }
 
+Move.prototype.getPointsRequiredForSelection = function() {
+	var self = this
+	return [[parseFloat(self.line.attr("x1")), parseFloat(self.line.attr("y1"))]
+		,[parseFloat(self.line.attr("x2")), parseFloat(self.line.attr("y2"))]]
+}
+
 function Rotate(angle) {
 	var self = this
 	self.commonCommandConstructor()
@@ -1974,6 +2064,7 @@ Rotate.prototype.execInner = function(callerF) {
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
 					selection.add(self)
+					run()
 					// to prevent click on background
 					d3.event.stopPropagation()
 				}
@@ -2094,6 +2185,12 @@ Rotate.prototype.getVisibleElements = function() {
 	return []
 }
 
+Rotate.prototype.getPointsRequiredForSelection = function() {
+	var self = this
+	return [[self.savedState.x, self.savedState.y]]
+}
+
+
 
 function Loop(numberOfRepetitions, commands) {
 	var self = this
@@ -2175,6 +2272,7 @@ Loop.prototype.execInner = function(callerF) {
 		iconG.on("click", function () {
 			if (!manipulation.isCreating()) {
 				selection.add(self)
+				run()
 				// to prevent click on background
 				d3.event.stopPropagation()
 			}
@@ -2342,6 +2440,7 @@ FuncCall.prototype.execInner = function(callerF) {
 			.style(fcTextStyle)
 			.on("click", function() {
 				selection.add(self)
+				run()
 				d3.event.stopPropagation()
 			})
 		self.icon.argUl = self.icon.body.append("xhtml:ul")
@@ -2559,6 +2658,7 @@ Branch.prototype.execInner = function(callerF) {
 			.on("click", function() {
 				if (!manipulation.isCreating()) {
 					selection.add(self)
+					run()
 					d3.event.stopPropagation()
 				}
 			})
@@ -2908,7 +3008,7 @@ saege 25 15
 }
 
 function automaticTest() {
-	if (true)
+	if (false)
 		return
 	
 	console.assert(F_.commands.length === 0)
@@ -2951,12 +3051,14 @@ function automaticTest() {
 	
 	manipulation.finish(Move, function() { return 10 })
 	selection.add(mvP)
+	run()
 	manipulation.createPreview(Rotate, function() { return 90 })
 	manipulation.finish(Rotate, function() { return 90 })
 	var rtP = F_.execCmds[0]
 	mvP = F_.execCmds[1]
 	selection.add(mvP)
 	selection.add(rtP) // previous is deselected without pressed shift
+	run()
 	console.assert(selection.e.length === 1)
 	console.assert(selection.e[0] === rtP)
 	keyPressed.shift = true
@@ -3005,6 +3107,8 @@ function automaticTest() {
 	selection.add(fcP)
 	// triggers bug in removeVisibleElements
 	selection.removeDeselectAndDeleteAllCompletely()
+	removeFunction(prevF)
+	
 	run()
 	
 	
