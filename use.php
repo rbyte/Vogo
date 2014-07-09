@@ -35,7 +35,7 @@ var α = new vogo.Func("α", {"a": 106, "n": 7});
 α.setCommands([
 	new vogo.Loop("n", [
 			new vogo.Move("a/n"),
-			new vogo.Rotate("Math.PI*2/n")])]);
+			new vogo.Rotate("360/n")])]);
 
 var δ = new vogo.Func("δ", {"a": 10, "b": -0.7, "c": 0.7});
 δ.setCommands([

@@ -81,7 +81,7 @@ var functions = []
 var F_
 
 var functionPanelSizePercentOfBodyWidth = 0.15 /* also change in css */
-var toolbarPanelSizePercentOfBodyWidth = 0.07 /* also change in css */
+var toolbarPanelSizePercentOfBodyWidth = 0.05 /* also change in css */
 var lastNotificationUpdateTime
 var dragInProgress = false
 var lastRotateExecuted
@@ -340,9 +340,9 @@ function setupUIEventListeners() {
 		.on("mousemove", function (d, i) {
 			mousePos = d3.mouse(this)
 			if (manipulation.isCreating(Move))
-				manipulation.update(Move, fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1]))
+				manipulation.update(Move)
 			if (manipulation.isCreating(Rotate))
-				manipulation.update(Rotate, fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1]))
+				manipulation.update(Rotate)
 		})
 		.on("click", function (d, i) {
 			// prevent click triggered after dragend
@@ -350,18 +350,16 @@ function setupUIEventListeners() {
 				return
 			mousePos = d3.mouse(this)
 			if (manipulation.isCreating(Move)) {
-				var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
 				if (keyPressed.d) {
-					manipulation.create(Move, newLineLengthFUNC)
+					manipulation.create(Move)
 				} else {
-					manipulation.finish(Move, newLineLengthFUNC)
+					manipulation.finish(Move)
 				}
 			} else if (manipulation.isCreating(Rotate)) {
-				var newRotateAngleFUNC = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
 				if (keyPressed.r) {
-					manipulation.create(Rotate, newRotateAngleFUNC)
+					manipulation.create(Rotate)
 				} else {
-					manipulation.finish(Rotate, newRotateAngleFUNC)
+					manipulation.finish(Rotate)
 				}
 			} else {
 				if (!selection.isEmpty()) {
@@ -468,35 +466,39 @@ State.prototype.clone = function() {
 }
 
 
-function fromMousePosToRotateAngleFUNC(mx, my) {
-	return function() { return angleToString(rotateAngleTo(mx, my)) }
+function fromMousePosToRotateAngle(mx, my, state) {
+	return angleToString(rotateAngleTo(mx, my, state))
 }
 
 function angleToString(angle) {
 	return parseFloat(convertToDegrees(angle).toFixed(radiusInDegrees ? 1 : 3 /*decimal places*/))
 }
 
-function fromMousePosToLineLengthWithoutChangingDirectionFUNC(mx, my) {
-	return function() { return parseFloat(getLineLengthToWithoutChangingDirection(mx, my).toFixed(2)) }
+function fromMousePosToLineLengthWithoutChangingDirection(mx, my, state) {
+	return parseFloat(getLineLengthToWithoutChangingDirection(mx, my, state).toFixed(2))
 }
 
-function rotateAngleTo(x, y) {
-	return getAngleDeltaTo(x - F_.state.x, y - F_.state.y)
+function rotateAngleTo(x, y, state) {
+	if (state === undefined)
+		state = F_.state
+	return getAngleDeltaTo(x - state.x, y - state.y, state.r)
 }
 
 function getAngleDeltaTo(dx, dy, r) {
-	return correctRadius(Math.atan2(dy, dx) + Math.PI/2 - (r === undefined ? F_.state.r : r))
+	return correctRadius(Math.atan2(dy, dx) + Math.PI/2 - r)
 }
 
-function getLineLengthTo(x, y) {
-	var dx = x - F_.state.x
-	var dy = y - F_.state.y
+function getLineLengthTo(x, y, state) {
+	if (state === undefined)
+		state = F_.state
+	var dx = x - state.x
+	var dy = y - state.y
 	return Math.sqrt(dx*dx + dy*dy)
 }
 
-function getLineLengthToWithoutChangingDirection(x, y) {
-	var ra = rotateAngleTo(x, y)
-	return (ra > Math.PI/2 || ra < Math.PI/2 ? 1 : -1) * Math.cos(ra) * getLineLengthTo(x, y)
+function getLineLengthToWithoutChangingDirection(x, y, state) {
+	var ra = rotateAngleTo(x, y, state)
+	return (ra > Math.PI/2 || ra < Math.PI/2 ? 1 : -1) * Math.cos(ra) * getLineLengthTo(x, y, state)
 }
 
 function correctRadius(r) {
@@ -772,26 +774,22 @@ onKeyDown["-"] = function() {
 
 onKeyDown.d = function() {
 	if (bodyIsSelected()) {
-		var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
 		if (!manipulation.isCreating()) {
-			manipulation.createPreview(Move, newLineLengthFUNC)
+			manipulation.createPreview(Move)
 		} else if (manipulation.isCreating(Rotate)) {
-			var newRotateAngle = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
-			manipulation.finish(Rotate, newRotateAngle)
-			manipulation.createPreview(Move, newLineLengthFUNC)
+			manipulation.finish(Rotate)
+			manipulation.createPreview(Move)
 		}
 	}
 }
 
 onKeyDown.r = function() {
 	if (bodyIsSelected()) {
-		var newRotateAngleFUNC = fromMousePosToRotateAngleFUNC(mousePos[0], mousePos[1])
 		if (!manipulation.isCreating()) {
-			manipulation.createPreview(Rotate, newRotateAngleFUNC)
+			manipulation.createPreview(Rotate)
 		} else if (manipulation.isCreating(Move)) {
-			var newLineLengthFUNC = fromMousePosToLineLengthWithoutChangingDirectionFUNC(mousePos[0], mousePos[1])
-			manipulation.finish(Move, newLineLengthFUNC)
-			manipulation.createPreview(Rotate, newRotateAngleFUNC)
+			manipulation.finish(Move)
+			manipulation.createPreview(Rotate)
 		}
 	}
 }
@@ -1098,7 +1096,7 @@ Expression.prototype.adjustDragstart = function(element, dragPrecision) {
 	}
 }
 
-Expression.prototype.adjustDrag = function(element, prefix, alterElementValueFunc) {
+Expression.prototype.adjustDrag = function(element, alterElementValueFunc) {
 	var self = this
 	console.assert(element instanceof HTMLInputElement)
 	if (self.isConst()) {
@@ -1109,15 +1107,14 @@ Expression.prototype.adjustDrag = function(element, prefix, alterElementValueFun
 		// 20.01 will only change slightly, whereas 100 will change rapidly
 		mouseDiff *= .6 /*feels good value*/ * Math.pow(10, self.dragPrecision)
 		// small Bug: the order of magnitude changes unexpectedly in the next drag,
-		// if the value is left of ending with .xy0, because the 0 is forgotten
+		// when the value is left of ending with .xy0, because the 0 is forgotten
 		mouseDiff = parseFloat(mouseDiff.toFixed(Math.max(0, -self.dragPrecision)))
 		// yes, we need to do the rounding twice: mouseDiff, to reduce reruns
 		// and newValue to get the precision right (+ can reintroduce rounding errors)
 		var newValue = parseFloat((self.originalValue+mouseDiff).toFixed(Math.max(0, -self.dragPrecision)))
 		if (self.eval(/*const!*/) !== newValue) {
 			self.set(newValue)
-			element.value = (prefix !== undefined ? prefix : "")
-				+ (alterElementValueFunc !== undefined ? alterElementValueFunc(newValue) : newValue)
+			element.value = (alterElementValueFunc !== undefined ? alterElementValueFunc(newValue) : newValue)
 			run()
 		}
 	}
@@ -1134,40 +1131,45 @@ manipulation.isCreating = function(cmdType) {
 		: this.insertedCommand instanceof cmdType
 }
 
-manipulation.create = function(cmdType, newMainParameterFUNC) {
+manipulation.create = function(cmdType, newMainParameter) {
 	if (this.isCreating(cmdType)) {
-		this.finish(cmdType, newMainParameterFUNC)
-		this.createPreview(cmdType, newMainParameterFUNC)
+		this.finish(cmdType, newMainParameter)
+		this.createPreview(cmdType, newMainParameter)
 	} else {
-		this.createPreview(cmdType, newMainParameterFUNC)
-		this.finish(cmdType, newMainParameterFUNC)
+		this.createPreview(cmdType, newMainParameter)
+		this.finish(cmdType, newMainParameter)
 	}
 }
 
-manipulation.createPreview = function(cmdType, newMainParameterFUNC) {
+manipulation.createPreview = function(cmdType, newMainParameter) {
 	console.assert(!this.isCreating(cmdType))
 	this.insertedCommand = new cmdType()
 	this.savedState = insertCmdRespectingSelection(this.insertedCommand)
-	this.update(cmdType, newMainParameterFUNC)
+	this.update(cmdType, newMainParameter)
 }
 
-manipulation.update = function(cmdType, newMainParameterFUNC) {
-	if (this.isCreating(cmdType)) {
-		F_.state = this.savedState.clone()
-		// the new main parameter has to be calculated AFTER the state is reset
-		this.insertedCommand.setMainParameter(newMainParameterFUNC()/*calc here*/)
+manipulation.update = function(cmdType, newMainParameter) {
+	var self = this
+	if (self.isCreating(cmdType)) {
+		if (newMainParameter === undefined) {
+			if (cmdType === Move)
+				newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], self.savedState)
+			if (cmdType === Rotate)
+				newMainParameter = fromMousePosToRotateAngle(mousePos[0], mousePos[1], self.savedState)
+		}
+		self.insertedCommand.setMainParameter(newMainParameter)
 		run()
 	} else {
 		// this happens when update is called before draw, when body is not selected
 		// because update is called, but key press is supressed
-		this.createPreview(cmdType, newMainParameterFUNC)
+		self.createPreview(cmdType, newMainParameter)
 		console.log("manipulation.update: warning: no preview exists yet")
 	}
 }
 
-manipulation.finish = function(cmdType, newMainParameterFUNC) {
+manipulation.finish = function(cmdType, newMainParameter) {
 	console.assert(this.isCreating(cmdType))
-	this.update(cmdType, newMainParameterFUNC)
+	this.update(cmdType, newMainParameter)
 	var ic = this.insertedCommand
 	this.insertedCommand = false
 	updateLabelVisibility(ic)
@@ -1738,7 +1740,7 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 				self.args[argName].adjustDragstart(this)
 			})
 			.on("drag", function (d) {
-				self.args[argName].adjustDrag(this, argName+"=")
+				self.args[argName].adjustDrag(this, function(v) { return argName+"="+v } )
 			})
 			.on("dragend", function (d) {
 				
@@ -1878,6 +1880,7 @@ Move.prototype.execInner = function(callerF) {
 		// be aware of the fact that lastRotateExecuted may not be the last command executed or even be in the same function
 		var match = /^(translate\([^\)]*\))/.exec(lastRotateExecuted.arc.attr("transform"))
 		console.assert(match !== null)
+		lastRotateExecuted.radiusScaleFactorCalculated = lastRotateScaleFactorCalculated
 		lastRotateExecuted.arc.attr("transform", match[1]+" scale("+lastRotateScaleFactorCalculated+")")
 		// to avoid readjusting angle if (e.g.) two moves are in a row
 		lastRotateExecuted = undefined
@@ -1900,18 +1903,34 @@ Move.prototype.execInner = function(callerF) {
 		&& !isInsideFuncCall
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
-		self.lineMainSVG.on("click", function(d, i) {
-			if (!manipulation.isCreating()) {
-				if (isInsideFuncCall) {
-					selection.add(self.getInnermostFuncCallOrFunc())
-				} else {
-					selection.add(self)
+		self.lineMainSVG
+			.on("click", function(d, i) {
+				if (!manipulation.isCreating()) {
+					if (isInsideFuncCall) {
+						selection.add(self.getInnermostFuncCallOrFunc())
+					} else {
+						selection.add(self)
+					}
+					run()
+					// to prevent click on background
+					d3.event.stopPropagation()
 				}
-				run()
-				// to prevent click on background
-				d3.event.stopPropagation()
-			}
-		})
+			})
+			.call(d3.behavior.drag()
+				.on("dragstart", function (d) {
+					console.log("dragstart on line")
+					d3.event.sourceEvent.stopPropagation()
+				})
+				.on("drag", function (d) {
+					self.setMainParameter(fromMousePosToLineLengthWithoutChangingDirection(
+						mousePos[0], mousePos[1], self.savedState))
+					run()
+				})
+				.on("dragend", function (d) {
+					
+					d3.event.sourceEvent.stopPropagation()
+				})
+			)
 	}
 	
 	
@@ -2024,6 +2043,7 @@ function Rotate(angle) {
 	self.setMainParameter(angle)
 	self.arc
 	self.label
+	self.radiusScaleFactorCalculated
 }
 Rotate.prototype = new Command(Rotate)
 
@@ -2032,6 +2052,16 @@ Rotate.prototype.clone = function(scope) {
 	var r = new Rotate(this.mainParameter.get())
 	r.scope = scope
 	return r
+}
+
+Rotate.prototype.addDegreeSymbol = function(v) { return v+"°"}
+
+Rotate.prototype.afterInputFieldUpdate = function(v) {
+	var self = this
+	if (v.charAt(v.length-1) === "°")
+		v = v.substr(0, v.length-1)
+	self.setMainParameter(v)
+	run()
 }
 
 Rotate.prototype.execInner = function(callerF) {
@@ -2107,13 +2137,11 @@ Rotate.prototype.execInner = function(callerF) {
 			.append("xhtml:input")
 			.attr("type", "text")
 			.on("blur", function() {
-				self.setMainParameter(this.value)
-				run()
+				self.afterInputFieldUpdate(this.value)
 			})
 			.on("keypress", function() {
 				if (d3.event.keyCode === /*enter*/ 13) {
-					self.setMainParameter(this.value)
-					run()
+					self.afterInputFieldUpdate(this.value)
 				}
 			})
 			.on("input", function() {
@@ -2139,13 +2167,16 @@ Rotate.prototype.execInner = function(callerF) {
 		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
 		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 - 1 // vertical alignment
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
-		setTextOfInput(self.labelInput, self.label, root.mainParameter.get())
-			//+"="+Math.round(angle/Math.PI*180)+"°"
+		var text = root.mainParameter.isConst()
+			? self.addDegreeSymbol(root.mainParameter.get())
+			: root.mainParameter.get()
+		setTextOfInput(self.labelInput, self.label, text)
 	}
 	if (drawIcons) {
 		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
 				+(lastRotateScaleFactorCalculated ? " scale("+lastRotateScaleFactorCalculated+")" : ""))
+			.attr("title", self.addDegreeSymbol(angleToString(angle)))
 		self.indicateIfInsideAnySelectedCommandsScope()
 		lastRotateExecuted = self
 	}
@@ -2187,7 +2218,15 @@ Rotate.prototype.getVisibleElements = function() {
 
 Rotate.prototype.getPointsRequiredForSelection = function() {
 	var self = this
-	return [[self.savedState.x, self.savedState.y]]
+	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
+	// the actual rotationArcRadius may be smalled due to scaling
+	var radius = rotationArcRadius * (self.radiusScaleFactorCalculated !== undefined ? self.radiusScaleFactorCalculated : 1)
+	// the 3 corners that the rotate arc spans
+	return [[self.savedState.x, self.savedState.y],
+		[self.savedState.x + Math.sin(self.savedState.r) * radius,
+		self.savedState.y - Math.cos(self.savedState.r) * radius],
+		[self.savedState.x + Math.sin(correctRadius(self.savedState.r + angle)) * radius,
+		self.savedState.y - Math.cos(correctRadius(self.savedState.r + angle)) * radius]]
 }
 
 
@@ -2296,7 +2335,7 @@ Loop.prototype.execInner = function(callerF) {
 			.attr("d", arc)
 		iconG.circleF
 			.attr("r", loopClockRadiusUsed)
-			
+			.attr("title", (i+1)+"/"+numberOfRepetitions)
 	}
 	
 	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length
@@ -2393,6 +2432,7 @@ function FuncCall(func, args) {
 	self.commonCommandConstructor()
 	// normally, I would use setMainParameter(func), but func is currently not an Expression and not editable
 	// func may be undefined if it is a shallowClone
+	// TODO allow func to be a string then resolve it to a function
 	self.f = func
 	self.customArguments = {}
 	self.cachedArguments = {}
@@ -3013,7 +3053,7 @@ function automaticTest() {
 	
 	console.assert(F_.commands.length === 0)
 	
-	manipulation.createPreview(Move, function() { return 10 })
+	manipulation.createPreview(Move, 10)
 	console.assert(F_.execCmds.length === 1)
 	console.assert(F_.commands.length === 1)
 	console.assert(F_.canContainCommands())
@@ -3049,11 +3089,11 @@ function automaticTest() {
 	console.assert(F_.state.y === -10)
 	console.assert(F_.state.r === 0)
 	
-	manipulation.finish(Move, function() { return 10 })
+	manipulation.finish(Move, 10)
 	selection.add(mvP)
 	run()
-	manipulation.createPreview(Rotate, function() { return 90 })
-	manipulation.finish(Rotate, function() { return 90 })
+	manipulation.createPreview(Rotate, 90)
+	manipulation.finish(Rotate, 90)
 	var rtP = F_.execCmds[0]
 	mvP = F_.execCmds[1]
 	selection.add(mvP)

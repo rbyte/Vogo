@@ -16,7 +16,7 @@ body {
 	left: 15%; /*coupled*/
 }
 #borderR {
-	right: 7%; /*coupled*/
+	right: 5%; /*coupled*/
 }
 #functions {
 	position: absolute;
@@ -30,7 +30,7 @@ body {
 #toolbar {
 	position: absolute;
 	height: 100%;
-	width: 7%; /*coupled*/
+	width: 5%; /*coupled*/
 	right: 0%;
 	background-color: #D6D6D6;
 	overflow-y: auto;

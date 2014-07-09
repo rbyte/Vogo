@@ -2,20 +2,20 @@ see also TODOs in code
 
 small features
 	adjust existing line length more directly
-	indicateIfInsideAnySelectedCommandsScope on hover
-	improve function call look -> context menu for args
-	handling endless recursion by checking line-length or out of bounds
+	export to code TO ui output window
 	selection
-		### select with rect
-			Propagation Issues
 		z-order-handling (ALT selects below)
 		copy and paste selection
 		move selection
+	indicateIfInsideAnySelectedCommandsScope on hover
+	improve function call look -> context menu for args
+	handling endless recursion by checking line-length or out of bounds
 	show results of expressions beneath input field "=..."
 	more tooltips, more sanity checks
 	cycle (select) through elements (as in code) with arrow keys
 	simple! Embedding of results in web pages (should remain dynamic)
 	add acknowledgements (back to me)
+	if loop is set to an array, automatically detect this and iterate over length
 
 performance
 	further cache arguments eval
@@ -26,6 +26,8 @@ performance
 
 big features
 	### automatic tests
+	upload results to server/community results page
+	examples and tutorial videos/help
 	new command: goto, go home, go to point in past, close path
 	constraint solving
 		snapping/line end handles
@@ -41,6 +43,7 @@ big features
 	Beziers
 	Bearbeitung von geschlossenen Pfaden (Füllung, ...)
 	allow much more dragging between elements
+	code ui view
 
 bugs
 	add proxies to functions (debug dependency checking) and improve run() performance
