@@ -2,7 +2,6 @@ see also TODOs in code
 
 small features
 	export to code TO ui output window
-	one selected element can contain another selected element - fix?!
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
 	handling endless recursion by checking line-length or out of bounds
@@ -12,6 +11,8 @@ small features
 	simple! Embedding of results in web pages (should remain dynamic)
 	add acknowledgements (back to me)
 	if loop is set to an array, automatically detect this and iterate over length
+	one selected element can contain another selected element - fix?!
+		is this creating bugs when removeDeselectAndDeleteAllCompletely ?
 
 performance
 	further cache arguments eval
@@ -47,10 +48,10 @@ big features
 	code ui view
 
 bugs
-	add proxies to functions (debug dependency checking) and improve run() performance
+	### add proxies to functions (debug dependency checking) and improve run() performance
 	foreignObject relative width and height
 	svg output does not work (input tag error)
-	fix: rotation manipulation in loop: so that line crosses mouse
+	fix: rotation/move manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
 	remove loops when empty (e.g. removed last inner command)
 	2 subsequent moves cannot be distinguished

@@ -1700,6 +1700,28 @@ Func.prototype.checkArgumentName = function(newName) {
 	return true
 }
 
+Func.prototype.setArgumentValue = function(argName, value) {
+	var self = this
+	console.assert(typeof value == "string")
+	console.assert(self.args[argName] !== undefined)
+	var regEx = /^([a-zA-Z][a-zA-Z0-9]*) *= *(.+)$/
+	var match = regEx.exec(value)
+	if (match !== null) { // match success
+		var newArgName = match[1]
+		var newValue = match[2]
+		if (argName !== newArgName) {
+			// TODO rename all occurences
+			self.args[newArgName] = self.args[argName]
+			delete self.args[argName] // dereference
+			argName = newArgName
+		}
+		self.args[argName].set(newValue)
+		run()
+	} else {
+		// TODO restore field
+	}
+}
+
 Func.prototype.addArgument = function(defaultValue, argName) {
 	var self = this
 	if (argName === undefined)
@@ -1709,32 +1731,17 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 	self.args[argName] = new Expression(defaultValue)
 	
 	function onChange(value) {
-		console.assert(typeof value == "string")
 		if (value === "") {
 			// TODO check dependencies
 			inputField.remove()
 			delete self.args[argName]
+			return
 		}
-		var regEx = /^([a-zA-Z][a-zA-Z0-9]*) *= *(.+)$/
-		var match = regEx.exec(value)
-		if (match !== null) { // match success
-			var newArgName = match[1]
-			var newValue = match[2]
-			if (argName !== newArgName) {
-				// TODO rename all occurences
-				self.args[newArgName] = self.args[argName]
-				delete self.args[argName] // dereference
-				argName = newArgName
-			}
-			self.args[argName].set(newValue)
-			run()
-		} else {
-			// TODO restore field
-		}
+		self.setArgumentValue(argName, value)
 	}
 	
 	var inputField = this.ul_args.append("li")
-		.append("input")
+	inputField.append("input")
 		.attr("class", "f_argument")
 		.attr("type", "text")
 		.on("blur", function() {
@@ -3102,25 +3109,27 @@ function automaticTest() {
 	
 	manipulation.finish(Move, 10)
 	selection.add(mvP)
-	run()
 	manipulation.createPreview(Rotate, 90)
 	manipulation.finish(Rotate, 90)
 	var rtP = F_.execCmds[0]
 	mvP = F_.execCmds[1]
 	selection.add(mvP)
-	selection.add(rtP) // previous is deselected without pressed shift
-	run()
+	// previous is deselected without pressed shift
+	selection.add(rtP)
+	console.assert(!selection.contains(mvP))
+	console.assert(selection.contains(rtP))
 	console.assert(selection.e.length === 1)
 	console.assert(selection.e[0] === rtP)
 	keyPressed.shift = true
 	selection.add(mvP)
+	keyPressed.shift = false
 	console.assert(selection.e.length === 2)
 	console.assert(selection.e[1] === mvP)
 	console.assert(rtP.evalMainParameter() === 90)
 	console.assert(rtP.mainParameter === undefined)
 	console.assert(rtP.root.mainParameter.isConst())
 	console.assert(rtP.root.mainParameter.isStatic())
-	keyPressed.shift = false
+	
 	onKeyDown.l() // loop
 	console.assert(selection.e.length === 0)
 	console.assert(F_.execCmds.length === 1)
@@ -3153,25 +3162,28 @@ function automaticTest() {
 	console.assert(nf.execCmds.length === 1)
 	var fcP = nf.execCmds[0]
 	console.assert(fcP.execCmds.length === 1)
-	var lpP = fcP.execCmds[0]
-	console.assert(lpP.execCmds.length === 6)
+	console.assert(fcP.execCmds[0].execCmds.length === 6)
 	selection.add(fcP)
-	// triggers bug in removeVisibleElements
+	console.assert(selection.contains(fcP))
+	// triggers minor bug in removeVisibleElements
 	selection.removeDeselectAndDeleteAllCompletely()
-	removeFunction(prevF)
-	
-	run()
-	
-	
-//	selection.add(lpP)
-//	onKeyDown.a() // abstract over; parameterise loop
-//	console.assert(Object.keys(F_.args).length === 1)
-//	// ...
-//	
-//	selection.add(lpP)
-//	selection.removeDeselectAndDeleteAllCompletely()
+	removeFunction(nf)
+	console.assert(functions.length === 1)
 //	run()
+	console.assert(F_ === prevF)
 	
+	selection.add(lpP)
+	onKeyDown.a()
+	console.assert(Object.keys(F_.args).length === 1)
+	var varName = Object.keys(F_.args)[0]
+	console.assert(varName === "a") // default for first
+	console.assert(F_.args[varName].eval() === 3)
+	// TODO setArgumentValue
+//	F_.setArgumentValue(varName, varName+"=4")
+//	rtP.root.mainParameter.set("360/a")
+//	mvP.root.mainParameter.set("100/a")
+//	run()
+//	console.assert(lpP.execCmds.length === 8)
 	
 	
 }
