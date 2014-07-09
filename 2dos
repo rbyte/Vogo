@@ -1,12 +1,8 @@
 see also TODOs in code
 
 small features
-	adjust existing line length more directly
 	export to code TO ui output window
-	selection
-		z-order-handling (ALT selects below)
-		copy and paste selection
-		move selection
+	one selected element can contain another selected element - fix?!
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
 	handling endless recursion by checking line-length or out of bounds
@@ -33,10 +29,15 @@ big features
 		snapping/line end handles
 	Collision-Free positioning
 		check same state of commands, then shift y ?
+	bigger click radius, especially for Move
 	variables can reference variables (on global scope)
 	How can the program flow be visualised (stepping through)?
 		Map a parameter to space (show multiple "shadow instances" of it)
 	Logo output
+	selection z-order-handling (ALT selects below)
+		this is actually hard, because event propagation will not work
+		I will need to manually compute which elements a click hit
+		http://mozilla.6506.n7.nabble.com/Event-Bubbling-through-Layers-td247852.html
 	edit lines (colour, breadth)
 	allow functions as arguments
 	undo

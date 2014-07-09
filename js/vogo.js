@@ -43,11 +43,12 @@ var defaultSvgViewboxHeight = 70
 var domSvg
 var pi = Math.PI // for use in UI
 var radiusInDegrees = true
+var lastCopiedElements
 
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
-	78: "n", 66: "b"}
+	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x"}
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -563,10 +564,6 @@ function getPrecision(n) {
 	}
 }
 
-function bodyIsSelected() {
-	return document.activeElement.nodeName === "BODY"
-}
-
 function updateLabelVisibility(self) {
 	if (self.label !== undefined)
 		self.label.classed("hide", !selection.contains(self)
@@ -763,34 +760,28 @@ function resolveSelectionRect(e, selectionList, x, y, w, h) {
 }
 
 onKeyDown["+"] = function() {
-	if (bodyIsSelected())
-		addNewFuncToUI()
+	addNewFuncToUI()
 }
 
 onKeyDown["-"] = function() {
-	if (bodyIsSelected())
-		removeFunction(F_)
+	removeFunction(F_)
 }
 
 onKeyDown.d = function() {
-	if (bodyIsSelected()) {
-		if (!manipulation.isCreating()) {
-			manipulation.createPreview(Move)
-		} else if (manipulation.isCreating(Rotate)) {
-			manipulation.finish(Rotate)
-			manipulation.createPreview(Move)
-		}
+	if (!manipulation.isCreating()) {
+		manipulation.createPreview(Move)
+	} else if (manipulation.isCreating(Rotate)) {
+		manipulation.finish(Rotate)
+		manipulation.createPreview(Move)
 	}
 }
 
 onKeyDown.r = function() {
-	if (bodyIsSelected()) {
-		if (!manipulation.isCreating()) {
-			manipulation.createPreview(Rotate)
-		} else if (manipulation.isCreating(Move)) {
-			manipulation.finish(Move)
-			manipulation.createPreview(Rotate)
-		}
+	if (!manipulation.isCreating()) {
+		manipulation.createPreview(Rotate)
+	} else if (manipulation.isCreating(Move)) {
+		manipulation.finish(Move)
+		manipulation.createPreview(Rotate)
 	}
 }
 
@@ -802,15 +793,12 @@ onKeyDown.e = function() {
 }
 
 onKeyDown.s = function() {
-	if (bodyIsSelected())
-		openSVG()
+	openSVG()
 }
 
 onKeyDown.del = function() {
-	if (bodyIsSelected()) {
-		selection.removeDeselectAndDeleteAllCompletely()
-		run()
-	}
+	selection.removeDeselectAndDeleteAllCompletely()
+	run()
 }
 
 onKeyDown.esc = function() {
@@ -883,6 +871,31 @@ onKeyDown.l = function() {
 
 onKeyDown.b = function() {
 	wrapSelectionInCommand("branch", function(cmdList) { return new Branch("true", cmdList, []) })
+}
+
+onKeyDown.c = function() {
+	if (keyPressed.ctrl && !selection.isEmpty()) {
+		// the overwritten have no scope links, so no need to explicitly delete them (for garbage collection)
+		lastCopiedElements = []
+		selection.e.forEach(function(e) { lastCopiedElements.push(e.root.clone()) })
+	}
+}
+
+onKeyDown.x = function() {
+	if (keyPressed.ctrl && !selection.isEmpty()) {
+		onKeyDown.c()
+		selection.removeDeselectAndDeleteAllCompletely()
+		run()
+	}
+}
+
+onKeyDown.v = function() {
+	if (keyPressed.ctrl && lastCopiedElements !== undefined) {
+		// the order of selection is honored while inserting
+		// this makes cutting "x" be well suited for reording commands
+		lastCopiedElements.forEach(function(e) { insertCmdRespectingSelection(e.clone()) })
+		run()
+	}
 }
 
 function Expression(exp) {
@@ -1918,7 +1931,6 @@ Move.prototype.execInner = function(callerF) {
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
-					console.log("dragstart on line")
 					d3.event.sourceEvent.stopPropagation()
 				})
 				.on("drag", function (d) {
@@ -1927,7 +1939,6 @@ Move.prototype.execInner = function(callerF) {
 					run()
 				})
 				.on("dragend", function (d) {
-					
 					d3.event.sourceEvent.stopPropagation()
 				})
 			)
