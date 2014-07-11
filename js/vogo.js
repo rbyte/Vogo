@@ -159,8 +159,8 @@ vogo.init = function() {
 	addNewFuncToUI()
 	setupUIEventListeners()
 	run()
-	manualTest()
 	automaticTest()
+	manualTest()
 }
 
 // wraps a function for drawing it multiple times
@@ -2875,17 +2875,18 @@ vogo.Branch = Branch
 vogo.onKeyDown = onKeyDown
 
 function manualTest() {
+	var tests = []
 	
-	if (false) {
+	tests.push(function() {
 		addNewFuncToUI("nEck")
 		F_.addArgument(4, "n")
 		F_.setCommands([
 			new Loop("n", [
 				new Rotate("360/n"),
 				new Move("100/n")])])
-	}
+	})
 	
-	if (false) {
+	tests.push(function() {
 		addNewFuncToUI("multiSquare")
 		F_.setCommands([
 			new Loop(36, [
@@ -2893,10 +2894,10 @@ function manualTest() {
 					new Rotate("90"),
 					new Move(20)]),
 				new Rotate("10")])])
-	}
+	})
 	
 	// this is a performance bummer!
-	if (false) {
+	tests.push(function() {
 		addNewFuncToUI("tree")
 		F_.addArgument(150, "size")
 		F_.setCommands([
@@ -2920,9 +2921,10 @@ function manualTest() {
 				new Move("-size")
 			])
 		])
-	}
+	})
 	
-	if (false) {
+	// 3
+	tests.push(function() {
 		addNewFuncToUI("fern")
 		F_.addArgument(10, "size")
 		F_.addArgument(1, "sign")
@@ -2941,9 +2943,9 @@ function manualTest() {
 				new Move("-2*size")
 			], [])
 		])
-	}
+	})
 	
-	if (false) {
+	tests.push(function() {
 		addNewFuncToUI("circle")
 		F_.setCommands([
 			new Loop(360, [
@@ -2951,9 +2953,9 @@ function manualTest() {
 				new Move(1),
 			])
 		])
-	}
+	})
 	
-	if (false) {
+	tests.push(function() {
 		addNewFuncToUI("spirale")
 		F_.addArgument(10, "a")
 		F_.setCommands([
@@ -2963,9 +2965,9 @@ function manualTest() {
 				new FuncCall(F_, {a: "a*1.02"})
 			], [])
 		])
-	}
+	})
 	
-	if (false) {
+	tests.push(function() {
 		addNewFuncToUI("meinBaum")
 		F_.addArgument(6, "tiefe")
 		F_.addArgument(30, "winkel")
@@ -2980,9 +2982,10 @@ function manualTest() {
 				new Move("-tiefe*5")
 			], [])
 		])
-	}
+	})
 	
-	if (false) {
+	// 7
+	tests.push(function() {
 		var nEck = addNewFuncToUI("nEck")
 		F_.addArgument(36, "ne")
 		F_.addArgument(5, "sz")
@@ -3000,99 +3003,69 @@ function manualTest() {
 				new FuncCall(nEck, {ne: "ne", sz: "sz"})
 			])
 		])
-	}
+	})
 	
-	if (false) {
-		addNewFuncToUI("KreisC")
-		F_.addArgument(4, "winkel")
+	tests.push(function() {
+		var KreisC = addNewFuncToUI("KreisC")
+		F_.addArgument(180, "winkel")
+		F_.addArgument(1, "rotate")
+		F_.addArgument(0.5, "groesze")
 		F_.setCommands([
-			
+			new Loop("winkel", [
+				new Move("groesze"),
+				new Rotate("rotate")
+			])
 		])
+		addNewFuncToUI("Welle")
+		F_.addArgument(4, "n")
+		F_.setCommands([
+			new Branch("n>0", [
+				new FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
+				new FuncCall(F_, {n: "n-1"})
+			], [])
+		])
+	})
+	
+	tests.push(function() {
+		addNewFuncToUI("zahnrad")
+		F_.addArgument(20, "anzahlecken")
+		F_.addArgument(9, "seitenlaenge")
+		F_.setCommands([
+			new Loop("anzahlecken", [
+				new Loop(2, [
+					new Move("seitenlaenge"),
+					new Rotate(-90)
+				]),
+				new Move("seitenlaenge"),
+				new Rotate("90 - (180 / anzahlecken)"),
+				new Move("seitenlaenge/2"),
+				new Rotate("90 - (180 / anzahlecken)")
+			])
+		])
+	})
+	
+	tests.push(function() {
+		addNewFuncToUI("saege")
+		F_.addArgument(9, "zacken")
+		F_.addArgument(9, "zackenlaenge")
+		F_.setCommands([
+			new Loop("zacken", [
+				new Loop(2, [
+					new Move("zackenlaenge"),
+					new Rotate(-90)
+				]),
+				new Rotate("90 + (180 / zacken)"),
+				new Move("zackenlaenge/2"),
+				new Rotate("90 + (180 / zacken)")
+			])
+		])
+	})
+	
+	var testsToRun = [false,false,false,/*3*/false,false,false,false,/*7*/false,false,false,false]
+	for (var i=0; i<testsToRun.length && i<tests.length; i++) {
+		if (testsToRun[i])
+			tests[i]()
 	}
-	
-	
-/*
-to   n_eck :ne :sz
-    repeat :ne [
-        rt 360 / :ne
-        fd :sz
-    ]
-end
-
-to   mn_eck :ne :sz
-    repeat :ne [
-        rt 360 / :ne
-        n_eck :ne :sz
-    ]
-end
-
-mn_eck 36 20
-	
-reset
-
-to KreisC :winkel :nachRechts :groesze
- repeat :winkel [
-  forward :groesze
-  ifelse :nachRechts <= 0
-   [left 1]
-   [right 1]
- ]
-end
-
-to Welle :n
- if :n > 0 [
-  KreisC 180 :n%2 0.5
-  Welle :n-1
- ]
-end
-
-Welle 5
-
-
-to zahnrad :anzahlecken :seitenlaenge
-repeat :anzahlecken [
-  repeat 2 [
-    fw :seitenlaenge
-    rt 90]
-  fw :seitenlaenge
-  lt 90 - (180 / :anzahlecken) 
-  fw :seitenlaenge / 2
-  lt 90 - (180 / :anzahlecken) 
-]
-end
-
-zahnrad 20 10
-
-
-to stern :b
- repeat 500
- [
-  forward :b 
-  right 200
-  make "b 1 + :b
- ]
-end 
-
-stern 1
-
-
-to saege :zacken :zackenlaenge
-repeat :zacken [
-repeat 2 [
-fw :zackenlaenge
-rt 90
-]
-lt 90+(180/:zacken)
-fw :zackenlaenge/2
-lt 90+(180/:zacken)
-]
-end
-
-saege 25 15
-
- */
-	
-	
 	
 	run()
 }
@@ -3237,7 +3210,7 @@ function automaticTest() {
 	console.assert(arrayTypesEqual(lpP.execCmds, [Move, Rotate, Move, Rotate, Move, Rotate, Move, Rotate]))
 	onKeyDown.del()
 	console.assert(arrayTypesEqual(F_.execCmds, []))
-	
+	// TODO remove arg
 }
 
 

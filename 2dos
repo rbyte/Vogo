@@ -25,11 +25,13 @@ performance
 big features
 	### automatic tests
 	upload results to server/community results page
+	store history in local browser cache
 	examples and tutorial videos/help
-	edit Move style
+	edit Move style (colour, breadth)
 	close path command
 		edit fill
 	new command: goto, go home, go to point in past
+	add svg-native circle/arc
 	constraint solving
 		snapping/line end handles
 	Collision-Free positioning
@@ -38,18 +40,17 @@ big features
 	variables can reference variables (on global scope)
 	How can the program flow be visualised (stepping through)?
 		Map a parameter to space (show multiple "shadow instances" of it)
-	Logo output
 	selection z-order-handling (ALT selects below)
 		this is actually hard, because event propagation will not work
 		I will need to manually compute which elements a click hit
 		http://mozilla.6506.n7.nabble.com/Event-Bubbling-through-Layers-td247852.html
-	edit lines (colour, breadth)
 	allow functions as arguments
 	undo
 	Beziers
 	Bearbeitung von geschlossenen Pfaden (Füllung, ...)
 	allow much more dragging between elements
 	code ui view
+	Logo output
 
 bugs
 	### add proxies to functions (debug dependency checking) and improve run() performance
@@ -57,6 +58,7 @@ bugs
 	fix: rotation/move manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
 	remove loops when empty (e.g. removed last inner command)
+	if an Expression is set to say Math.random(), it is considered static because it does not depend on arguments
 	2 subsequent moves cannot be distinguished
 	chromium only (chrome works): the input fields inside foreign objects do not update
 
