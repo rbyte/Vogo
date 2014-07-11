@@ -533,7 +533,8 @@ function updateNotification(text, displayTime) {
 }
 
 function openSVG() {
-	var svg = domSvg
+//	var svg = domSvg
+	var svg = F_.svg[0][0]
 	window.open("data:image/svg+xml," + encodeURIComponent(
 	// http://stackoverflow.com/questions/1700870/how-do-i-do-outerhtml-in-firefox
 		svg.outerHTML || new XMLSerializer().serializeToString(svg)
@@ -767,7 +768,7 @@ onKeyDown["-"] = function() {
 	removeFunction(F_)
 }
 
-onKeyDown.d = function() {
+onKeyDown.d = function() { // draw/move
 	if (!manipulation.isCreating()) {
 		manipulation.createPreview(Move)
 	} else if (manipulation.isCreating(Rotate)) {
@@ -776,7 +777,7 @@ onKeyDown.d = function() {
 	}
 }
 
-onKeyDown.r = function() {
+onKeyDown.r = function() { // rotate
 	if (!manipulation.isCreating()) {
 		manipulation.createPreview(Rotate)
 	} else if (manipulation.isCreating(Move)) {
@@ -873,7 +874,7 @@ onKeyDown.b = function() {
 	wrapSelectionInCommand("branch", function(cmdList) { return new Branch("true", cmdList, []) })
 }
 
-onKeyDown.c = function() {
+onKeyDown.c = function() { // copy
 	if (keyPressed.ctrl && !selection.isEmpty()) {
 		// the overwritten have no scope links, so no need to explicitly delete them (for garbage collection)
 		lastCopiedElements = []
@@ -881,7 +882,7 @@ onKeyDown.c = function() {
 	}
 }
 
-onKeyDown.x = function() {
+onKeyDown.x = function() { // cut
 	if (keyPressed.ctrl && !selection.isEmpty()) {
 		onKeyDown.c()
 		selection.removeDeselectAndDeleteAllCompletely()
@@ -889,13 +890,41 @@ onKeyDown.x = function() {
 	}
 }
 
-onKeyDown.v = function() {
+onKeyDown.v = function() { // paste
 	if (keyPressed.ctrl && lastCopiedElements !== undefined) {
 		// the order of selection is honored while inserting
 		// this makes cutting "x" be well suited for reording commands
 		lastCopiedElements.forEach(function(e) { insertCmdRespectingSelection(e.clone()) })
 		run()
 	}
+}
+
+function forAllExecCmdsOfTypeDo(cmds, func, type) {
+	cmds.forEach(function(c) {
+		if (c.canContainCommands()) {
+			forAllExecCmdsOfTypeDo(c.execCmds, func, type)
+		} else if (type === undefined || c instanceof type) {
+			func(c)
+		}
+	})
+}
+
+onKeyDown.f = function() { // fill/close path
+	if (true) return
+	// TODO
+	var path = ["M0,0"]
+	var withoutFirst = []
+	for (var i=1; i<F_.execCmds.length; i++)
+		withoutFirst.push(F_.execCmds[i])
+	forAllExecCmdsOfTypeDo(withoutFirst, function(m) {
+		// TODO construct with Array join()
+		path.push("L"+m.savedState.x+","+m.savedState.y)
+	}, Move)
+	path.push("L"+F_.state.x+","+F_.state.y)
+	path.push("Z")
+	path = path.join(" ")
+	console.log(path)
+	F_.paintingG.append("path").attr("d", path)
 }
 
 function Expression(exp) {
@@ -1700,26 +1729,16 @@ Func.prototype.checkArgumentName = function(newName) {
 	return true
 }
 
-Func.prototype.setArgumentValue = function(argName, value) {
+Func.prototype.setArgument = function(value, argName, newArgName) {
 	var self = this
-	console.assert(typeof value == "string")
 	console.assert(self.args[argName] !== undefined)
-	var regEx = /^([a-zA-Z][a-zA-Z0-9]*) *= *(.+)$/
-	var match = regEx.exec(value)
-	if (match !== null) { // match success
-		var newArgName = match[1]
-		var newValue = match[2]
-		if (argName !== newArgName) {
-			// TODO rename all occurences
-			self.args[newArgName] = self.args[argName]
-			delete self.args[argName] // dereference
-			argName = newArgName
-		}
-		self.args[argName].set(newValue)
-		run()
-	} else {
-		// TODO restore field
+	if (newArgName !== undefined && argName !== newArgName) {
+		// TODO rename all occurences
+		self.args[newArgName] = self.args[argName]
+		delete self.args[argName] // dereference
+		argName = newArgName
 	}
+	self.args[argName].set(value)
 }
 
 Func.prototype.addArgument = function(defaultValue, argName) {
@@ -1737,7 +1756,20 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 			delete self.args[argName]
 			return
 		}
-		self.setArgumentValue(argName, value)
+		console.assert(typeof value == "string")
+		var regEx = /^([a-zA-Z][a-zA-Z0-9]*) *= *(.+)$/
+		var match = regEx.exec(value)
+		if (match !== null) { // match success
+			var newArgName = match[1]
+			var newValue = match[2]
+			self.setArgument(newValue, argName, newArgName)
+			// because argName is the crucial closured variable
+			if (argName !== newArgName)
+				argName = newArgName
+			run()
+		} else {
+			// TODO restore field
+		}
 	}
 	
 	var inputField = this.ul_args.append("li")
@@ -3069,6 +3101,15 @@ function automaticTest() {
 	if (false)
 		return
 	
+	function arrayTypesEqual(arr, types) {
+		if (arr.length !== types.length)
+			return false
+		for (var i=0; i<arr.length; i++)
+			if(!(arr[i] instanceof types[i]))
+				return false
+		return true
+	}
+	
 	console.assert(F_.commands.length === 0)
 	
 	manipulation.createPreview(Move, 10)
@@ -3141,7 +3182,7 @@ function automaticTest() {
 	console.assert(lpP.root.commands === lpP.getRootCommandsRef())
 	console.assert(lpP.root.commands.length === 2)
 	console.assert(lpP.root.execCmds.length === 0) // is unused
-	console.assert(lpP.execCmds.length === 6)
+	console.assert(arrayTypesEqual(lpP.execCmds, [Rotate, Move, Rotate, Move, Rotate, Move]))
 	rtP = lpP.execCmds[0]
 	mvP = lpP.execCmds[1]
 	console.assert(rtP.scope === lpP)
@@ -3159,9 +3200,9 @@ function automaticTest() {
 	console.assert(nf.previousF_ === prevF)
 	insertCmdRespectingSelection(new FuncCall(prevF))
 	run()
-	console.assert(nf.execCmds.length === 1)
+	console.assert(arrayTypesEqual(nf.execCmds, [FuncCall]))
 	var fcP = nf.execCmds[0]
-	console.assert(fcP.execCmds.length === 1)
+	console.assert(arrayTypesEqual(fcP.execCmds, [Loop]))
 	console.assert(fcP.execCmds[0].execCmds.length === 6)
 	selection.add(fcP)
 	console.assert(selection.contains(fcP))
@@ -3179,12 +3220,23 @@ function automaticTest() {
 	console.assert(varName === "a") // default for first
 	console.assert(F_.args[varName].eval() === 3)
 	// TODO setArgumentValue
-//	F_.setArgumentValue(varName, varName+"=4")
-//	rtP.root.mainParameter.set("360/a")
-//	mvP.root.mainParameter.set("100/a")
-//	run()
-//	console.assert(lpP.execCmds.length === 8)
-	
+	F_.setArgument(4, varName)
+	rtP.root.mainParameter.set("360/a")
+	mvP.root.mainParameter.set("100/a")
+	run()
+	console.assert(arrayTypesEqual(lpP.execCmds, [Rotate, Move, Rotate, Move, Rotate, Move, Rotate, Move]))
+	selection.add(lpP.execCmds[1])
+	selection.addAccumulate(lpP.execCmds[0])
+	keyPressed.ctrl = true
+	onKeyDown.x() // cut
+	console.assert(arrayTypesEqual(lpP.execCmds, []))
+	selection.add(lpP)
+	onKeyDown.v() // paste
+	keyPressed.ctrl = false
+	// order changed
+	console.assert(arrayTypesEqual(lpP.execCmds, [Move, Rotate, Move, Rotate, Move, Rotate, Move, Rotate]))
+	onKeyDown.del()
+	console.assert(arrayTypesEqual(F_.execCmds, []))
 	
 }
 
