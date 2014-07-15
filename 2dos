@@ -1,7 +1,7 @@
 see also TODOs in code
 
 small features
-	export to code TO ui output window
+	export code to ui output window
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
 	handling endless recursion by checking line-length or out of bounds
@@ -9,6 +9,7 @@ small features
 	more tooltips, more sanity checks
 	cycle (select) through elements (as in code) with arrow keys
 	simple! Embedding of results in web pages (should remain dynamic)
+	new sidebars background image
 	add acknowledgements (back to me)
 	add switch for add before or after selected element
 	if loop is set to an array, automatically detect this and iterate over length

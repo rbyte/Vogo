@@ -166,6 +166,7 @@ vogo.init = function() {
 // wraps a function for drawing it multiple times
 function Drawing(f, args, paintingG) {
 	var func = new Func(f.name, {}, [new FuncCall(f, args)], paintingG).exec()
+	// TODO use d3.node() ?
 	paintingG[0][0].vogo = func
 	func.update = function(newArgs) {
 		console.assert(this.getRootCommandsRef().length == 1)
@@ -189,7 +190,7 @@ function Drawing(f, args, paintingG) {
 vogo.draw = function(f, args) {
 	return function(elem) { return new Drawing(f, args, elem) }
 }
-
+// for d3.call()
 vogo.update = function(args) {
 	return function(elem) { return elem[0][0].vogo.update(args) }
 }
@@ -534,7 +535,7 @@ function updateNotification(text, displayTime) {
 
 function openSVG() {
 //	var svg = domSvg
-	var svg = F_.svg[0][0]
+	var svg = F_.svg.node()
 	window.open("data:image/svg+xml," + encodeURIComponent(
 	// http://stackoverflow.com/questions/1700870/how-do-i-do-outerhtml-in-firefox
 		svg.outerHTML || new XMLSerializer().serializeToString(svg)
@@ -580,7 +581,7 @@ function setTextOfInput(input, containingForeignObject, text) {
 		input.property("value", text)
 	input.attr("size", Math.max(1, text.toString().length))
 	if (!containingForeignObject.classed("hide")) {
-		var newWidth = input[0][0].offsetWidth
+		var newWidth = input.node().offsetWidth
 		if (newWidth > 0)
 			containingForeignObject.attr("width", newWidth+5)
 	}
@@ -811,7 +812,7 @@ onKeyDown.esc = function() {
 
 onKeyDown.a = function() {
 	if (selection.isEmpty()) {
-		F_.addArgument("1")
+		var argName = F_.addArgument("1")
 	} else {
 		// TODO if exp isStatic
 		var argName = F_.addArgument(selection.e[0].evalMainParameter())
@@ -1397,9 +1398,9 @@ Command.prototype.applyCSSClass = function(elements, on, prop, mark, selected) {
 					// because selected is a special case of marked
 					// and that elements are either marked, selected or neither
 					var cssName = !on ? "" : (mark ? "mark" : "selected")
-					if (!on && p[0][0].getAttribute("class") === "")
+					if (!on && p.node().getAttribute("class") === "")
 						return
-					p[0][0].setAttribute("class", cssName)
+					p.node().setAttribute("class", cssName)
 //					p.attr("class", cssName)
 					// TODO MAJOR PERFORMANCE BUMMER: 90% time in d3.classed()
 					// it seems d3.classed does regex which is VERY slow.
@@ -1507,6 +1508,7 @@ function Func(name, args, commands, customPaintingG) {
 	self.state = new State()
 	self.setName(name)
 	self.args = {}
+	self.argLi = {}
 	if (args !== undefined) {
 		self.args = args
 		for (var a in args) // wrap in expressions
@@ -1633,9 +1635,8 @@ MainSVG.prototype.updateViewbox = function(afterZoom) {
 
 Func.prototype.updateViewbox = function(afterZoom) {
 	var self = this
-		// [0][0] gets the dom element
 	// the preview svg aspect ratio is coupled to the main svg
-	self.svgWidth = self.svgContainer[0][0].getBoundingClientRect().width
+	self.svgWidth = self.svgContainer.node().getBoundingClientRect().width
 	self.svgHeight = self.svgWidth * mainSVG.svgHeight/mainSVG.svgWidth
 	self.svgContainer.style({height: self.svgHeight+"px"})
 	
@@ -1732,13 +1733,25 @@ Func.prototype.checkArgumentName = function(newName) {
 Func.prototype.setArgument = function(value, argName, newArgName) {
 	var self = this
 	console.assert(self.args[argName] !== undefined)
-	if (newArgName !== undefined && argName !== newArgName) {
+	if (newArgName !== undefined && argName !== newArgName) { // rename
 		// TODO rename all occurences
 		self.args[newArgName] = self.args[argName]
+		self.argLi[newArgName] = self.argLi[argName]
 		delete self.args[argName] // dereference
+		delete self.argLi[argName]
 		argName = newArgName
 	}
 	self.args[argName].set(value)
+}
+
+Func.prototype.removeArgument = function(argName) {
+	var self = this
+	console.assert(self.args[argName] !== undefined)
+	console.assert(self.argLi[argName] !== undefined)
+	// TODO check dependencies
+	self.argLi[argName].remove()
+	delete self.argLi[argName]
+	delete self.args[argName]
 }
 
 Func.prototype.addArgument = function(defaultValue, argName) {
@@ -1751,9 +1764,7 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 	
 	function onChange(value) {
 		if (value === "") {
-			// TODO check dependencies
-			inputField.remove()
-			delete self.args[argName]
+			self.removeArgument(argName)
 			return
 		}
 		console.assert(typeof value == "string")
@@ -1772,8 +1783,8 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 		}
 	}
 	
-	var inputField = this.ul_args.append("li")
-	inputField.append("input")
+	self.argLi[argName] = this.ul_args.append("li")
+	self.argLi[argName].append("input")
 		.attr("class", "f_argument")
 		.attr("type", "text")
 		.on("blur", function() {
@@ -1799,6 +1810,7 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 			})
 		)
 		.property("value", argName+"="+self.args[argName].get())
+//		.node().focus()
 	
 	return argName
 }
@@ -3210,7 +3222,7 @@ function automaticTest() {
 	console.assert(arrayTypesEqual(lpP.execCmds, [Move, Rotate, Move, Rotate, Move, Rotate, Move, Rotate]))
 	onKeyDown.del()
 	console.assert(arrayTypesEqual(F_.execCmds, []))
-	// TODO remove arg
+	F_.removeArgument(varName)
 }
 
 
