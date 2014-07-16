@@ -33,6 +33,11 @@ var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
 var fcTextStyle = {cursor: "pointer"}
 var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity": 1, "fill-opacity": 0}
 
+var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
+	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
+	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x"}
+var mouseMap = { 0: "left", 1: "middle", 2: "right" }
+
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
@@ -43,39 +48,9 @@ var defaultSvgViewboxHeight = 70
 var domSvg
 var pi = Math.PI // for use in UI
 var radiusInDegrees = true
-var lastCopiedElements
-
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
-var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
-	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
-	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x"}
-var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
-var onKeyDown = {}
-var onKeyUp = {}
-var keyPressed = {}
-for (var k in keyMap)
-	keyPressed[keyMap[k]] = false
-var mousePressed = {}
-for (var m in mouseMap)
-	mousePressed[mouseMap[m]] = false
-function updateKeyDownAndUp(keyCode, down) {
-	if (document.activeElement.nodeName !== "INPUT") {
-		var key = keyMap[keyCode]
-		if (key) {
-			var currentDown = keyPressed[key]
-			keyPressed[key] = down
-			if (down && !currentDown && onKeyDown[key])
-				onKeyDown[key]()
-			if (!down && currentDown && onKeyUp[key])
-				onKeyUp[key]()
-		} else {
-			console.log(keyCode+" not in keymap.")
-		}
-	}
-}
-
 var mainSVG
 var functions = []
 // the function that is currently selected
@@ -88,67 +63,8 @@ var dragInProgress = false
 var lastRotateExecuted
 var lastRotateScaleFactorCalculated
 var mousePos = [0,0]
-
-
-var selection = {
-	e: [],
-	isEmpty: function() {
-		return this.e.length === 0
-	},
-	add: function(x) {
-		console.assert(x.root !== x) // only proxies can be selected
-		if (!keyPressed.shift) {
-			this.removeAndDeselectAll()
-			this.e.push(x)
-			x.select(true)
-		} else {
-			this.addAccumulate(x)
-		}
-	},
-	addAccumulate: function(x) {
-		console.assert(x.root !== x) // only proxies can be selected
-		if (this.contains(x)) {
-			this.removeAndDeselect(x)
-		} else {
-			// do not allow selection of multiple with same root
-			if (this.containsAsRoot(x))
-				this.removeAndDeselect(this.e[this.indexOfSelectedProxyOf(x)])
-			this.e.push(x)
-			x.select(true)
-		}
-	},
-	contains: function(x) {
-		return this.e.indexOf(x) !== -1
-	},
-	indexOfSelectedProxyOf: function(x) {
-		for (var i=0; i<this.e.length; i++)
-			if (this.e[i].root === x.root)
-				return i
-		return -1
-	},
-	containsAsRoot: function(x) {
-		return this.indexOfSelectedProxyOf(x) !== -1
-	},
-	removeAndDeselect: function(x) {
-		if (this.contains(x))
-			this.e.splice(this.e.indexOf(x), 1)
-		x.select(false) // deselect
-	},
-	removeAndDeselectAll: function() {
-		var detach = this.e
-		this.e = []
-		detach.forEach(function(x) { x.select(false) })
-		return detach
-	},
-	// remove means splice from selection
-	// deselect means disable highlighting indicating selection
-	// delete means structurally remove command from program (root, all proxies, ...)
-	removeDeselectAndDeleteAllCompletely: function() {
-		var detach = this.removeAndDeselectAll()
-		detach.forEach(function(x) { x.deleteCompletely() })
-		return detach
-	}
-}
+var lastCopiedElements
+;;
 
 vogo.init = function() {
 	domSvg = document.getElementById("turtleSVG")
@@ -161,38 +77,6 @@ vogo.init = function() {
 	run()
 	automaticTest()
 	manualTest()
-}
-
-// wraps a function for drawing it multiple times
-function Drawing(f, args, paintingG) {
-	var func = new Func(f.name, {}, [new FuncCall(f, args)], paintingG).exec()
-	// TODO use d3.node() ?
-	paintingG[0][0].vogo = func
-	func.update = function(newArgs) {
-		console.assert(this.getRootCommandsRef().length == 1)
-		// TODO is this right?
-		var fc = this.execCmds[0]
-		console.assert(fc instanceof FuncCall)
-		if (newArgs !== undefined) {
-			// leave old, just override
-			for (var a in newArgs)
-				fc.customArguments[a] = !(newArgs[a] instanceof Expression)
-					? new Expression(newArgs[a]) 
-					: newArgs[a]
-		}
-		this.state.reset()
-		return this.exec()
-	}
-	return func
-}
-
-// for d3.call()
-vogo.draw = function(f, args) {
-	return function(elem) { return new Drawing(f, args, elem) }
-}
-// for d3.call()
-vogo.update = function(args) {
-	return function(elem) { return elem[0][0].vogo.update(args) }
 }
 
 function run() {
@@ -212,6 +96,14 @@ function run() {
 			f.exec()
 		}
 	})
+}
+
+function MainSVG() {
+	var self = this
+	self.svgWidth
+	self.svgHeight
+	self.svg = d3.select("#turtleSVG").attr("xmlns", "http://www.w3.org/2000/svg")
+	self.svgInit()
 }
 
 function updateScreenElemsSize() {
@@ -235,17 +127,6 @@ function updatePanelSize() {
 		"right": toolbarPanelSizePercentOfBodyWidth*100+"%", 
 		"width": (1-functionPanelSizePercentOfBodyWidth-toolbarPanelSizePercentOfBodyWidth)*100+"%"})
 	window.onresize()
-}
-
-
-
-
-function MainSVG() {
-	var self = this
-	self.svgWidth
-	self.svgHeight
-	self.svg = d3.select("#turtleSVG").attr("xmlns", "http://www.w3.org/2000/svg")
-	self.svgInit()
 }
 
 function addKeysToToolbar() {
@@ -423,7 +304,7 @@ function setupUIEventListeners() {
 						 * unexpected.
 						 * 
 						 * Also, adding multiple with the same root will let
-						 * the last added proxy to be the lucky one.
+						 * the last added proxy be the lucky one.
 						 **/
 						list.forEach(function(le) {
 							selection.addAccumulate(le)
@@ -442,30 +323,7 @@ function setupUIEventListeners() {
 		.on("keydown", function() { updateKeyDownAndUp(d3.event.keyCode, true) })
 		.on("keyup", function() { updateKeyDownAndUp(d3.event.keyCode, false) })
 }
-
-function State() {
-	this.reset()
-}
-
-State.prototype.addRadius = function(angle) {
-	this.r += angle
-	this.r = correctRadius(this.r)
-}
-
-State.prototype.reset = function() {
-	this.x = 0
-	this.y = 0
-	// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
-	this.r = 0
-}
-
-State.prototype.clone = function() {
-	var s = new State()
-	s.x = this.x
-	s.y = this.y
-	s.r = this.r
-	return s
-}
+;;
 
 
 function fromMousePosToRotateAngle(mx, my, state) {
@@ -586,7 +444,7 @@ function setTextOfInput(input, containingForeignObject, text) {
 			containingForeignObject.attr("width", newWidth+5)
 	}
 }
-
+;;
 function addNewFuncToUI(name) {
 	var f = new Func(name)
 	f.initUI()
@@ -760,6 +618,55 @@ function resolveSelectionRect(e, selectionList, x, y, w, h) {
 //	console.log(selectionList)
 	return selectionList
 }
+;;
+
+function State() {
+	this.reset()
+}
+
+State.prototype.addRadius = function(angle) {
+	this.r += angle
+	this.r = correctRadius(this.r)
+}
+
+State.prototype.reset = function() {
+	this.x = 0
+	this.y = 0
+	// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
+	this.r = 0
+}
+
+State.prototype.clone = function() {
+	var s = new State()
+	s.x = this.x
+	s.y = this.y
+	s.r = this.r
+	return s
+}
+
+var onKeyDown = {}
+var onKeyUp = {}
+var keyPressed = {}
+for (var k in keyMap)
+	keyPressed[keyMap[k]] = false
+var mousePressed = {}
+for (var m in mouseMap)
+	mousePressed[mouseMap[m]] = false
+function updateKeyDownAndUp(keyCode, down) {
+	if (document.activeElement.nodeName !== "INPUT") {
+		var key = keyMap[keyCode]
+		if (key) {
+			var currentDown = keyPressed[key]
+			keyPressed[key] = down
+			if (down && !currentDown && onKeyDown[key])
+				onKeyDown[key]()
+			if (!down && currentDown && onKeyUp[key])
+				onKeyUp[key]()
+		} else {
+			console.log(keyCode+" not in keymap.")
+		}
+	}
+}
 
 onKeyDown["+"] = function() {
 	addNewFuncToUI()
@@ -927,6 +834,7 @@ onKeyDown.f = function() { // fill/close path
 	console.log(path)
 	F_.paintingG.append("path").attr("d", path)
 }
+;;
 
 function Expression(exp) {
 	// result of expressions that do not depend on arguments (e.g. "Math.PI/2")
@@ -942,7 +850,7 @@ Expression.prototype.set = function(exp) {
 		return
 	}
 	
-	if (typeof exp == "string") {
+	if (typeof exp === "string") {
 		var result
 		try {
 			result = eval(exp)
@@ -966,11 +874,11 @@ Expression.prototype.get = function() {
 }
 
 Expression.prototype.getWrapped = function() {
-	return (typeof this.exp == "string" ? "\""+this.exp+"\"" : this.exp)
+	return (typeof this.exp === "string" ? "\""+this.exp+"\"" : this.exp)
 }
 
 Expression.prototype.isConst = function() {
-	return typeof this.exp == "number"
+	return typeof this.exp === "number"
 }
 
 Expression.prototype.isStatic = function() {
@@ -1098,33 +1006,6 @@ Expression.prototype.eval = function(command) {
 	return result
 }
 
-/*
-	var toEval = "(function("
-	var i = 0
-	for (var arg in mainArgProvider)
-		toEval += arg+(++i < argsCount ? ", " : "")
-	if (loopIndex !== undefined)
-		toEval += (argsCount > 0 ? ", " : "")+"l1" // loop 1 index
-	toEval +=") { return "+self.exp+"; })("
-	i = 0
-	for (var arg in mainArgProvider) { // arguments itself are Expressions
-		var a = (fc !== undefined && fc.root.customArguments[arg] !== undefined
-			? fc.root.customArguments[arg].eval(fc)
-			: mainArgProvider[arg].eval())
-		if (a instanceof Array)
-			a = "["+a+"]"
-		toEval += a +(++i < argsCount ? ", " : "")
-	}
-	// TODO for simplicity, lets just do the first loop...
-	if (loopIndex !== undefined)
-		toEval += (argsCount > 0 ? ", " : "")+loopIndex
-	toEval +=")"
-	return evalWithChecks(toEval)
-
- **/
-
-
-
 Expression.prototype.adjustDragstart = function(element, dragPrecision) {
 	var self = this
 	if (self.isConst()) {
@@ -1162,87 +1043,124 @@ Expression.prototype.adjustDrag = function(element, alterElementValueFunc) {
 		}
 	}
 }
+;;
 
+var selection = {
+	e: [],
+	isEmpty: function() {
+		return this.e.length === 0
+	},
+	add: function(x) {
+		console.assert(x.root !== x) // only proxies can be selected
+		if (!keyPressed.shift) {
+			this.removeAndDeselectAll()
+			this.e.push(x)
+			x.select(true)
+		} else {
+			this.addAccumulate(x)
+		}
+	},
+	addAccumulate: function(x) {
+		console.assert(x.root !== x) // only proxies can be selected
+		if (this.contains(x)) {
+			this.removeAndDeselect(x)
+		} else {
+			// do not allow selection of multiple with same root
+			if (this.containsAsRoot(x))
+				this.removeAndDeselect(this.e[this.indexOfSelectedProxyOf(x)])
+			this.e.push(x)
+			x.select(true)
+		}
+	},
+	contains: function(x) {
+		return this.e.indexOf(x) !== -1
+	},
+	indexOfSelectedProxyOf: function(x) {
+		for (var i=0; i<this.e.length; i++)
+			if (this.e[i].root === x.root)
+				return i
+		return -1
+	},
+	containsAsRoot: function(x) {
+		return this.indexOfSelectedProxyOf(x) !== -1
+	},
+	removeAndDeselect: function(x) {
+		if (this.contains(x))
+			this.e.splice(this.e.indexOf(x), 1)
+		x.select(false) // deselect
+	},
+	removeAndDeselectAll: function() {
+		var detach = this.e
+		this.e = []
+		detach.forEach(function(x) { x.select(false) })
+		return detach
+	},
+	// remove means splice from selection
+	// deselect means disable highlighting indicating selection
+	// delete means structurally remove command from program (root, all proxies, ...)
+	removeDeselectAndDeleteAllCompletely: function() {
+		var detach = this.removeAndDeselectAll()
+		detach.forEach(function(x) { x.deleteCompletely() })
+		return detach
+	}
+}
 
 var manipulation = {
-	insertedCommand: false
-}
-
-manipulation.isCreating = function(cmdType) {
-	return cmdType === undefined
-		? this.insertedCommand !== false
-		: this.insertedCommand instanceof cmdType
-}
-
-manipulation.create = function(cmdType, newMainParameter) {
-	if (this.isCreating(cmdType)) {
-		this.finish(cmdType, newMainParameter)
-		this.createPreview(cmdType, newMainParameter)
-	} else {
-		this.createPreview(cmdType, newMainParameter)
-		this.finish(cmdType, newMainParameter)
-	}
-}
-
-manipulation.createPreview = function(cmdType, newMainParameter) {
-	console.assert(!this.isCreating(cmdType))
-	this.insertedCommand = new cmdType()
-	this.savedState = insertCmdRespectingSelection(this.insertedCommand)
-	this.update(cmdType, newMainParameter)
-}
-
-manipulation.update = function(cmdType, newMainParameter) {
-	var self = this
-	if (self.isCreating(cmdType)) {
-		if (newMainParameter === undefined) {
-			if (cmdType === Move)
-				newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], self.savedState)
-			if (cmdType === Rotate)
-				newMainParameter = fromMousePosToRotateAngle(mousePos[0], mousePos[1], self.savedState)
+	insertedCommand: false,
+	savedState: undefined,
+	isCreating: function(cmdType) {
+		return cmdType === undefined
+			? this.insertedCommand !== false
+			: this.insertedCommand instanceof cmdType
+	},
+	create: function(cmdType, newMainParameter) {
+		if (this.isCreating(cmdType)) {
+			this.finish(cmdType, newMainParameter)
+			this.createPreview(cmdType, newMainParameter)
+		} else {
+			this.createPreview(cmdType, newMainParameter)
+			this.finish(cmdType, newMainParameter)
 		}
-		self.insertedCommand.setMainParameter(newMainParameter)
+	},
+	createPreview: function(cmdType, newMainParameter) {
+		console.assert(!this.isCreating(cmdType))
+		this.insertedCommand = new cmdType()
+		this.savedState = insertCmdRespectingSelection(this.insertedCommand)
+		this.update(cmdType, newMainParameter)
+	},
+	update: function(cmdType, newMainParameter) {
+		var self = this
+		if (self.isCreating(cmdType)) {
+			if (newMainParameter === undefined) {
+				if (cmdType === Move)
+					newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], self.savedState)
+				if (cmdType === Rotate)
+					newMainParameter = fromMousePosToRotateAngle(mousePos[0], mousePos[1], self.savedState)
+			}
+			self.insertedCommand.setMainParameter(newMainParameter)
+			run()
+		} else {
+			// this happens when update is called before draw, when body is not selected
+			// because update is called, but key press is supressed
+			self.createPreview(cmdType, newMainParameter)
+			console.log("manipulation.update: warning: no preview exists yet")
+		}
+	},
+	finish: function(cmdType, newMainParameter) {
+		console.assert(this.isCreating(cmdType))
+		this.update(cmdType, newMainParameter)
+		var ic = this.insertedCommand
+		this.insertedCommand = false
+		updateLabelVisibility(ic)
+	},
+	remove: function(cmdType) {
+		console.assert(this.isCreating(cmdType))
+		this.insertedCommand.deleteCompletely()
+		this.insertedCommand = false
 		run()
-	} else {
-		// this happens when update is called before draw, when body is not selected
-		// because update is called, but key press is supressed
-		self.createPreview(cmdType, newMainParameter)
-		console.log("manipulation.update: warning: no preview exists yet")
 	}
 }
-
-manipulation.finish = function(cmdType, newMainParameter) {
-	console.assert(this.isCreating(cmdType))
-	this.update(cmdType, newMainParameter)
-	var ic = this.insertedCommand
-	this.insertedCommand = false
-	updateLabelVisibility(ic)
-}
-
-manipulation.remove = function(cmdType) {
-	console.assert(this.isCreating(cmdType))
-	this.insertedCommand.deleteCompletely()
-	this.insertedCommand = false
-	run()
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
+;;
 
 // this is only called once for every kind of command
 function Command(myConstructor) {
@@ -1501,6 +1419,7 @@ Command.prototype.getInnermostFuncCallOrFunc = function() {
 Command.prototype.isInsideFuncCall = function() {
 	return (this.getInnermostFuncCallOrFunc() instanceof FuncCall)
 }
+;;
 
 function Func(name, args, commands, customPaintingG) {
 	var self = this
@@ -1622,10 +1541,10 @@ function updateViewboxFor(obj, ref, afterZoom) {
 	console.assert(ref !== undefined && !isNaN(ref.svgViewboxX) && !isNaN(ref.svgViewboxY)
 		&& ref.svgViewboxWidth > 0 && ref.svgViewboxHeight > 0)
 	console.assert(isFinite(ref.svgViewboxX) && isFinite(ref.svgViewboxY) && isFinite(ref.svgViewboxWidth) && isFinite(ref.svgViewboxHeight))
-	function applyTransition() {
-		return afterZoom === undefined ? obj : obj.transition().duration(zoomTransitionDuration)
-	}
-	applyTransition(obj).attr("viewBox", ref.svgViewboxX+" "+ref.svgViewboxY+" "+ref.svgViewboxWidth+" "+ref.svgViewboxHeight)
+	;(afterZoom === undefined
+		? obj
+		: obj.transition().duration(zoomTransitionDuration))
+		.attr("viewBox", ref.svgViewboxX+" "+ref.svgViewboxY+" "+ref.svgViewboxWidth+" "+ref.svgViewboxHeight)
 }
 
 MainSVG.prototype.updateViewbox = function(afterZoom) {
@@ -1767,7 +1686,7 @@ Func.prototype.addArgument = function(defaultValue, argName) {
 			self.removeArgument(argName)
 			return
 		}
-		console.assert(typeof value == "string")
+		console.assert(typeof value === "string")
 		var regEx = /^([a-zA-Z][a-zA-Z0-9]*) *= *(.+)$/
 		var match = regEx.exec(value)
 		if (match !== null) { // match success
@@ -1913,6 +1832,7 @@ Func.prototype.toCode = function() {
 Func.prototype.getRootCommandsRef = function() {
 	return this.root.commands // .root, but functions can not have proxies anyway
 }
+;;
 
 function Move(lineLength) {
 	var self = this
@@ -2098,6 +2018,7 @@ Move.prototype.getPointsRequiredForSelection = function() {
 	return [[parseFloat(self.line.attr("x1")), parseFloat(self.line.attr("y1"))]
 		,[parseFloat(self.line.attr("x2")), parseFloat(self.line.attr("y2"))]]
 }
+;;
 
 function Rotate(angle) {
 	var self = this
@@ -2290,8 +2211,7 @@ Rotate.prototype.getPointsRequiredForSelection = function() {
 		[self.savedState.x + Math.sin(correctRadius(self.savedState.r + angle)) * radius,
 		self.savedState.y - Math.cos(correctRadius(self.savedState.r + angle)) * radius]]
 }
-
-
+;;
 
 function Loop(numberOfRepetitions, commands) {
 	var self = this
@@ -2488,6 +2408,7 @@ Loop.prototype.toCode = function(scopeDepth) {
 Loop.prototype.getRootCommandsRef = function() {
 	return this.root.commands
 }
+;;
 
 function FuncCall(func, args) {
 	var self = this
@@ -2706,7 +2627,7 @@ FuncCall.prototype.getRootCommandsRef = function() {
 	console.log("FuncCall getRootCommandsRef: warning: editing function from referencing call. should be avoided.")
 	return this.root.f.commands
 }
-
+;;
 
 function Branch(cond, ifTrueCmds, ifFalseCmds) {
 	var self = this
@@ -2874,7 +2795,39 @@ Branch.prototype.getRootCommandsRef = function() {
 	console.assert(self.root !== self) // because only proxies have a lastCondEvalResult
 	return self.lastCondEvalResult ? self.root.ifTrueCmds : self.root.ifFalseCmds
 }
+;;
 
+// wraps a function for drawing it multiple times
+function Drawing(f, args, paintingG) {
+	var func = new Func(f.name, {}, [new FuncCall(f, args)], paintingG).exec()
+	// TODO use d3.node() ?
+	paintingG[0][0].vogo = func
+	func.update = function(newArgs) {
+		console.assert(this.getRootCommandsRef().length === 1)
+		// TODO is this right?
+		var fc = this.execCmds[0]
+		console.assert(fc instanceof FuncCall)
+		if (newArgs !== undefined) {
+			// leave old, just override
+			for (var a in newArgs)
+				fc.customArguments[a] = !(newArgs[a] instanceof Expression)
+					? new Expression(newArgs[a]) 
+					: newArgs[a]
+		}
+		this.state.reset()
+		return this.exec()
+	}
+	return func
+}
+
+// for d3.call()
+vogo.draw = function(f, args) {
+	return function(elem) { return new Drawing(f, args, elem) }
+}
+// for d3.call()
+vogo.update = function(args) {
+	return function(elem) { return elem[0][0].vogo.update(args) }
+}
 
 // export
 vogo.Drawing = Drawing
@@ -2962,7 +2915,7 @@ function manualTest() {
 		F_.setCommands([
 			new Loop(360, [
 				new Rotate("1"),
-				new Move(1),
+				new Move(1)
 			])
 		])
 	})

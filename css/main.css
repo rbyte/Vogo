@@ -7,7 +7,7 @@ body {
 	position: absolute;
 	height: 100%;
 	width: 2px;
-	background-color: #bbb;
+	background-color: #BBB;
 	box-shadow: 0 0 5px rgba(0,0,0,0.3);
 	cursor: col-resize;
 	z-index: 2;
