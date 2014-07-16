@@ -33,11 +33,6 @@ var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
 var fcTextStyle = {cursor: "pointer"}
 var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity": 1, "fill-opacity": 0}
 
-var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
-	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
-	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x"}
-var mouseMap = { 0: "left", 1: "middle", 2: "right" }
-
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
@@ -50,7 +45,19 @@ var pi = Math.PI // for use in UI
 var radiusInDegrees = true
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 
+var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
+	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
+	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x"}
+var mouseMap = { 0: "left", 1: "middle", 2: "right" }
+
 // VARIABLES
+var keyPressed = {}
+for (var k in keyMap)
+	keyPressed[keyMap[k]] = false
+var mousePressed = {}
+for (var m in mouseMap)
+	mousePressed[mouseMap[m]] = false
+
 var mainSVG
 var functions = []
 // the function that is currently selected
@@ -118,17 +125,6 @@ function updateScreenElemsSize() {
 	mainSVG.updateViewbox()
 }
 
-function updatePanelSize() {
-	d3.select("#borderL").style("left", functionPanelSizePercentOfBodyWidth*100+"%")
-	d3.select("#functions").style("width", functionPanelSizePercentOfBodyWidth*100+"%")
-	d3.select("#borderR").style("right", toolbarPanelSizePercentOfBodyWidth*100+"%")
-	d3.select("#toolbar").style("width", toolbarPanelSizePercentOfBodyWidth*100+"%")
-	d3.select("#turtleSVGcontainer").style({
-		"right": toolbarPanelSizePercentOfBodyWidth*100+"%", 
-		"width": (1-functionPanelSizePercentOfBodyWidth-toolbarPanelSizePercentOfBodyWidth)*100+"%"})
-	window.onresize()
-}
-
 function addKeysToToolbar() {
 	var xhr = new XMLHttpRequest()
 	xhr.onreadystatechange = function() {
@@ -176,7 +172,14 @@ function setupUIEventListeners() {
 			if (id === "borderR")
 				toolbarPanelSizePercentOfBodyWidth = Math.max(0.03, Math.min(0.18,
 					(1 - d3.event.x / document.body.clientWidth)))
-			updatePanelSize()
+			d3.select("#borderL").style("left", functionPanelSizePercentOfBodyWidth*100+"%")
+			d3.select("#functions").style("width", functionPanelSizePercentOfBodyWidth*100+"%")
+			d3.select("#borderR").style("right", toolbarPanelSizePercentOfBodyWidth*100+"%")
+			d3.select("#toolbar").style("width", toolbarPanelSizePercentOfBodyWidth*100+"%")
+			d3.select("#turtleSVGcontainer").style({
+				"right": toolbarPanelSizePercentOfBodyWidth*100+"%", 
+				"width": (1-functionPanelSizePercentOfBodyWidth-toolbarPanelSizePercentOfBodyWidth)*100+"%"})
+			window.onresize()
 		})
 		.on("dragend", function (d) {
 			d3.selectAll("#functions, #turtleSVGcontainer, #toolbar").style({cursor: null /*remove style prop*/})
@@ -319,12 +322,35 @@ function setupUIEventListeners() {
 			})
 		)
 	
+	function updateKeyDownAndUp(keyCode, down) {
+		if (document.activeElement.nodeName !== "INPUT") {
+			var key = keyMap[keyCode]
+			if (key) {
+				var currentDown = keyPressed[key]
+				keyPressed[key] = down
+				if (down && !currentDown && onKeyDown[key])
+					onKeyDown[key]()
+				if (!down && currentDown && onKeyUp[key])
+					onKeyUp[key]()
+			} else {
+				console.log(keyCode+" not in keymap.")
+			}
+		}
+	}
+	
 	d3.select("body")
 		.on("keydown", function() { updateKeyDownAndUp(d3.event.keyCode, true) })
 		.on("keyup", function() { updateKeyDownAndUp(d3.event.keyCode, false) })
 }
 ;;
 
+function convertToRadian(angle) {
+	return radiusInDegrees && isRegularNumber(angle) ? angle/180*Math.PI : angle
+}
+
+function convertToDegrees(angle) {
+	return radiusInDegrees && isRegularNumber(angle) ? angle/Math.PI *180: angle
+}
 
 function fromMousePosToRotateAngle(mx, my, state) {
 	return angleToString(rotateAngleTo(mx, my, state))
@@ -359,6 +385,12 @@ function getLineLengthTo(x, y, state) {
 function getLineLengthToWithoutChangingDirection(x, y, state) {
 	var ra = rotateAngleTo(x, y, state)
 	return (ra > Math.PI/2 || ra < Math.PI/2 ? 1 : -1) * Math.cos(ra) * getLineLengthTo(x, y, state)
+}
+
+function isRegularNumber(n) {
+	// http://stackoverflow.com/questions/18082/validate-decimal-numbers-in-javascript-isnumeric
+	// typeof n == "number" not needed
+	return !isNaN(parseFloat(n)) && isFinite(n)
 }
 
 function correctRadius(r) {
@@ -398,12 +430,6 @@ function openSVG() {
 	// http://stackoverflow.com/questions/1700870/how-do-i-do-outerhtml-in-firefox
 		svg.outerHTML || new XMLSerializer().serializeToString(svg)
 	))
-}
-
-function isRegularNumber(n) {
-	// http://stackoverflow.com/questions/18082/validate-decimal-numbers-in-javascript-isnumeric
-	// typeof n == "number" not needed
-	return !isNaN(parseFloat(n)) && isFinite(n)
 }
 
 // this is used to determine the precision of the interactive drag-adjustment for numbers
@@ -586,14 +612,6 @@ function insertCmdRespectingSelection(cmd) {
 	return stateAtInsertionPoint
 }
 
-function convertToRadian(angle) {
-	return radiusInDegrees && isRegularNumber(angle) ? angle/180*Math.PI : angle
-}
-
-function convertToDegrees(angle) {
-	return radiusInDegrees && isRegularNumber(angle) ? angle/Math.PI *180: angle
-}
-
 function resolveSelectionRect(e, selectionList, x, y, w, h) {
 	var allIn = true
 	if (e.canContainCommands()) {
@@ -617,115 +635,6 @@ function resolveSelectionRect(e, selectionList, x, y, w, h) {
 		selectionList.push(e)
 //	console.log(selectionList)
 	return selectionList
-}
-;;
-
-function State() {
-	this.reset()
-}
-
-State.prototype.addRadius = function(angle) {
-	this.r += angle
-	this.r = correctRadius(this.r)
-}
-
-State.prototype.reset = function() {
-	this.x = 0
-	this.y = 0
-	// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
-	this.r = 0
-}
-
-State.prototype.clone = function() {
-	var s = new State()
-	s.x = this.x
-	s.y = this.y
-	s.r = this.r
-	return s
-}
-
-var onKeyDown = {}
-var onKeyUp = {}
-var keyPressed = {}
-for (var k in keyMap)
-	keyPressed[keyMap[k]] = false
-var mousePressed = {}
-for (var m in mouseMap)
-	mousePressed[mouseMap[m]] = false
-function updateKeyDownAndUp(keyCode, down) {
-	if (document.activeElement.nodeName !== "INPUT") {
-		var key = keyMap[keyCode]
-		if (key) {
-			var currentDown = keyPressed[key]
-			keyPressed[key] = down
-			if (down && !currentDown && onKeyDown[key])
-				onKeyDown[key]()
-			if (!down && currentDown && onKeyUp[key])
-				onKeyUp[key]()
-		} else {
-			console.log(keyCode+" not in keymap.")
-		}
-	}
-}
-
-onKeyDown["+"] = function() {
-	addNewFuncToUI()
-}
-
-onKeyDown["-"] = function() {
-	removeFunction(F_)
-}
-
-onKeyDown.d = function() { // draw/move
-	if (!manipulation.isCreating()) {
-		manipulation.createPreview(Move)
-	} else if (manipulation.isCreating(Rotate)) {
-		manipulation.finish(Rotate)
-		manipulation.createPreview(Move)
-	}
-}
-
-onKeyDown.r = function() { // rotate
-	if (!manipulation.isCreating()) {
-		manipulation.createPreview(Rotate)
-	} else if (manipulation.isCreating(Move)) {
-		manipulation.finish(Move)
-		manipulation.createPreview(Rotate)
-	}
-}
-
-onKeyDown.e = function() {
-	var result = exportAll()
-	console.log(result)
-	// TODO make it beautiful
-//	window.prompt("Copy to clipboard: Ctrl+C, Enter", result)
-}
-
-onKeyDown.s = function() {
-	openSVG()
-}
-
-onKeyDown.del = function() {
-	selection.removeDeselectAndDeleteAllCompletely()
-	run()
-}
-
-onKeyDown.esc = function() {
-	if (manipulation.isCreating(Move))
-		manipulation.remove(Move)
-	if (manipulation.isCreating(Rotate))
-		manipulation.remove(Rotate)
-}
-
-onKeyDown.a = function() {
-	if (selection.isEmpty()) {
-		var argName = F_.addArgument("1")
-	} else {
-		// TODO if exp isStatic
-		var argName = F_.addArgument(selection.e[0].evalMainParameter())
-		selection.e[0].setMainParameter(argName)
-	}
-	run()
 }
 
 function wrapSelectionInCommand(cmdName, doWithCmdList) {
@@ -774,39 +683,6 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 	run()
 }
 
-onKeyDown.l = function() {
-	wrapSelectionInCommand("loop", function(cmdList) { return new Loop(2, cmdList) })
-}
-
-onKeyDown.b = function() {
-	wrapSelectionInCommand("branch", function(cmdList) { return new Branch("true", cmdList, []) })
-}
-
-onKeyDown.c = function() { // copy
-	if (keyPressed.ctrl && !selection.isEmpty()) {
-		// the overwritten have no scope links, so no need to explicitly delete them (for garbage collection)
-		lastCopiedElements = []
-		selection.e.forEach(function(e) { lastCopiedElements.push(e.root.clone()) })
-	}
-}
-
-onKeyDown.x = function() { // cut
-	if (keyPressed.ctrl && !selection.isEmpty()) {
-		onKeyDown.c()
-		selection.removeDeselectAndDeleteAllCompletely()
-		run()
-	}
-}
-
-onKeyDown.v = function() { // paste
-	if (keyPressed.ctrl && lastCopiedElements !== undefined) {
-		// the order of selection is honored while inserting
-		// this makes cutting "x" be well suited for reording commands
-		lastCopiedElements.forEach(function(e) { insertCmdRespectingSelection(e.clone()) })
-		run()
-	}
-}
-
 function forAllExecCmdsOfTypeDo(cmds, func, type) {
 	cmds.forEach(function(c) {
 		if (c.canContainCommands()) {
@@ -816,25 +692,250 @@ function forAllExecCmdsOfTypeDo(cmds, func, type) {
 		}
 	})
 }
+;;
 
-onKeyDown.f = function() { // fill/close path
-	if (true) return
-	// TODO
-	var path = ["M0,0"]
-	var withoutFirst = []
-	for (var i=1; i<F_.execCmds.length; i++)
-		withoutFirst.push(F_.execCmds[i])
-	forAllExecCmdsOfTypeDo(withoutFirst, function(m) {
-		// TODO construct with Array join()
-		path.push("L"+m.savedState.x+","+m.savedState.y)
-	}, Move)
-	path.push("L"+F_.state.x+","+F_.state.y)
-	path.push("Z")
-	path = path.join(" ")
-	console.log(path)
-	F_.paintingG.append("path").attr("d", path)
+// singletons
+var onKeyUp = {}
+var onKeyDown = {
+	"+": function() {
+		addNewFuncToUI()
+	},
+	"-": function() {
+		removeFunction(F_)
+	},
+	d: function() { // draw/move
+		if (!manipulation.isCreating()) {
+			manipulation.createPreview(Move)
+		} else if (manipulation.isCreating(Rotate)) {
+			manipulation.finish(Rotate)
+			manipulation.createPreview(Move)
+		}
+	},
+	r: function() { // rotate
+		if (!manipulation.isCreating()) {
+			manipulation.createPreview(Rotate)
+		} else if (manipulation.isCreating(Move)) {
+			manipulation.finish(Move)
+			manipulation.createPreview(Rotate)
+		}
+	},
+	e: function() {
+		var result = exportAll()
+		console.log(result)
+		// TODO make it beautiful
+	//	window.prompt("Copy to clipboard: Ctrl+C, Enter", result)
+	},
+	s: function() {
+		openSVG()
+	},
+	del: function() {
+		selection.removeDeselectAndDeleteAllCompletely()
+		run()
+	},
+	esc: function() {
+		if (manipulation.isCreating(Move))
+			manipulation.remove(Move)
+		if (manipulation.isCreating(Rotate))
+			manipulation.remove(Rotate)
+	},
+	a: function() { // abstract
+		if (selection.isEmpty()) {
+			var argName = F_.addArgument("1")
+		} else {
+			// TODO if exp isStatic
+			var argName = F_.addArgument(selection.e[0].evalMainParameter())
+			selection.e[0].setMainParameter(argName)
+		}
+		run()
+	},
+	l: function() {
+		wrapSelectionInCommand("loop", function(cmdList) { return new Loop(2, cmdList) })
+	},
+	b: function() {
+		wrapSelectionInCommand("branch", function(cmdList) { return new Branch("true", cmdList, []) })
+	},
+	c: function() { // copy
+		if (keyPressed.ctrl && !selection.isEmpty()) {
+			// the overwritten have no scope links, so no need to explicitly delete them (for garbage collection)
+			lastCopiedElements = []
+			selection.e.forEach(function(e) { lastCopiedElements.push(e.root.clone()) })
+		}
+	},
+	x: function() { // cut
+		if (keyPressed.ctrl && !selection.isEmpty()) {
+			onKeyDown.c()
+			selection.removeDeselectAndDeleteAllCompletely()
+			run()
+		}
+	},
+	v: function() { // paste
+		if (keyPressed.ctrl && lastCopiedElements !== undefined) {
+			// the order of selection is honored while inserting
+			// this makes cutting "x" be well suited for reording commands
+			lastCopiedElements.forEach(function(e) { insertCmdRespectingSelection(e.clone()) })
+			run()
+		}
+	},
+	f: function() { // fill/close path
+		if (true) return
+		// TODO
+		var path = ["M0,0"]
+		var withoutFirst = []
+		for (var i=1; i<F_.execCmds.length; i++)
+			withoutFirst.push(F_.execCmds[i])
+		forAllExecCmdsOfTypeDo(withoutFirst, function(m) {
+			// TODO construct with Array join()
+			path.push("L"+m.savedState.x+","+m.savedState.y)
+		}, Move)
+		path.push("L"+F_.state.x+","+F_.state.y)
+		path.push("Z")
+		path = path.join(" ")
+		console.log(path)
+		F_.paintingG.append("path").attr("d", path)
+	}
 }
 ;;
+
+var selection = {
+	e: [],
+	isEmpty: function() {
+		return this.e.length === 0
+	},
+	add: function(x) {
+		console.assert(x.root !== x) // only proxies can be selected
+		if (!keyPressed.shift) {
+			this.removeAndDeselectAll()
+			this.e.push(x)
+			x.select(true)
+		} else {
+			this.addAccumulate(x)
+		}
+	},
+	addAccumulate: function(x) {
+		console.assert(x.root !== x) // only proxies can be selected
+		if (this.contains(x)) {
+			this.removeAndDeselect(x)
+		} else {
+			// do not allow selection of multiple with same root
+			if (this.containsAsRoot(x))
+				this.removeAndDeselect(this.e[this.indexOfSelectedProxyOf(x)])
+			this.e.push(x)
+			x.select(true)
+		}
+	},
+	contains: function(x) {
+		return this.e.indexOf(x) !== -1
+	},
+	indexOfSelectedProxyOf: function(x) {
+		for (var i=0; i<this.e.length; i++)
+			if (this.e[i].root === x.root)
+				return i
+		return -1
+	},
+	containsAsRoot: function(x) {
+		return this.indexOfSelectedProxyOf(x) !== -1
+	},
+	removeAndDeselect: function(x) {
+		if (this.contains(x))
+			this.e.splice(this.e.indexOf(x), 1)
+		x.select(false) // deselect
+	},
+	removeAndDeselectAll: function() {
+		var detach = this.e
+		this.e = []
+		detach.forEach(function(x) { x.select(false) })
+		return detach
+	},
+	// remove means splice from selection
+	// deselect means disable highlighting indicating selection
+	// delete means structurally remove command from program (root, all proxies, ...)
+	removeDeselectAndDeleteAllCompletely: function() {
+		var detach = this.removeAndDeselectAll()
+		detach.forEach(function(x) { x.deleteCompletely() })
+		return detach
+	}
+}
+
+var manipulation = {
+	insertedCommand: false,
+	savedState: undefined,
+	isCreating: function(cmdType) {
+		return cmdType === undefined
+			? this.insertedCommand !== false
+			: this.insertedCommand instanceof cmdType
+	},
+	create: function(cmdType, newMainParameter) {
+		if (this.isCreating(cmdType)) {
+			this.finish(cmdType, newMainParameter)
+			this.createPreview(cmdType, newMainParameter)
+		} else {
+			this.createPreview(cmdType, newMainParameter)
+			this.finish(cmdType, newMainParameter)
+		}
+	},
+	createPreview: function(cmdType, newMainParameter) {
+		console.assert(!this.isCreating(cmdType))
+		this.insertedCommand = new cmdType()
+		this.savedState = insertCmdRespectingSelection(this.insertedCommand)
+		this.update(cmdType, newMainParameter)
+	},
+	update: function(cmdType, newMainParameter) {
+		var self = this
+		if (self.isCreating(cmdType)) {
+			if (newMainParameter === undefined) {
+				if (cmdType === Move)
+					newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], self.savedState)
+				if (cmdType === Rotate)
+					newMainParameter = fromMousePosToRotateAngle(mousePos[0], mousePos[1], self.savedState)
+			}
+			self.insertedCommand.setMainParameter(newMainParameter)
+			run()
+		} else {
+			// this happens when update is called before draw, when body is not selected
+			// because update is called, but key press is supressed
+			self.createPreview(cmdType, newMainParameter)
+			console.log("manipulation.update: warning: no preview exists yet")
+		}
+	},
+	finish: function(cmdType, newMainParameter) {
+		console.assert(this.isCreating(cmdType))
+		this.update(cmdType, newMainParameter)
+		var ic = this.insertedCommand
+		this.insertedCommand = false
+		updateLabelVisibility(ic)
+	},
+	remove: function(cmdType) {
+		console.assert(this.isCreating(cmdType))
+		this.insertedCommand.deleteCompletely()
+		this.insertedCommand = false
+		run()
+	}
+}
+;;
+
+function State() {
+	this.reset()
+}
+
+State.prototype.addRadius = function(angle) {
+	this.r += angle
+	this.r = correctRadius(this.r)
+}
+
+State.prototype.reset = function() {
+	this.x = 0
+	this.y = 0
+	// r: 0 is North, -Math.PI/2 is West. r is in [-Pi, Pi].
+	this.r = 0
+}
+
+State.prototype.clone = function() {
+	var s = new State()
+	s.x = this.x
+	s.y = this.y
+	s.r = this.r
+	return s
+}
 
 function Expression(exp) {
 	// result of expressions that do not depend on arguments (e.g. "Math.PI/2")
@@ -1041,123 +1142,6 @@ Expression.prototype.adjustDrag = function(element, alterElementValueFunc) {
 			element.value = (alterElementValueFunc !== undefined ? alterElementValueFunc(newValue) : newValue)
 			run()
 		}
-	}
-}
-;;
-
-var selection = {
-	e: [],
-	isEmpty: function() {
-		return this.e.length === 0
-	},
-	add: function(x) {
-		console.assert(x.root !== x) // only proxies can be selected
-		if (!keyPressed.shift) {
-			this.removeAndDeselectAll()
-			this.e.push(x)
-			x.select(true)
-		} else {
-			this.addAccumulate(x)
-		}
-	},
-	addAccumulate: function(x) {
-		console.assert(x.root !== x) // only proxies can be selected
-		if (this.contains(x)) {
-			this.removeAndDeselect(x)
-		} else {
-			// do not allow selection of multiple with same root
-			if (this.containsAsRoot(x))
-				this.removeAndDeselect(this.e[this.indexOfSelectedProxyOf(x)])
-			this.e.push(x)
-			x.select(true)
-		}
-	},
-	contains: function(x) {
-		return this.e.indexOf(x) !== -1
-	},
-	indexOfSelectedProxyOf: function(x) {
-		for (var i=0; i<this.e.length; i++)
-			if (this.e[i].root === x.root)
-				return i
-		return -1
-	},
-	containsAsRoot: function(x) {
-		return this.indexOfSelectedProxyOf(x) !== -1
-	},
-	removeAndDeselect: function(x) {
-		if (this.contains(x))
-			this.e.splice(this.e.indexOf(x), 1)
-		x.select(false) // deselect
-	},
-	removeAndDeselectAll: function() {
-		var detach = this.e
-		this.e = []
-		detach.forEach(function(x) { x.select(false) })
-		return detach
-	},
-	// remove means splice from selection
-	// deselect means disable highlighting indicating selection
-	// delete means structurally remove command from program (root, all proxies, ...)
-	removeDeselectAndDeleteAllCompletely: function() {
-		var detach = this.removeAndDeselectAll()
-		detach.forEach(function(x) { x.deleteCompletely() })
-		return detach
-	}
-}
-
-var manipulation = {
-	insertedCommand: false,
-	savedState: undefined,
-	isCreating: function(cmdType) {
-		return cmdType === undefined
-			? this.insertedCommand !== false
-			: this.insertedCommand instanceof cmdType
-	},
-	create: function(cmdType, newMainParameter) {
-		if (this.isCreating(cmdType)) {
-			this.finish(cmdType, newMainParameter)
-			this.createPreview(cmdType, newMainParameter)
-		} else {
-			this.createPreview(cmdType, newMainParameter)
-			this.finish(cmdType, newMainParameter)
-		}
-	},
-	createPreview: function(cmdType, newMainParameter) {
-		console.assert(!this.isCreating(cmdType))
-		this.insertedCommand = new cmdType()
-		this.savedState = insertCmdRespectingSelection(this.insertedCommand)
-		this.update(cmdType, newMainParameter)
-	},
-	update: function(cmdType, newMainParameter) {
-		var self = this
-		if (self.isCreating(cmdType)) {
-			if (newMainParameter === undefined) {
-				if (cmdType === Move)
-					newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], self.savedState)
-				if (cmdType === Rotate)
-					newMainParameter = fromMousePosToRotateAngle(mousePos[0], mousePos[1], self.savedState)
-			}
-			self.insertedCommand.setMainParameter(newMainParameter)
-			run()
-		} else {
-			// this happens when update is called before draw, when body is not selected
-			// because update is called, but key press is supressed
-			self.createPreview(cmdType, newMainParameter)
-			console.log("manipulation.update: warning: no preview exists yet")
-		}
-	},
-	finish: function(cmdType, newMainParameter) {
-		console.assert(this.isCreating(cmdType))
-		this.update(cmdType, newMainParameter)
-		var ic = this.insertedCommand
-		this.insertedCommand = false
-		updateLabelVisibility(ic)
-	},
-	remove: function(cmdType) {
-		console.assert(this.isCreating(cmdType))
-		this.insertedCommand.deleteCompletely()
-		this.insertedCommand = false
-		run()
 	}
 }
 ;;
@@ -1538,9 +1522,17 @@ Func.prototype.updateTurtle = function() {
 }
 
 function updateViewboxFor(obj, ref, afterZoom) {
-	console.assert(ref !== undefined && !isNaN(ref.svgViewboxX) && !isNaN(ref.svgViewboxY)
-		&& ref.svgViewboxWidth > 0 && ref.svgViewboxHeight > 0)
-	console.assert(isFinite(ref.svgViewboxX) && isFinite(ref.svgViewboxY) && isFinite(ref.svgViewboxWidth) && isFinite(ref.svgViewboxHeight))
+	console.assert(
+		ref !== undefined
+		&& !isNaN(ref.svgViewboxX)
+		&& !isNaN(ref.svgViewboxY)
+		&& ref.svgViewboxWidth > 0
+		&& ref.svgViewboxHeight > 0)
+	console.assert(
+		isFinite(ref.svgViewboxX)
+		&& isFinite(ref.svgViewboxY)
+		&& isFinite(ref.svgViewboxWidth)
+		&& isFinite(ref.svgViewboxHeight))
 	;(afterZoom === undefined
 		? obj
 		: obj.transition().duration(zoomTransitionDuration))
@@ -3034,6 +3026,7 @@ function manualTest() {
 	
 	run()
 }
+;;
 
 function automaticTest() {
 	if (false)
