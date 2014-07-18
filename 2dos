@@ -1,6 +1,7 @@
 see also TODOs in code
 
 small features
+	auto-select newly created commands
 	export code to ui output window
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
@@ -24,7 +25,8 @@ performance
 
 big features
 	### automatic tests
-	upload results to server/community results page
+	### upload results to server/community results page
+		also export viewport properties
 	store history in local browser cache
 	examples and tutorial videos/help
 	edit Move style (colour, breadth)

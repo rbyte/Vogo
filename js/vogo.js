@@ -22,13 +22,14 @@ var vogo = function() {// spans everything - not indented
 var vogo = {}
 
 // CONSTANTS (const not supported in strict mode)
-var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": ".2", "stroke-linecap": "round"}
+var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": .2, "stroke-linecap": "round"}
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
-var lineStyle = {stroke: "#000", "stroke-width": ".25", "stroke-linecap": "round"}
+var lineStyle = {stroke: "#000", "stroke-opacity": 0.8, "stroke-width": .25, "stroke-linecap": "round"}
+var lineStyleInScope = {stroke: "#500", "stroke-opacity": 0.4}
 var arcStyle = {fill: "#000", "fill-opacity": 0.1}
-var clockStyle = {fill: "#fff", "fill-opacity": 0.01 /*for clickability*/, stroke: "#777", "stroke-width": ".05"}
+var arcStyleInScope = {fill: "#500", "fill-opacity": 0.05}
+var clockStyle = {fill: "#fff", "fill-opacity": 0.01 /*for clickability*/, stroke: "#777", "stroke-width": .05}
 var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
-var textStyle = {fill: "#666", "font-family": "Open Sans", "font-size": "1.5px", "text-anchor": "middle"}
 var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
 var fcTextStyle = {cursor: "pointer"}
 var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity": 1, "fill-opacity": 0}
@@ -88,20 +89,14 @@ vogo.init = function() {
 
 function run() {
 //	console.log("RUNNING")
-	F_.state.reset()
-	lastRotateExecuted = undefined
-	lastRotateScaleFactorCalculated = undefined
 	F_.exec()
-	F_.updateTurtle()
 	mainSVG.updateTurtle()
 	
-	functions.forEach(function(f) {
-		if (f !== F_) {
-			f.state.reset()
-			lastRotateExecuted = undefined
-			lastRotateScaleFactorCalculated = undefined
+	// also run all functions that depend on F_
+	determineDeepFuncDependenciesFor(F_, true/*reverse search*/).forEach(function(f) {
+		f = functions[f]
+		if (f !== F_)
 			f.exec()
-		}
 	})
 }
 
@@ -432,24 +427,6 @@ function openSVG() {
 	))
 }
 
-// this is used to determine the precision of the interactive drag-adjustment for numbers
-// this is similar to "get order of magnitude"
-// getPrecision(100) === 2
-// getPrecision(.01) === -2
-// BUT: getPrecision(100.01) === -2 (intended output)
-function getPrecision(n) {
-	var match = /^-?([0-9]*)\.?([0-9]*)$/.exec(n.toString())
-	if (match !== null) {
-		// match[0] is original string, [1] is part before comma and [2] after
-		var precision = -match[2].length
-		if (precision === 0)
-			precision = match[1].length-1
-		return precision
-	} else {
-		console.log("getPrecision: warning: value does not match regex for number")
-	}
-}
-
 function updateLabelVisibility(self) {
 	if (self.label !== undefined)
 		self.label.classed("hide", !selection.contains(self)
@@ -495,17 +472,24 @@ function exportAll() {
 	var fDep = determineFuncDependencies()
 	var fProcessed = {}
 	var result = ""
-	outer: while (Object.keys(fProcessed).length < functions.length) {
-		var fProcessedOld = Object.keys(fProcessed).length
+	function numberOfProcessedFunctions() { return Object.keys(fProcessed).length }
+	
+	outer: while (numberOfProcessedFunctions() < functions.length) {
+		var fPlOld = numberOfProcessedFunctions()
 		for (var i=0; i<functions.length; i++) {
-			if (fDep[i] === undefined || fProcessed[fDep[i]] !== undefined || i === fDep[i] /*allow recursion*/) {
+			var doesOnlyDependOnAlreadyExportedFunctions = true
+			for (var k=0; k<fDep[i].length; k++) {
+				if (fDep[i][k] !== i /*allow recursion*/ && fProcessed[fDep[i][k]] === undefined)
+					doesOnlyDependOnAlreadyExportedFunctions = false
+			}
+			if (doesOnlyDependOnAlreadyExportedFunctions) {
 				result += functions[i].toCode()+"\n\n"
 				fProcessed[i] = true
-				if (Object.keys(fProcessed).length === functions.length)
+				if (numberOfProcessedFunctions() === functions.length)
 					break outer
 			}
 		}
-		if (fProcessedOld === Object.keys(fProcessed).length) {
+		if (fPlOld === numberOfProcessedFunctions()) {
 			// TODO
 			console.log("exportAll: error: circular dependencies between functions!")
 			break
@@ -514,14 +498,23 @@ function exportAll() {
 	return result
 }
 
-function determineFuncDependencies() {
-	// TODO big bug in here: the dependencies are actually a tree, not just a list!
-	// store proxies in function? let fc take care of removing it. shallowClone for function = functionCall ?
-	var dependencies = {}
+// TODO functions proxies should be its dependencies. function shallowClone = funcCall !?
+function determineFuncDependencies(reverse) {
+	// those are direct. if a -> b -> c, a -> c is not inside the list
+	var dependencies = [] // x depends on dependencies[x]
+	var reverseDependencies = [] // reverseDependencies[x] depend on x
+	for (var f in functions) {
+		dependencies.push([])
+		reverseDependencies.push([])
+	}
 	function searchForFuncCall(commands) {
 		for (var k=0; k<commands.length; k++) {
 			if (commands[k] instanceof FuncCall) {
-				dependencies[i] = functions.indexOf(commands[k].root.f)
+				var f = functions.indexOf(commands[k].root.f)
+				if (dependencies[i].indexOf(f) === -1)
+					dependencies[i].push(f)
+				if (reverseDependencies[f].indexOf(i) === -1)
+					reverseDependencies[f].push(i)
 			}
 			if (commands[k] instanceof Loop)
 				searchForFuncCall(commands[k].getRootCommandsRef())
@@ -531,12 +524,39 @@ function determineFuncDependencies() {
 			}
 		}
 	}
-	for (var i=0; k<functions.length; k++)
+	for (var i=0; i<functions.length; i++)
 		searchForFuncCall(functions[i].getRootCommandsRef())
-	if (false)
-		for (var d in dependencies)
-			console.log(functions[d].name+" depends on "+functions[dependencies[d]].name)
-	return dependencies
+	if (false) {
+		printFuncDependencies(dependencies, " depends on:")
+		printFuncDependencies(reverseDependencies, " is a dependency of:")
+	}
+	return reverse !== undefined ? reverseDependencies : dependencies
+}
+
+function printFuncDependencies(dd, str) {
+	for (var d in dd) {
+		console.log(functions[d].name+str)
+		var fd = dd[d]
+		for (var f in fd)
+			console.log("\t"+functions[fd[f]].name)
+	}
+}
+
+// also considers indirect (transitiv) dependencies:
+// reachability search from f in dependency graph
+function determineDeepFuncDependenciesFor(f, reverse) {
+	var ds = determineFuncDependencies(reverse)
+	var list = []
+	function gather(i) { // depth first search
+		ds[i].forEach(function(e) {
+			if (list.indexOf(e) === -1) {
+				list.push(e)
+				gather(e)
+			}
+		})
+	}
+	gather(functions.indexOf(f))
+	return list
 }
 
 function commandsToCodeString(commands, scopeDepth) {
@@ -722,6 +742,7 @@ var onKeyDown = {
 	e: function() {
 		var result = exportAll()
 		console.log(result)
+		
 		// TODO make it beautiful
 	//	window.prompt("Copy to clipboard: Ctrl+C, Enter", result)
 	},
@@ -1105,6 +1126,24 @@ Expression.prototype.eval = function(command) {
 	if (!self.isNormalResult(result))
 		errorMsg("is not a normal result.")
 	return result
+}
+
+// this is used to determine the precision of the interactive drag-adjustment for numbers
+// this is similar to "get order of magnitude"
+// getPrecision(100) === 2
+// getPrecision(.01) === -2
+// BUT: getPrecision(100.01) === -2 (intended output)
+function getPrecision(n) {
+	var match = /^-?([0-9]*)\.?([0-9]*)$/.exec(n.toString())
+	if (match !== null) {
+		// match[0] is original string, [1] is part before comma and [2] after
+		var precision = -match[2].length
+		if (precision === 0)
+			precision = match[1].length-1
+		return precision
+	} else {
+		console.log("getPrecision: warning: value does not match regex for number")
+	}
 }
 
 Expression.prototype.adjustDragstart = function(element, dragPrecision) {
@@ -1742,6 +1781,11 @@ Func.prototype.setCommands = function(commands) {
 // @override
 Func.prototype.exec = function(/*no caller here*/) {
 	var self = this
+//	console.log("exec: "+self.name)
+	self.state.reset()
+	lastRotateExecuted = undefined
+	lastRotateScaleFactorCalculated = undefined
+	
 	if (self.commands.length !== self.execCmds.length) {
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 		console.assert(self.execCmds.length === 0)
@@ -1974,7 +2018,13 @@ Move.prototype.execInner = function(callerF) {
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-	self.lineMainSVG.style({"stroke-opacity": on ? 0.4 : 1.0, "stroke": on ? "#500" : lineStyle.stroke})
+//	var sty = {}
+//	for (var attr in lineStyleInScope) {
+//		console.assert(lineStyle[attr] !== undefined)
+//		sty[attr] = (on ? lineStyleInScope : lineStyle)[attr]
+//	}
+//	self.lineMainSVG.style({"stroke-opacity": on ? 0.4 : lineStyle["stroke-opacity"], "stroke": on ? "#500" : lineStyle.stroke})
+	self.lineMainSVG.style(on ? lineStyleInScope : lineStyle)
 }
 
 Move.prototype.mark = function(on) {
@@ -2160,8 +2210,14 @@ Rotate.prototype.execInner = function(callerF) {
 Rotate.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-	self.arc.style({"fill-opacity": on ? 0.05 : arcStyle["fill-opacity"]
-		, "fill": on ? "#500" : arcStyle.stroke})
+//	var sty = {}
+//	for (var attr in arcStyleInScope) {
+//		console.assert(arcStyle[attr] !== undefined)
+//		sty[attr] = (on ? arcStyleInScope : arcStyle)[attr]
+//	}
+	self.arc.style(on ? arcStyleInScope : arcStyle)
+//	self.arc.style({"fill-opacity": on ? 0.05 : arcStyle["fill-opacity"]
+//		, "fill": on ? "#500" : arcStyle.stroke})
 }
 
 Rotate.prototype.mark = function(on) {
@@ -3018,7 +3074,20 @@ function manualTest() {
 		])
 	})
 	
-	var testsToRun = [false,false,false,/*3*/false,false,false,false,/*7*/false,false,false,false]
+	tests.push(function() {
+		addNewFuncToUI("tunnel")
+		F_.addArgument(60, "a")
+		F_.addArgument(2.04, "c")
+		F_.addArgument(40, "n")
+		F_.setCommands([
+			new Loop("n", [
+				new Move("a"),
+				new Move("-a*c"),
+				new Move("a"),
+				new Rotate("360/n")])])
+	})
+	
+	var testsToRun = [false,false,false,/*3*/false,false,false,false,/*7*/false,false,false,false,/*1*/false]
 	for (var i=0; i<testsToRun.length && i<tests.length; i++) {
 		if (testsToRun[i])
 			tests[i]()
