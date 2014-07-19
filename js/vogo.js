@@ -33,6 +33,7 @@ var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
 var fcTextStyle = {cursor: "pointer"}
 var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity": 1, "fill-opacity": 0}
+var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%", top: "10%", left: "10%", border: "1px solid rgba(0,0,0,0.1)"}
 
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
@@ -72,7 +73,7 @@ var lastRotateExecuted
 var lastRotateScaleFactorCalculated
 var mousePos = [0,0]
 var lastCopiedElements
-;;
+
 
 vogo.init = function() {
 	domSvg = document.getElementById("turtleSVG")
@@ -337,7 +338,7 @@ function setupUIEventListeners() {
 		.on("keydown", function() { updateKeyDownAndUp(d3.event.keyCode, true) })
 		.on("keyup", function() { updateKeyDownAndUp(d3.event.keyCode, false) })
 }
-;;
+
 
 function convertToRadian(angle) {
 	return radiusInDegrees && isRegularNumber(angle) ? angle/180*Math.PI : angle
@@ -447,7 +448,7 @@ function setTextOfInput(input, containingForeignObject, text) {
 			containingForeignObject.attr("width", newWidth+5)
 	}
 }
-;;
+
 function addNewFuncToUI(name) {
 	var f = new Func(name)
 	f.initUI()
@@ -468,7 +469,8 @@ function removeFunction(self) {
 	}
 }
 
-function exportAll() {
+// "export" current project
+function generateJScodeForExternalInvocation() {
 	var fDep = determineFuncDependencies()
 	var fProcessed = {}
 	var result = ""
@@ -495,6 +497,7 @@ function exportAll() {
 			break
 		}
 	}
+	result += "new vogo.Drawing("+F_.name+", {});\n"
 	return result
 }
 
@@ -712,7 +715,7 @@ function forAllExecCmdsOfTypeDo(cmds, func, type) {
 		}
 	})
 }
-;;
+
 
 // singletons
 var onKeyUp = {}
@@ -739,12 +742,25 @@ var onKeyDown = {
 			manipulation.createPreview(Rotate)
 		}
 	},
-	e: function() {
-		var result = exportAll()
-		console.log(result)
-		
-		// TODO make it beautiful
-	//	window.prompt("Copy to clipboard: Ctrl+C, Enter", result)
+	e: function() { // export for usage in code/web
+		var jsCodeForExternalInvocation = generateJScodeForExternalInvocation()
+		console.log(jsCodeForExternalInvocation)
+var html = [
+"<!DOCTYPE html>"
+,"<html>"
+,"<head>"
+,"	<meta charset='utf-8'>"
+,"	<title>Vogo Export</title>"
+,"	<script type='text/javascript' src='js/d3.v3.min.js'></script>"
+,"	<script type='text/javascript' src='js/vogo.js'></script>"
+,"</head>"
+,"<body>"
+,"<script>"
+,jsCodeForExternalInvocation
+,"</script>"
+,"</body>"
+,"</html>"]
+		window.open("data:text/plain;charset=utf-8," + encodeURIComponent(html.join("\n")))
 	},
 	s: function() {
 		openSVG()
@@ -761,7 +777,7 @@ var onKeyDown = {
 	},
 	a: function() { // abstract
 		if (selection.isEmpty()) {
-			var argName = F_.addArgument("1")
+			F_.addArgument("1")
 		} else {
 			// TODO if exp isStatic
 			var argName = F_.addArgument(selection.e[0].evalMainParameter())
@@ -815,7 +831,7 @@ var onKeyDown = {
 		F_.paintingG.append("path").attr("d", path)
 	}
 }
-;;
+
 
 var selection = {
 	e: [],
@@ -847,7 +863,7 @@ var selection = {
 	contains: function(x) {
 		return this.e.indexOf(x) !== -1
 	},
-	indexOfSelectedProxyOf: function(x) {
+    indexOfSelectedProxyOf: function(x) {
 		for (var i=0; i<this.e.length; i++)
 			if (this.e[i].root === x.root)
 				return i
@@ -932,7 +948,7 @@ var manipulation = {
 		run()
 	}
 }
-;;
+
 
 function State() {
 	this.reset()
@@ -1183,7 +1199,7 @@ Expression.prototype.adjustDrag = function(element, alterElementValueFunc) {
 		}
 	}
 }
-;;
+
 
 // this is only called once for every kind of command
 function Command(myConstructor) {
@@ -1442,7 +1458,7 @@ Command.prototype.getInnermostFuncCallOrFunc = function() {
 Command.prototype.isInsideFuncCall = function() {
 	return (this.getInnermostFuncCallOrFunc() instanceof FuncCall)
 }
-;;
+
 
 function Func(name, args, commands, customPaintingG) {
 	var self = this
@@ -1868,7 +1884,7 @@ Func.prototype.toCode = function() {
 Func.prototype.getRootCommandsRef = function() {
 	return this.root.commands // .root, but functions can not have proxies anyway
 }
-;;
+
 
 function Move(lineLength) {
 	var self = this
@@ -2060,7 +2076,7 @@ Move.prototype.getPointsRequiredForSelection = function() {
 	return [[parseFloat(self.line.attr("x1")), parseFloat(self.line.attr("y1"))]
 		,[parseFloat(self.line.attr("x2")), parseFloat(self.line.attr("y2"))]]
 }
-;;
+
 
 function Rotate(angle) {
 	var self = this
@@ -2259,7 +2275,7 @@ Rotate.prototype.getPointsRequiredForSelection = function() {
 		[self.savedState.x + Math.sin(correctRadius(self.savedState.r + angle)) * radius,
 		self.savedState.y - Math.cos(correctRadius(self.savedState.r + angle)) * radius]]
 }
-;;
+
 
 function Loop(numberOfRepetitions, commands) {
 	var self = this
@@ -2456,7 +2472,7 @@ Loop.prototype.toCode = function(scopeDepth) {
 Loop.prototype.getRootCommandsRef = function() {
 	return this.root.commands
 }
-;;
+
 
 function FuncCall(func, args) {
 	var self = this
@@ -2570,7 +2586,7 @@ FuncCall.prototype.execInner = function(callerF) {
 			self.icon.argF[a].text.text(a).style(fcArgTextStyle)
 			self.icon.argF[a].inputDiv.remove() // input is inside inputDiv
 			self.icon.argF[a].input = undefined
-			self.icon.argF[a]
+			self.icon.argF[a] // TODO is this line correct?
 			delete root.customArguments[a]
 			run()
 		} else {
@@ -2675,7 +2691,7 @@ FuncCall.prototype.getRootCommandsRef = function() {
 	console.log("FuncCall getRootCommandsRef: warning: editing function from referencing call. should be avoided.")
 	return this.root.f.commands
 }
-;;
+
 
 function Branch(cond, ifTrueCmds, ifFalseCmds) {
 	var self = this
@@ -2843,14 +2859,23 @@ Branch.prototype.getRootCommandsRef = function() {
 	console.assert(self.root !== self) // because only proxies have a lastCondEvalResult
 	return self.lastCondEvalResult ? self.root.ifTrueCmds : self.root.ifFalseCmds
 }
-;;
+
 
 // wraps a function for drawing it multiple times
+// TODO "new" is not required for invoking
 function Drawing(f, args, paintingG) {
-	var func = new Func(f.name, {}, [new FuncCall(f, args)], paintingG).exec()
+	if (paintingG === undefined) {
+		var svg = d3.select("body").append("svg")
+			.attr("xmlns", "http://www.w3.org/2000/svg")
+			.attr("viewBox", "-100 -50 200 100") // TODO
+			.style(defaultSvgDrawingStyle)
+		paintingG = svg.append("g")
+	}
+	
+	var wrapperF = new Func(f.name, {}, [new FuncCall(f, args)], paintingG).exec()
 	// TODO use d3.node() ?
-	paintingG[0][0].vogo = func
-	func.update = function(newArgs) {
+	paintingG.node().vogo = wrapperF
+	wrapperF.update = function(newArgs) {
 		console.assert(this.getRootCommandsRef().length === 1)
 		// TODO is this right?
 		var fc = this.execCmds[0]
@@ -2865,7 +2890,7 @@ function Drawing(f, args, paintingG) {
 		this.state.reset()
 		return this.exec()
 	}
-	return func
+	return wrapperF
 }
 
 // for d3.call()
@@ -2874,7 +2899,7 @@ vogo.draw = function(f, args) {
 }
 // for d3.call()
 vogo.update = function(args) {
-	return function(elem) { return elem[0][0].vogo.update(args) }
+	return function(elem) { return elem.node().vogo.update(args) }
 }
 
 // export
@@ -3095,7 +3120,7 @@ function manualTest() {
 	
 	run()
 }
-;;
+
 
 function automaticTest() {
 	if (false)

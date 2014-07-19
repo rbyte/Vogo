@@ -1,6 +1,3 @@
-<?php
-
-?>
 <!DOCTYPE html>
 <html>
 <head>
@@ -51,7 +48,7 @@ var δ = new vogo.Func("δ", {"a": 10, "b": -0.7, "c": 0.7});
 	new vogo.Rotate("b"),
 	new vogo.Move("-a")]);
 
-new vogo.Drawing(α, {}, d3.select("#mysvg"))
+new vogo.Drawing(δ, {}, d3.select("#mysvg"))
 
 if (false) {
 	var fd = new vogo.Drawing(α, {n: 10}, d3.select("#mysvg"))

@@ -2,7 +2,6 @@ see also TODOs in code
 
 small features
 	auto-select newly created commands
-	export code to ui output window
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
 	handling endless recursion by checking line-length or out of bounds
@@ -24,9 +23,14 @@ performance
 	round dom numbers
 
 big features
-	### automatic tests
 	### upload results to server/community results page
 		also export viewport properties
+		define API
+		serverside exchange method
+		clientside browse and import
+		clientside code-based import
+		clientside share
+	### automatic tests
 	store history in local browser cache
 	examples and tutorial videos/help
 	edit Move style (colour, breadth)
@@ -55,12 +59,13 @@ big features
 	Logo output
 
 bugs
-	### add proxies to functions (debug dependency checking) and improve run() performance
 	foreignObject relative width and height
+	code output: loop has one tab indentation too much (may also apply to other code)
 	fix: rotation/move manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
 	remove loops when empty (e.g. removed last inner command)
 	if an Expression is set to say Math.random(), it is considered static because it does not depend on arguments
 	2 subsequent moves cannot be distinguished
 	chromium only (chrome works): the input fields inside foreign objects do not update
+	function name input field has no drag event, but selections via mouse is disabled
 
