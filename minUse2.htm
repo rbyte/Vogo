@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<title>Vogo Export</title>
+	<script type='text/javascript' src='js/d3.v3.min.js'></script>
+	<script type='text/javascript' src='js/vogo.js'></script>
+</head>
+<body>
+
+<svg id="mysvg" style="position: fixed; width: 80%; height: 80%; top: 10%; left: 10%; border: 1px solid rgba(0, 0, 0, 0.1);" viewBox="-50 -50 100 100" xmlns="http://www.w3.org/2000/svg">
+</svg>
+
+<script>
+var α = new vogo.Func("α", {"a": 106, "n": 7});
+α.setCommands([
+    new vogo.Loop("n", [
+        new vogo.Move("a/n"),
+        new vogo.Rotate("360/n")])]);
+
+var δ = new vogo.Func("δ", {"a": 10, "b": -20, "c": 0.7});
+δ.setCommands([
+    new vogo.Move("a"),
+    new vogo.Rotate("b"),
+    new vogo.Move("a"),
+    new vogo.FuncCall(δ, {"a": "a*c", "b": "b"}),
+    new vogo.Move("-a"),
+    new vogo.Rotate("-b*2"),
+    new vogo.Move("a"),
+    new vogo.FuncCall(δ, {"a": "a*c", "b": "b"}),
+    new vogo.Move("-a"),
+    new vogo.Rotate("b"),
+    new vogo.Move("-a")]);
+
+//new vogo.Drawing(δ)
+
+if (true) {
+    var fd = new vogo.Drawing(δ, {arguments: {b: -80}, container: d3.select("#mysvg")})
+    fd.update({n: 5})
+}
+
+if (false)
+    d3.select("#mysvg").append("g")
+            .call(vogo.draw(α, {n: 10}))
+            .call(vogo.update({n: 5}))
+
+if (false) {
+    var data = [3, 5, 7]
+    data.forEach(function(e) {
+        new vogo.Drawing(α, {arguments: {n: e}, container: d3.select("#mysvg").append("g")})
+    })
+}
+</script>
+</body>
+</html>

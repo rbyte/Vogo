@@ -12,6 +12,7 @@ small features
 	add acknowledgements (back to me)
 	add switch for add before or after selected element
 	if loop is set to an array, automatically detect this and iterate over length
+	manipulation preview has different style (e.g. lower opacity)
 	one selected element can contain another selected element - fix?!
 		is this creating bugs when removeDeselectAndDeleteAllCompletely ?
 
@@ -24,7 +25,6 @@ performance
 
 big features
 	### upload results to server/community results page
-		also export viewport properties
 		define API
 		serverside exchange method
 		clientside browse and import

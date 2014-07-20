@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<meta charset='utf-8'>
-	<title>Vogo Export</title>
-	<script type='text/javascript' src='js/d3.v3.min.js'></script>
-	<script type='text/javascript' src='js/vogo.js'></script>
+    <meta charset='utf-8'>
+    <title>Vogo Export</title>
+    <script src='http://d3js.org/d3.v3.min.js'></script>
+    <script src='http://localhost/dev/ma/js/vogo.js'></script>
 </head>
 <body>
 <script>
-var α = new vogo.Func("α", {});
-α.setCommands([
-	new vogo.Loop(8, [
-			new vogo.Move(13.53),
-			new vogo.Rotate(150.2)])]);
+    var α = new vogo.Func("α");
+    α.setCommands([
+        new vogo.Loop(5, [
+            new vogo.Move(14.8),
+            new vogo.Rotate(86)])]);
 
-new vogo.Drawing(α, {});
+    new vogo.Drawing(α);
 
 </script>
 </body>

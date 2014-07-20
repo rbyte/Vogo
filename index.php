@@ -6,10 +6,10 @@
 <head>
 	<meta charset="utf-8">
 	<title>Vogo</title>
-	<link rel="icon" href="images/favicon.png" type="image/png"/>
+	<link rel="icon" type="image/png" href="images/favicon.png"/>
 	<link rel="stylesheet" type="text/css" href="css/main.css"/>
-	<script type='text/javascript' src='js/d3.js'></script>
-	<script type='text/javascript' src='js/vogo.js'></script>
+	<script src='js/d3.js'></script>
+	<script src='js/vogo.js'></script>
 </head>
 
 <body>

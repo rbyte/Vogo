@@ -22,6 +22,9 @@ var vogo = function() {// spans everything - not indented
 var vogo = {}
 
 // CONSTANTS (const not supported in strict mode)
+	// TODO http://mgrf.de/vogo/
+var urlToSelf = "http://localhost/dev/ma/js/vogo.js"
+
 var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": .2, "stroke-linecap": "round"}
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
 var lineStyle = {stroke: "#000", "stroke-opacity": 0.8, "stroke-width": .25, "stroke-linecap": "round"}
@@ -39,9 +42,13 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 3
-var scopeDepthLimit = 6 // for endless loops and recursion
+var scopeDepthLimit = 8 // for endless loops and recursion
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 70
+var defaultViewBox = (-defaultSvgViewboxHeight/2)
+	+" "+(-defaultSvgViewboxHeight/2)
+	+" "+defaultSvgViewboxHeight
+	+" "+defaultSvgViewboxHeight
 var domSvg
 var pi = Math.PI // for use in UI
 var radiusInDegrees = true
@@ -221,10 +228,7 @@ function setupUIEventListeners() {
 	mainSVG.svg
 		.on("mousemove", function (d, i) {
 			mousePos = d3.mouse(this)
-			if (manipulation.isCreating(Move))
-				manipulation.update(Move)
-			if (manipulation.isCreating(Rotate))
-				manipulation.update(Rotate)
+			manipulation.update()
 		})
 		.on("click", function (d, i) {
 			// prevent click triggered after dragend
@@ -235,13 +239,13 @@ function setupUIEventListeners() {
 				if (keyPressed.d) {
 					manipulation.create(Move)
 				} else {
-					manipulation.finish(Move)
+					manipulation.finish()
 				}
 			} else if (manipulation.isCreating(Rotate)) {
 				if (keyPressed.r) {
 					manipulation.create(Rotate)
 				} else {
-					manipulation.finish(Rotate)
+					manipulation.finish()
 				}
 			} else {
 				if (!selection.isEmpty()) {
@@ -266,6 +270,7 @@ function setupUIEventListeners() {
 					mainSVG.updateViewbox()
 				} else {
 					if (!dragInProgress) {
+						manipulation.finish()
 						selectionRect = mainSVG.paintingG.append("rect")
 							.attr("x", dragStart[0])
 							.attr("y", dragStart[1])
@@ -497,7 +502,14 @@ function generateJScodeForExternalInvocation() {
 			break
 		}
 	}
-	result += "new vogo.Drawing("+F_.name+", {});\n"
+	// F_.svg.attr("viewBox")
+	var F_viewBoxRounded =
+		F_.svgViewboxX.toFixed(3)
+		+" "+F_.svgViewboxY.toFixed(3)
+		+" "+F_.svgViewboxWidth.toFixed(3)
+		+" "+F_.svgViewboxHeight.toFixed(3)
+
+	result += "new vogo.Drawing("+F_.name+", {viewBox: \""+F_viewBoxRounded+"\"});\n"
 	return result
 }
 
@@ -730,7 +742,7 @@ var onKeyDown = {
 		if (!manipulation.isCreating()) {
 			manipulation.createPreview(Move)
 		} else if (manipulation.isCreating(Rotate)) {
-			manipulation.finish(Rotate)
+			manipulation.finish()
 			manipulation.createPreview(Move)
 		}
 	},
@@ -738,7 +750,7 @@ var onKeyDown = {
 		if (!manipulation.isCreating()) {
 			manipulation.createPreview(Rotate)
 		} else if (manipulation.isCreating(Move)) {
-			manipulation.finish(Move)
+			manipulation.finish()
 			manipulation.createPreview(Rotate)
 		}
 	},
@@ -751,8 +763,8 @@ var html = [
 ,"<head>"
 ,"	<meta charset='utf-8'>"
 ,"	<title>Vogo Export</title>"
-,"	<script type='text/javascript' src='js/d3.v3.min.js'></script>"
-,"	<script type='text/javascript' src='js/vogo.js'></script>"
+,"	<script src='http://d3js.org/d3.v3.min.js'></script>"
+,"	<script src='"+urlToSelf+"'></script>"
 ,"</head>"
 ,"<body>"
 ,"<script>"
@@ -760,7 +772,8 @@ var html = [
 ,"</script>"
 ,"</body>"
 ,"</html>"]
-		window.open("data:text/plain;charset=utf-8," + encodeURIComponent(html.join("\n")))
+		// text/plain
+		window.open("data:text/html;charset=utf-8," + encodeURIComponent(html.join("\n")))
 	},
 	s: function() {
 		openSVG()
@@ -770,10 +783,7 @@ var html = [
 		run()
 	},
 	esc: function() {
-		if (manipulation.isCreating(Move))
-			manipulation.remove(Move)
-		if (manipulation.isCreating(Rotate))
-			manipulation.remove(Rotate)
+		manipulation.remove()
 	},
 	a: function() { // abstract
 		if (selection.isEmpty()) {
@@ -914,38 +924,36 @@ var manipulation = {
 		console.assert(!this.isCreating(cmdType))
 		this.insertedCommand = new cmdType()
 		this.savedState = insertCmdRespectingSelection(this.insertedCommand)
-		this.update(cmdType, newMainParameter)
+		this.update(newMainParameter)
 	},
-	update: function(cmdType, newMainParameter) {
-		var self = this
-		if (self.isCreating(cmdType)) {
+	update: function(newMainParameter) {
+		if (this.isCreating()) {
 			if (newMainParameter === undefined) {
-				if (cmdType === Move)
-					newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], self.savedState)
-				if (cmdType === Rotate)
-					newMainParameter = fromMousePosToRotateAngle(mousePos[0], mousePos[1], self.savedState)
+				if (this.insertedCommand instanceof Move)
+					newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], this.savedState)
+				else if (this.insertedCommand instanceof Rotate)
+					newMainParameter = fromMousePosToRotateAngle(mousePos[0], mousePos[1], this.savedState)
+				else
+					console.assert(false, "manipulation.update: error: only Move and Rotate are supported")
 			}
-			self.insertedCommand.setMainParameter(newMainParameter)
+			this.insertedCommand.setMainParameter(newMainParameter)
 			run()
-		} else {
-			// this happens when update is called before draw, when body is not selected
-			// because update is called, but key press is supressed
-			self.createPreview(cmdType, newMainParameter)
-			console.log("manipulation.update: warning: no preview exists yet")
 		}
 	},
-	finish: function(cmdType, newMainParameter) {
-		console.assert(this.isCreating(cmdType))
-		this.update(cmdType, newMainParameter)
-		var ic = this.insertedCommand
-		this.insertedCommand = false
-		updateLabelVisibility(ic)
+	finish: function(newMainParameter) {
+		if (this.isCreating()) {
+			this.update(newMainParameter)
+			var ic = this.insertedCommand
+			this.insertedCommand = false
+			updateLabelVisibility(ic)
+		}
 	},
-	remove: function(cmdType) {
-		console.assert(this.isCreating(cmdType))
-		this.insertedCommand.deleteCompletely()
-		this.insertedCommand = false
-		run()
+	remove: function() {
+		if (this.isCreating()) {
+			this.insertedCommand.deleteCompletely()
+			this.insertedCommand = false
+			run()
+		}
 	}
 }
 
@@ -1874,8 +1882,11 @@ Func.prototype.setStateTo = function(idx) {
 // @override
 Func.prototype.toCode = function() {
 	var self = this
-	var result = "var "+self.name+" = new vogo.Func(\""+self.name+"\", "
-		+argsToCode(self.args)+");\n"
+	var result = "var "+self.name+" = new vogo.Func(\""+self.name+"\""+
+		(Object.keys(self.args).length > 0
+			? ", "+argsToCode(self.args)
+			: "")
+		+");\n"
 		// the extra call will make recursion possible
 		+self.name+".setCommands("+commandsToCodeString(self.commands, 0)+");"
 	return result
@@ -2624,20 +2635,19 @@ FuncCall.prototype.execInner = function(callerF) {
 			}
 		}
 	}
-	
-	if (self.execCmds.length !== root.f.commands.length) {
-//		self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
-//		self.execCmds = []
-		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
-		console.assert(self.execCmds.length === 0)
-		root.f.commands.forEach(function(e) {
-			self.execCmds.push(e.shallowClone(self))
-		})
-	}
-	
+
 	if (self.scopeDepth > scopeDepthLimit) {
 		updateNotification("Execution depth too high (>"+scopeDepthLimit+"). Endless loop/recursion? Stopping here.", 5000)
 	} else {
+		if (self.execCmds.length !== root.f.commands.length) {
+//			self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
+//			self.execCmds = []
+			forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
+			console.assert(self.execCmds.length === 0)
+			root.f.commands.forEach(function(e) {
+				self.execCmds.push(e.shallowClone(self))
+			})
+		}
 //		console.log("exec fc with scopeDepth: "+self.scopeDepth)
 		self.execCmds.forEach(function(e) { e.exec(callerF) })
 	}
@@ -2862,19 +2872,27 @@ Branch.prototype.getRootCommandsRef = function() {
 
 
 // wraps a function for drawing it multiple times
+// opt is an object containing optional arguments
 // TODO "new" is not required for invoking
-function Drawing(f, args, paintingG) {
-	if (paintingG === undefined) {
+function Drawing(f, opt) {
+	if (opt === undefined)
+		opt = {}
+	if (opt.container === undefined) {
 		var svg = d3.select("body").append("svg")
 			.attr("xmlns", "http://www.w3.org/2000/svg")
-			.attr("viewBox", "-100 -50 200 100") // TODO
+			.attr("viewBox", (opt.viewBox !== undefined
+				? opt.viewBox
+				: defaultViewBox))
 			.style(defaultSvgDrawingStyle)
-		paintingG = svg.append("g")
+		opt.container = svg.append("g")
+	}
+	if (opt.arguments === undefined) {
+		opt.arguments = {}
 	}
 	
-	var wrapperF = new Func(f.name, {}, [new FuncCall(f, args)], paintingG).exec()
-	// TODO use d3.node() ?
-	paintingG.node().vogo = wrapperF
+	var wrapperF = new Func(f.name, {}, [new FuncCall(f, opt.arguments)], opt.container)
+	wrapperF.exec()
+	opt.container.node().vogo = wrapperF
 	wrapperF.update = function(newArgs) {
 		console.assert(this.getRootCommandsRef().length === 1)
 		// TODO is this right?
@@ -2895,7 +2913,7 @@ function Drawing(f, args, paintingG) {
 
 // for d3.call()
 vogo.draw = function(f, args) {
-	return function(elem) { return new Drawing(f, args, elem) }
+	return function(elem) { return new Drawing(f, {arguments: args, container: elem})}
 }
 // for d3.call()
 vogo.update = function(args) {
@@ -3173,10 +3191,10 @@ function automaticTest() {
 	console.assert(F_.state.y === -10)
 	console.assert(F_.state.r === 0)
 	
-	manipulation.finish(Move, 10)
+	manipulation.finish(10)
 	selection.add(mvP)
 	manipulation.createPreview(Rotate, 90)
-	manipulation.finish(Rotate, 90)
+	manipulation.finish(90)
 	var rtP = F_.execCmds[0]
 	mvP = F_.execCmds[1]
 	selection.add(mvP)
