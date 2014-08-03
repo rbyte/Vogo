@@ -1,0 +1,56 @@
+body {
+	position: absolute;
+	min-height: 100%;
+	min-width: 100%;
+	margin: 0;
+	padding: 0;
+	font-family: "Open Sans Light", "Open Sans", sans-serif;
+	font-weight: 100;
+	font-size: 100%;
+	background: url("../images/ricepaper22t.png") repeat scroll 0 0 #f6f4f2;
+}
+a {
+	outline: none;
+	text-decoration: none;
+}
+.container {
+	width: 88%;
+	text-align: center;
+	margin: 4% 6% 10% 6%;
+}
+.iconBox {
+	display: inline-block;
+	width: 20%;
+	min-width: 180px;
+	vertical-align: top;
+	text-align: center;
+	padding: 0% 2% 4% 2%;
+}
+.vogoIcon {
+	max-width: 60%;
+}
+.title {
+	font-size: 200%;
+	margin: 0;
+}
+.startLink {
+	font-size: 200%;
+	font-weight: bold;
+	color: #2844b2;
+	text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.2);
+	transition: all 200ms ease-in-out;
+}
+.startLink:hover {
+	color: #581bbf;
+	text-shadow: 0px 1px 3px rgba(0, 0, 0, 0.1);
+}
+.videoBox {
+	display: inline-block;
+	width: 75%;
+	min-width: 400px;
+	vertical-align: top;
+	text-align: left;
+}
+.videoBox video {
+	width: 100%;
+}

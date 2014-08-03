@@ -21,9 +21,10 @@ var vogo = function() {// spans everything - not indented
 "use strict";
 var vogo = {}
 
-// CONSTANTS (const not supported in strict mode)
-	// TODO http://mgrf.de/vogo/
-var urlToSelf = "http://localhost/dev/ma/js/vogo.js"
+// CONSTANTS
+var version = 0.1
+var urlToSelf = "http://mgrf.de/vogo/js/vogo.js"
+//var urlToSelf = "http://localhost/dev/vogo/js/vogo.js"
 
 var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": .2, "stroke-linecap": "round"}
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
@@ -2921,14 +2922,15 @@ vogo.update = function(args) {
 }
 
 // export
-vogo.Drawing = Drawing
+vogo.version = version
+vogo.onKeyDown = onKeyDown
 vogo.Func = Func
 vogo.Move = Move
 vogo.Rotate = Rotate
 vogo.Loop = Loop
 vogo.FuncCall = FuncCall
 vogo.Branch = Branch
-vogo.onKeyDown = onKeyDown
+vogo.Drawing = Drawing
 
 function manualTest() {
 	var tests = []
@@ -3130,7 +3132,19 @@ function manualTest() {
 				new Rotate("360/n")])])
 	})
 	
-	var testsToRun = [false,false,false,/*3*/false,false,false,false,/*7*/false,false,false,false,/*1*/false]
+	tests.push(function() {
+		addNewFuncToUI("swirlPyramid")
+		F_.addArgument(40, "a")
+		F_.setCommands([
+			new Loop("a", [
+				new Move("60*(i+1)/a"),
+				new Rotate("90+90/a")])])
+	})
+	
+	var testsToRun = [false,false,false,
+		/*03*/false,false,false,false,
+		/*07*/false,false,false,false,
+		/*11*/false,false]
 	for (var i=0; i<testsToRun.length && i<tests.length; i++) {
 		if (testsToRun[i])
 			tests[i]()

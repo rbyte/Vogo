@@ -3,6 +3,10 @@ body {
 	padding: 0;
 	font-family: "Open Sans", sans-serif;
 }
+a {
+	outline: none;
+	text-decoration: none;
+}
 .border {
 	position: absolute;
 	height: 100%;
@@ -133,42 +137,6 @@ text.mark:not(.selected) {
 	color: #55f;
 	padding-left: 3px;
 }
-/*#functions .ul_examples {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-}*/
-#functions .centerDiv {
-	padding-top: 3px;
-	width: 100%;
-	text-align: center;
-	/*background-color: #000;*/
-}
-#functions #f_addNew {
-	/*width: 20%;*/
-	margin-bottom: 10%;
-    padding: 0px 8px 2px 8px; /*top right bottom left*/
-    display: inline-block;
-    text-align: center;
-	/*font-weight: 100;*/
-	font-size: 150%;
-    color: #aaa;
-    background-color: #d8d8d8;
-    border: 0 none;
-    border-radius: 20px;
-    box-shadow: 0 2px 1px rgba(0, 0, 0, 0.07), 0 0 1px rgba(0, 0, 0, 0.2), 0 1px 0 rgba(255, 255, 255, 0.3) inset;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
-	cursor: pointer;
-	transition: color 100ms ease-in-out, background-color 100ms ease-in-out;
-}
-#functions #f_addNew:hover {
-	color: #888;
-	background-color: #ddd;
-}
-button::-moz-focus-inner {
-    border: none;
-}
-
 
 .titleRow {
 	display: table;
@@ -217,7 +185,6 @@ button::-moz-focus-inner {
 #functions .f_remove:hover {
 	color: #777;
 }
-
 
 #notification {
 	position: absolute;
@@ -270,7 +237,7 @@ svg li {
 
 #ul_toolbar {
 	list-style: none;
-	padding: 0;
+	padding: 0 0 10% 0;
 	margin: 0;
 }
 #ul_toolbar li {
@@ -283,7 +250,7 @@ svg li {
 	background: linear-gradient(to top, rgba(218,218,218,1), rgba(233,233,233,1));
 	border: 1px solid rgba(0,0,0,0.15);
 }
-#ul_toolbar img, .container-box { /*, #ul_toolbar svg*/
+#ul_toolbar img, #ul_toolbar .container-box { /*, #ul_toolbar svg*/
 	width: 41%;
 }
 #ul_toolbar img {
@@ -296,7 +263,7 @@ svg li {
 }
 .aspect-box {
 	padding-top: 100%; /*1:1 aspect*/
-	position: relative
+	position: relative;
 }
 .content-box {
 	position: absolute;
@@ -304,4 +271,32 @@ svg li {
 	right: 0;
 	bottom: 0;
 	left: 0;
+}
+
+.centerDiv {
+	padding-top: 3px;
+	width: 100%;
+	text-align: center;
+	/*background-color: #000;*/
+}
+.helpSVGcontainer {
+	width: 40%;
+}
+#functions .container-box {
+	width: 14%;
+}
+.roundButton {
+    color: #aaa;
+    background-color: #d8d8d8;
+	max-width: 100%;
+	max-height: 100%;
+	border-radius: 50%; /*cicle*/
+    border: 0 none;
+    box-shadow: 0 2px 1px rgba(0, 0, 0, 0.07), 0 0 1px rgba(0, 0, 0, 0.2), 0 1px 0 rgba(255, 255, 255, 0.3) inset;
+	cursor: pointer;
+	transition: color 100ms ease-in-out, background-color 100ms ease-in-out;
+}
+.roundButton:hover {
+	color: #888;
+	background-color: #ddd;
 }

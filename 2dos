@@ -1,47 +1,56 @@
 see also TODOs in code
 
+### MA release version
+	vogo intro page
+		add acknowledgements (back to me)
+	test, test, test
+	github upload
+
+### community
+	examples and tutorial videos/help
+		text
+		blink symbols on key hit
+	upload results to server/community results page
+		adapt API to allow import to UI
+			factor addNewFuncToUI into Func
+		define & document API
+			improve compiler scheme image
+		clientside code-based import & export
+			what is "common" for code and ui
+			version check
+		serverside exchange method
+		clientside browse and import
+		clientside share
+	email Bret :)
+
 small features
+	remove ° if edit in input field (rotate)
+	more tooltips, more sanity checks
 	auto-select newly created commands
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
 	handling endless recursion by checking line-length or out of bounds
 	show results of expressions beneath input field "=..."
-	more tooltips, more sanity checks
 	cycle (select) through elements (as in code) with arrow keys
-	simple! Embedding of results in web pages (should remain dynamic)
-	add acknowledgements (back to me)
 	add switch for add before or after selected element
 	if loop is set to an array, automatically detect this and iterate over length
 	manipulation preview has different style (e.g. lower opacity)
 	one selected element can contain another selected element - fix?!
 		is this creating bugs when removeDeselectAndDeleteAllCompletely ?
 
-performance
-	further cache arguments eval
-	for one run cycle and the same stack position, only evaluate variables once
-	store which expression requires which variables, so I only eval those
-	put svg styles in svg css (inkscape compatibility?)
-	round dom numbers
-
 big features
-	### upload results to server/community results page
-		define API
-		serverside exchange method
-		clientside browse and import
-		clientside code-based import
-		clientside share
-	### automatic tests
-	store history in local browser cache
-	examples and tutorial videos/help
+	automatic tests
 	edit Move style (colour, breadth)
 	close path command
 		edit fill
+	Collision-Free positioning
+		check same state of commands, then shift y ?
 	new command: goto, go home, go to point in past
+		go back X states in time
+	store history in local browser cache
 	add svg-native circle/arc
 	constraint solving
 		snapping/line end handles
-	Collision-Free positioning
-		check same state of commands, then shift y ?
 	bigger click radius, especially for Move
 	variables can reference variables (on global scope)
 	How can the program flow be visualised (stepping through)?
@@ -53,10 +62,17 @@ big features
 	allow functions as arguments
 	undo
 	Beziers
-	Bearbeitung von geschlossenen Pfaden (Füllung, ...)
 	allow much more dragging between elements
-	code ui view
+	code ui view/codemirror
 	Logo output
+
+performance
+	remove huge box shadow (?)
+	further cache arguments eval
+	for one run cycle and the same stack position, only evaluate variables once
+	store which expression requires which variables, so I only eval those
+	put svg styles in svg css (inkscape compatibility?)
+	round dom numbers
 
 bugs
 	foreignObject relative width and height
@@ -67,5 +83,5 @@ bugs
 	if an Expression is set to say Math.random(), it is considered static because it does not depend on arguments
 	2 subsequent moves cannot be distinguished
 	chromium only (chrome works): the input fields inside foreign objects do not update
-	function name input field has no drag event, but selections via mouse is disabled
+	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
 

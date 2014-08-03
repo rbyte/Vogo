@@ -16,7 +16,9 @@
 	<div id="functions">
 		<ul id="ul_f"></ul>
 		<div class="centerDiv">
-			<button id="f_addNew" title="Add new function">+</button>
+			<div class="container-box"><div class="aspect-box"><div class="content-box">
+				<img id="f_addNew" class="roundButton" src="images/NewFunction.svg" title="Add new function"></a>
+			</div></div></div>
 		</div>
 	</div>
 	<div id="borderL" class="border"></div>
@@ -35,6 +37,11 @@
 			<li key="e" title="Export to code"><img src="images/Export.svg"></li>
 			<li key="s" title="SVG output"><img src="images/Svg.svg"></li>
 		</ul>
+		<div class="centerDiv">
+			<div class="container-box helpSVGcontainer"><div class="aspect-box"><div class="content-box">
+				<a href="intro.php"><img class="roundButton" src="images/Help.svg" title="Help"></a>
+			</div></div></div>
+		</div>
 	</div>
 	
 	<script>
