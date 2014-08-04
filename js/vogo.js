@@ -409,7 +409,7 @@ function correctRadius(r) {
 }
 
 function hideNotification() {
-	d3.select("#notification").classed({"opacity0": true})
+	d3.select("#notification").classed({opacity0: true})
 }
 
 function updateNotification(text, displayTime) {
@@ -421,7 +421,7 @@ function updateNotification(text, displayTime) {
 				hideNotification()
 		}, displayTime)
 	
-	d3.select("#notification").classed({"opacity0": false})
+	d3.select("#notification").classed({opacity0: false})
 	d3.select("#notification").text(text)
 }
 
@@ -463,6 +463,7 @@ function addNewFuncToUI(name) {
 	return f
 }
 
+// TODO refactor into Function.remove()
 function removeFunction(self) {
 	// TODO dependency check
 	if (functions.length > 1) {
@@ -473,6 +474,11 @@ function removeFunction(self) {
 	} else {
 		updateNotification("There has to be at least one function.")
 	}
+}
+
+function resetUI() {
+	forEachSelfRemovingDoCall(functions, "remove")
+	addNewFuncToUI()
 }
 
 // "export" current project
@@ -532,11 +538,12 @@ function determineFuncDependencies(reverse) {
 				if (reverseDependencies[f].indexOf(i) === -1)
 					reverseDependencies[f].push(i)
 			}
-			if (commands[k] instanceof Loop)
+			if (commands[k] instanceof Loop) {
 				searchForFuncCall(commands[k].getRootCommandsRef())
+			}
 			if (commands[k] instanceof Branch) {
-				searchForFuncCall(commands[k].ifTrueBranch)
-				searchForFuncCall(commands[k].ifFalseBranch)
+				searchForFuncCall(commands[k].ifTrueCmds)
+				searchForFuncCall(commands[k].ifFalseCmds)
 			}
 		}
 	}
@@ -727,6 +734,18 @@ function forAllExecCmdsOfTypeDo(cmds, func, type) {
 			func(c)
 		}
 	})
+}
+
+function runBenchmark(minMillisecsToRun) {
+	var startTime = Date.now()
+	var ticks = 0
+	while (true) {
+		run()
+		ticks++
+		if (Date.now() - startTime > minMillisecsToRun)
+			break;
+	}
+	return Math.round((ticks * 1000) / (Date.now() - startTime))
 }
 
 
@@ -1229,6 +1248,10 @@ Command.prototype.commonCommandConstructor = function() {
 	self.scopeDepth = 0
 	self.refDepthOfSameType = 0
 	self.savedState
+	// for reducing the amount of DOM styling required
+	self.isInsideAnySelectedCommandsScopeCache = false
+	self.isMarkedCache = false
+	self.isSelectedCache = false
 }
 
 Command.prototype.setMainParameter = function(x) {
@@ -1341,39 +1364,62 @@ Command.prototype.deleteProxyCommand = function() {
 	delete self.scope
 }
 
-Command.prototype.classMark = function(elements, on, prop) {
-	this.applyCSSClass(elements, on, prop, true, false)
+Command.prototype.classMark = function(cmd, element, on) {
+	this.applyCSSClass(cmd, element, on, true)
 }
 
-Command.prototype.classSelected = function(elements, on, prop) {
-	this.applyCSSClass(elements, on, prop, false, true)
+Command.prototype.classSelected = function(cmd, element, on) {
+	this.applyCSSClass(cmd, element, on, false)
 }
 
-//Command.prototype.applyCSSClass = function(elements, on, prop, mark, selected) {
-//	// NADA
-//}
+Command.prototype.applyCSSClass = function(cmd, element, on, markAndNotSelected) {
+	if (element !== undefined) {
+		if (markAndNotSelected) {
+			if (on !== cmd.isMarkedCache) {
+				console.log("is marked")
+				cmd.isMarkedCache = on
+				element.node().setAttribute("class", on ? "mark" : "")
+			}
+		} else {
+			if (on !== cmd.isSelectedCache) {
+				console.log("is selected")
+				cmd.isSelectedCache = on
+				element.node().setAttribute("class", on ? "selected" : "")
+			}
+		}
+	}
+}
 
-Command.prototype.applyCSSClass = function(elements, on, prop, mark, selected) {
-	if (elements instanceof Array)
-		elements.forEach(function(e) {
-			if (e !== undefined) {
-				var p = prop !== undefined ? e[prop] : e
-				if (p !== undefined) {
-					// this is a broad simplification
-					// it assumes that "selected" is always set after "mark"
-					// because selected is a special case of marked
-					// and that elements are either marked, selected or neither
-					var cssName = !on ? "" : (mark ? "mark" : "selected")
-					if (!on && p.node().getAttribute("class") === "")
-						return
-					p.node().setAttribute("class", cssName)
-//					p.attr("class", cssName)
-					// TODO MAJOR PERFORMANCE BUMMER: 90% time in d3.classed()
-					// it seems d3.classed does regex which is VERY slow.
-//					p.classed(cssName, on)
+Command.prototype.applyCSSClassORIG = function(cmd, elements, on, prop, markAndNotSelected) {
+	return true
+	
+	for (var i=0; i<elements.length; i++) {
+		var e = elements[i]
+		if (e !== undefined) {
+			var p = prop !== undefined ? e[prop] : e
+			if (p !== undefined) {
+
+				// this is a broad simplification
+				// it assumes that "selected" is always set after "mark"
+				// because selected is a special case of marked
+				// and that elements are either marked, selected or neither
+
+				if (markAndNotSelected) {
+					if (on !== cmd.isMarkedCache) {
+						console.log("is marked")
+						cmd.isMarkedCache = on
+						p.node().setAttribute("class", on ? "mark" : "")
+					}
+				} else {
+					if (on !== cmd.isSelectedCache) {
+						console.log("is selected")
+						cmd.isSelectedCache = on
+						p.node().setAttribute("class", on ? "selected" : "")
+					}
 				}
 			}
-		})
+		}
+	}
 }
 
 Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
@@ -1442,7 +1488,7 @@ Command.prototype.exec = function(callerF) {
 	self.execInner(callerF)
 }
 
-Command.prototype.isInsideAnySelectedCommandsScope = function(includingProxies) {
+Command.prototype.isInsideAnySelectedCommandsScope = function(includingProxies, thenDoFunc) {
 	var self = this
 	var scp = self.scope
 	// traverse scope up to see if self is somewhere inside the selection
@@ -1450,7 +1496,12 @@ Command.prototype.isInsideAnySelectedCommandsScope = function(includingProxies) 
 	if (!selection.isEmpty())
 		while (!(scp instanceof Func) && !selection[checKr](scp))
 			scp = scp.scope
-	return selection[checKr](scp)
+	var on = selection[checKr](scp)
+	// d3.style is VERY time consuming, so lets check whether it is necessary
+	if (on !== self.isInsideAnySelectedCommandsScopeCache) {
+		self.isInsideAnySelectedCommandsScopeCache = on
+		thenDoFunc(on)
+	}
 }
 
 // traverses the scope chain up, looking for the first FuncCall, and if none, returns Func
@@ -1845,11 +1896,15 @@ Func.prototype.switchTo = function() {
 Func.prototype.remove = function() {
 	var self = this
 	functions.splice(functions.indexOf(self), 1)
-	if (F_ === self && functions.length > 0) { // switch to previous or last
-		(self.previousF_ !== undefined && functions.indexOf(self.previousF_) !== -1
-			? self.previousF_
-			: functions[functions.length-1])
-				.switchTo()
+	if (F_ === self) { // switch to previous or last
+		if (functions.length === 0) {
+			F_ = undefined
+		} else {
+			(self.previousF_ !== undefined && functions.indexOf(self.previousF_) !== -1
+				? self.previousF_
+				: functions[functions.length-1])
+					.switchTo()
+		}
 	}
 	
 	self.deleteCompletelyContainedCommands()
@@ -2045,25 +2100,22 @@ Move.prototype.execInner = function(callerF) {
 
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
-	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-//	var sty = {}
-//	for (var attr in lineStyleInScope) {
-//		console.assert(lineStyle[attr] !== undefined)
-//		sty[attr] = (on ? lineStyleInScope : lineStyle)[attr]
-//	}
-//	self.lineMainSVG.style({"stroke-opacity": on ? 0.4 : lineStyle["stroke-opacity"], "stroke": on ? "#500" : lineStyle.stroke})
-	self.lineMainSVG.style(on ? lineStyleInScope : lineStyle)
+	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
+		self.lineMainSVG.style(on ? lineStyleInScope : lineStyle)
+	})
 }
 
 Move.prototype.mark = function(on) {
 	var self = this
-	self.classMark(self.root.proxies, on, "lineMainSVG")
+	self.root.proxies.forEach(function(p) {
+		self.classMark(p, p.lineMainSVG, on)
+	})
 }
 
 Move.prototype.select = function(on) {
 	var self = this
 	self.mark(on)
-	self.classSelected([self.lineMainSVG], on)
+	self.classSelected(self, self.lineMainSVG, on)
 	if (on) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
@@ -2237,26 +2289,22 @@ Rotate.prototype.execInner = function(callerF) {
 
 Rotate.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
-	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-//	var sty = {}
-//	for (var attr in arcStyleInScope) {
-//		console.assert(arcStyle[attr] !== undefined)
-//		sty[attr] = (on ? arcStyleInScope : arcStyle)[attr]
-//	}
-	self.arc.style(on ? arcStyleInScope : arcStyle)
-//	self.arc.style({"fill-opacity": on ? 0.05 : arcStyle["fill-opacity"]
-//		, "fill": on ? "#500" : arcStyle.stroke})
+	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
+		self.arc.style(on ? arcStyleInScope : arcStyle)
+	})
 }
 
 Rotate.prototype.mark = function(on) {
 	var self = this
-	self.classMark(self.root.proxies, on, "arc")
+	self.root.proxies.forEach(function(p) {
+		self.classMark(p, p.arc, on)
+	})
 }
 
 Rotate.prototype.select = function(on) {
 	var self = this
 	self.mark(on)
-	self.classSelected([self.arc], on)
+	self.classSelected(self, self.arc, on)
 	if (on) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
@@ -2428,9 +2476,10 @@ Loop.prototype.execInner = function(callerF) {
 			updateIcon(self.iconGs[i])
 			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
-			self.classMark([self.iconGs[i].circleF], selection.containsAsRoot(self))
+			// TODO 
+			self.classMark(self, self.iconGs[i].circleF, selection.containsAsRoot(self))
 			if (selection.contains(self))
-				self.classSelected([self.iconGs[i].circleF], true)
+				self.classSelected(self, self.iconGs[i].circleF, true)
 		}
 		
 		for (var k=0; k<self.root.commands.length; k++) {
@@ -2445,26 +2494,29 @@ Loop.prototype.execInner = function(callerF) {
 
 Loop.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
-	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-	self.iconGs.forEach(function(e) {
-		if (e !== undefined)
-			// TODO too slow for doing on this scale.
-			e.style({"opacity": on ? 0.4 : 1.0})
+	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
+		self.iconGs.forEach(function(e) {
+			if (e !== undefined)
+				e.style({opacity: on ? 0.4 : 1.0})
+		})
 	})
 }
 
 Loop.prototype.mark = function(on) {
 	var self = this
 	if (self.root.proxies !== undefined)
-		self.root.proxies.forEach(function(e) {
-			self.classMark(e.iconGs, on, "circleF")
+		self.root.proxies.forEach(function(p) {
+			p.iconGs.forEach(function(i) {
+				if (i !== undefined)
+					self.classMark(p, i.circleF, on)
+			})
 		})
 }
 
 Loop.prototype.select = function(on) {
 	var self = this
 	self.mark(on)
-//	self.classSelected(self.iconGs, on, "circleF")
+//	TODO classSelected ...
 }
 
 Loop.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2658,8 +2710,9 @@ FuncCall.prototype.execInner = function(callerF) {
 
 FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
-	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-	self.icon.style({"opacity": on ? 0.3 : 1.0})
+	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
+		self.icon.style({opacity: on ? 0.3 : 1.0})
+	})
 }
 
 FuncCall.prototype.mark = function(on) {
@@ -2671,7 +2724,7 @@ FuncCall.prototype.select = function(on) {
 	var self = this
 	// TODO mark
 	if (self.icon !== undefined)
-		self.classSelected([self.icon.body.text], on)
+		self.classSelected(self, self.icon.body.text, on)
 }
 
 FuncCall.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2811,18 +2864,21 @@ Branch.prototype.execInner = function(callerF) {
 
 Branch.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
-	var on = self.isInsideAnySelectedCommandsScope(true/*including proxies*/)
-	self.iconG.style({"opacity": on ? 0.5 : 1.0})
+	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
+		self.iconG.style({opacity: on ? 0.5 : 1.0})
+	})
 }
 
 Branch.prototype.mark = function(on) {
 	var self = this
-	self.classMark([self.iconG.baseL], on)
+	if (self.iconG !== undefined)
+		self.classMark(self, self.iconG.baseL, on)
 }
 
 Branch.prototype.select = function(on) {
 	var self = this
-	self.classSelected([self.iconG.baseL], on)
+	if (self.iconG !== undefined)
+		self.classSelected(self, self.iconG.baseL, on)
 }
 
 Branch.prototype.getVisibleElementsFromMainSVG = function() {
@@ -3078,8 +3134,8 @@ function manualTest() {
 		F_.addArgument(4, "n")
 		F_.setCommands([
 			new Branch("n>0", [
-				new FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
-				new FuncCall(F_, {n: "n-1"})
+//				new FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
+//				new FuncCall(F_, {n: "n-1"})
 			], [])
 		])
 	})
@@ -3141,14 +3197,41 @@ function manualTest() {
 				new Rotate("90+90/a")])])
 	})
 	
+	tests.push(function() {
+		addNewFuncToUI("coincidentalSpiral")
+		F_.setCommands([
+			new Loop("400", [
+				new Move("10*i"),
+				new Rotate("153.95")])])
+	})
+	
+	tests.push(function() {
+		addNewFuncToUI("tunnel2")
+		F_.setCommands([
+			new Loop("360", [
+				new Move("400"),
+				new Rotate("151")])])
+	})
+	
 	var testsToRun = [false,false,false,
 		/*03*/false,false,false,false,
-		/*07*/false,false,false,false,
-		/*11*/false,false]
+		/*07*/true,false,false,false,
+		/*11*/false,false,false,false]
+	
+//	var testsToRun = [false,true,true,
+//		/*03*/true,true,false,true,
+//		/*07*/true,false,true,true,
+//		/*11*/true,true,false,false]
+	var benchmarkResults = []
+	
 	for (var i=0; i<testsToRun.length && i<tests.length; i++) {
-		if (testsToRun[i])
+		if (testsToRun[i]) {
 			tests[i]()
+			benchmarkResults.push(i+": "+runBenchmark(3000))
+//			resetUI()
+		}
 	}
+	console.log("Benchmark Profile:\n"+benchmarkResults.join("\n"))
 	
 	run()
 }

@@ -1,15 +1,15 @@
 see also TODOs in code
 
 ### MA release version
-	vogo intro page
-		add acknowledgements (back to me)
-	test, test, test
-	github upload
-
-### community
-	examples and tutorial videos/help
+	tutorial videos/help
 		text
 		blink symbols on key hit
+	test, test, test
+	github upload
+		clean git
+	email Bret & Toby :)
+
+### community
 	upload results to server/community results page
 		adapt API to allow import to UI
 			factor addNewFuncToUI into Func
@@ -21,7 +21,7 @@ see also TODOs in code
 		serverside exchange method
 		clientside browse and import
 		clientside share
-	email Bret :)
+	examples
 
 small features
 	remove ° if edit in input field (rotate)
@@ -67,7 +67,6 @@ big features
 	Logo output
 
 performance
-	remove huge box shadow (?)
 	further cache arguments eval
 	for one run cycle and the same stack position, only evaluate variables once
 	store which expression requires which variables, so I only eval those
