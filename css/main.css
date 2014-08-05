@@ -64,6 +64,10 @@ a {
 	fill-opacity: 0.3 !important;
 }
 svg line {
+/*	stroke: #000;
+	stroke-opacity: 0.8;
+	stroke-width: .25;
+	stroke-linecap: round;*/
 	cursor: pointer;
 }
 path.selected, line.selected, circle.selected {

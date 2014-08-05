@@ -91,9 +91,10 @@ vogo.init = function() {
 	window.onresize()
 	addNewFuncToUI()
 	setupUIEventListeners()
-	run()
 	automaticTest()
-	manualTest()
+//	benchmark()
+//	examples[7]()
+	run()
 }
 
 function run() {
@@ -273,20 +274,22 @@ function setupUIEventListeners() {
 					if (!dragInProgress) {
 						manipulation.finish()
 						selectionRect = mainSVG.paintingG.append("rect")
-							.attr("x", dragStart[0])
-							.attr("y", dragStart[1])
-							.attr("width", 0)
-							.attr("height", 0)
+							.attr({
+								x: dragStart[0],
+								y: dragStart[1],
+								width: 0,
+								height: 0})
 							.style(selectionRectStyle)
 					}
 					dragInProgress = true
 					var w = mousePos[0]-dragStart[0]
 					var h = mousePos[1]-dragStart[1]
 					selectionRect // rect is not displayed if w || h < 0
-						.attr("width", Math.abs(w))
-						.attr("height", Math.abs(h))
-						.attr("x", w < 0 ? dragStart[0]+w : dragStart[0])
-						.attr("y", h < 0 ? dragStart[1]+h : dragStart[1])
+						.attr({
+							width: Math.abs(w),
+							height: Math.abs(h),
+							x: w < 0 ? dragStart[0]+w : dragStart[0],
+							y: h < 0 ? dragStart[1]+h : dragStart[1]})
 				}
 			})
 			.on("dragend", function (d) {
@@ -736,7 +739,29 @@ function forAllExecCmdsOfTypeDo(cmds, func, type) {
 	})
 }
 
-function runBenchmark(minMillisecsToRun) {
+function runBenchmarkBasedOnRepetitions(numberOfRepetitions) {
+	var startTime = Date.now()
+	var ticks = 0
+	while (ticks++ <= numberOfRepetitions)
+		run()
+	return Date.now() - startTime
+}
+
+function benchmark() {
+	var benchmarkResults = []
+	
+	examples.forEach(function(t) {
+		t()
+		benchmarkResults.push(runBenchmarkBasedOnRepetitions(7))
+		resetUI()
+	})
+	var sum = 0
+	benchmarkResults.forEach(function(br) { sum += br })
+	
+	console.log("Benchmark Profile:\n"+sum+"; "+benchmarkResults.join("; ")+"\n")
+}
+
+function runBenchmarkBasedOnTime(minMillisecsToRun) {
 	var startTime = Date.now()
 	var ticks = 0
 	while (true) {
@@ -745,7 +770,7 @@ function runBenchmark(minMillisecsToRun) {
 		if (Date.now() - startTime > minMillisecsToRun)
 			break;
 	}
-	return Math.round((ticks * 1000) / (Date.now() - startTime))
+	return Math.round((ticks * 1000) / (Date.now() - startTime) *10)/10
 }
 
 
@@ -873,7 +898,7 @@ var selection = {
 		if (!keyPressed.shift) {
 			this.removeAndDeselectAll()
 			this.e.push(x)
-			x.select(true)
+			x.updateMarkAndSelect()
 		} else {
 			this.addAccumulate(x)
 		}
@@ -887,7 +912,7 @@ var selection = {
 			if (this.containsAsRoot(x))
 				this.removeAndDeselect(this.e[this.indexOfSelectedProxyOf(x)])
 			this.e.push(x)
-			x.select(true)
+			x.updateMarkAndSelect()
 		}
 	},
 	contains: function(x) {
@@ -905,12 +930,12 @@ var selection = {
 	removeAndDeselect: function(x) {
 		if (this.contains(x))
 			this.e.splice(this.e.indexOf(x), 1)
-		x.select(false) // deselect
+		x.updateMarkAndSelect()
 	},
 	removeAndDeselectAll: function() {
 		var detach = this.e
 		this.e = []
-		detach.forEach(function(x) { x.select(false) })
+		detach.forEach(function(x) { x.updateMarkAndSelect() })
 		return detach
 	},
 	// remove means splice from selection
@@ -1364,61 +1389,27 @@ Command.prototype.deleteProxyCommand = function() {
 	delete self.scope
 }
 
-Command.prototype.classMark = function(cmd, element, on) {
-	this.applyCSSClass(cmd, element, on, true)
-}
-
-Command.prototype.classSelected = function(cmd, element, on) {
-	this.applyCSSClass(cmd, element, on, false)
-}
-
-Command.prototype.applyCSSClass = function(cmd, element, on, markAndNotSelected) {
-	if (element !== undefined) {
-		if (markAndNotSelected) {
-			if (on !== cmd.isMarkedCache) {
-				console.log("is marked")
-				cmd.isMarkedCache = on
-				element.node().setAttribute("class", on ? "mark" : "")
-			}
-		} else {
-			if (on !== cmd.isSelectedCache) {
-				console.log("is selected")
-				cmd.isSelectedCache = on
-				element.node().setAttribute("class", on ? "selected" : "")
-			}
-		}
-	}
-}
-
-Command.prototype.applyCSSClassORIG = function(cmd, elements, on, prop, markAndNotSelected) {
-	return true
+Command.prototype.updateMarkAndSelect = function(force) {
+	var self = this
+	var selectOn = selection.contains(self)
+	// selectOn always implies markOn & selection.contains always implies containsAsRoot
+	var markOn = selectOn ? true : selection.containsAsRoot(self)
+	// default is Off, so I only need to force if it is On
+	var selectChanged = selectOn !== self.isSelectedCache || (force !== undefined && selectOn)
+	var markChanged = markOn !== self.root.isMarkedCache || (force !== undefined && markOn)
+	self.isSelectedCache = selectOn
+	self.root.isMarkedCache = markOn
 	
-	for (var i=0; i<elements.length; i++) {
-		var e = elements[i]
-		if (e !== undefined) {
-			var p = prop !== undefined ? e[prop] : e
-			if (p !== undefined) {
-
-				// this is a broad simplification
-				// it assumes that "selected" is always set after "mark"
-				// because selected is a special case of marked
-				// and that elements are either marked, selected or neither
-
-				if (markAndNotSelected) {
-					if (on !== cmd.isMarkedCache) {
-						console.log("is marked")
-						cmd.isMarkedCache = on
-						p.node().setAttribute("class", on ? "mark" : "")
-					}
-				} else {
-					if (on !== cmd.isSelectedCache) {
-						console.log("is selected")
-						cmd.isSelectedCache = on
-						p.node().setAttribute("class", on ? "selected" : "")
-					}
-				}
-			}
-		}
+	if (markChanged) {
+		console.assert(self.root.proxies !== undefined)
+		self.root.proxies.forEach(function(p) {
+			// from the proxies, only one can be selected
+			var cssClass = p.isSelectedCache ? "selected mark" : (markOn ? "mark" : "")
+			p.updateCssClass(cssClass, selectOn)
+		})
+	} else if (selectChanged) {
+		var cssClass = selectOn ? "selected mark" : (markOn ? "mark" : "")
+		self.updateCssClass(cssClass, selectOn)
 	}
 }
 
@@ -1666,13 +1657,15 @@ Func.prototype.updateViewbox = function(afterZoom) {
 	self.svgHeight = self.svgWidth * mainSVG.svgHeight/mainSVG.svgWidth
 	self.svgContainer.style({height: self.svgHeight+"px"})
 	
-//	console.assert(self.svgWidth > 0 && self.svgViewboxHeight > 0 && mainSVG.svgWidth > 0 && mainSVG.svgHeight > 0)
-//	console.log(self.svgWidth+","+self.svgViewboxHeight+","+mainSVG.svgWidth+","+mainSVG.svgHeight)
-	console.assert(self.svgWidth > 0)
-	console.assert(self.svgViewboxHeight > 0)
-	console.assert(mainSVG.svgWidth > 0)
-	// there have be instances (occuring when resizing the window), when this failed
-	console.assert(mainSVG.svgHeight > 0)
+	try {
+		console.assert(self.svgWidth > 0)
+		console.assert(self.svgViewboxHeight > 0)
+		console.assert(mainSVG.svgWidth > 0)
+		// there have be instances (occuring when resizing the window), when this failed
+		console.assert(mainSVG.svgHeight > 0)
+	} catch(e) {
+		return
+	}
 	
 	// keep height stable and center (on startup to 0,0)
 	var svgViewboxWidthPrevious = self.svgViewboxWidth
@@ -1996,7 +1989,8 @@ Move.prototype.execInner = function(callerF) {
 	var x2 = callerF.state.x
 	var y2 = callerF.state.y
 	if (self.line === undefined) {
-		self.line = callerF.paintingG.append("line").style(lineStyle)
+		self.line = callerF.paintingG.append("line")
+			.style(lineStyle)
 	}
 	var drawOnMainSVG = callerF === F_
 	var isInsideFuncCall = self.isInsideFuncCall()
@@ -2005,7 +1999,8 @@ Move.prototype.execInner = function(callerF) {
 			|| selection.containsAsRoot(self))
 		&& !isInsideFuncCall
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
-		self.lineMainSVG = mainSVG.paintingG.append("line").style(lineStyle)
+		self.lineMainSVG = mainSVG.paintingG.append("line")
+			.style(lineStyle)
 		self.lineMainSVG
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
@@ -2034,9 +2029,9 @@ Move.prototype.execInner = function(callerF) {
 			)
 	}
 	
-	
 	if (self.label === undefined && drawIcons) {
 		self.label = mainSVG.paintingG.append("foreignObject")
+//			.attr({width: 250, height: 25, x: 0, y: 0})
 			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
 			.on("click", function() {
 				d3.event.stopPropagation()
@@ -2093,9 +2088,8 @@ Move.prototype.execInner = function(callerF) {
 	}
 	
 	for (var l in lines)
-		lines[l]
-			.attr("x1", x1).attr("y1", y1)
-			.attr("x2", x2).attr("y2", y2)
+//		lines[l].attr({x1: x1, y1: y1, x2: x2, y2: y2})
+		lines[l].attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
 }
 
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
@@ -2105,18 +2099,11 @@ Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	})
 }
 
-Move.prototype.mark = function(on) {
+Move.prototype.updateCssClass = function(cssClass, selectOn) {
 	var self = this
-	self.root.proxies.forEach(function(p) {
-		self.classMark(p, p.lineMainSVG, on)
-	})
-}
-
-Move.prototype.select = function(on) {
-	var self = this
-	self.mark(on)
-	self.classSelected(self, self.lineMainSVG, on)
-	if (on) {
+	if (self.lineMainSVG !== undefined)
+		self.lineMainSVG.node().setAttribute("class", cssClass)
+	if (selectOn) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
 			setTextOfInput(self.labelInput, self.label)
@@ -2125,7 +2112,6 @@ Move.prototype.select = function(on) {
 		updateLabelVisibility(self)
 	}
 }
-
 
 Move.prototype.getVisibleElementsFromMainSVG = function() {
 	return ["lineMainSVG", "label"]
@@ -2233,6 +2219,7 @@ Rotate.prototype.execInner = function(callerF) {
 	if (self.label === undefined && drawLabel) {
 		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
 		self.label = mainSVG.paintingG.append("foreignObject")
+//			.attr({width: 250, height: 25, x: 0, y: 0})
 			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
 			.on("click", function() {
 				d3.event.stopPropagation()
@@ -2294,18 +2281,11 @@ Rotate.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	})
 }
 
-Rotate.prototype.mark = function(on) {
+Rotate.prototype.updateCssClass = function(cssClass, selectOn) {
 	var self = this
-	self.root.proxies.forEach(function(p) {
-		self.classMark(p, p.arc, on)
-	})
-}
-
-Rotate.prototype.select = function(on) {
-	var self = this
-	self.mark(on)
-	self.classSelected(self, self.arc, on)
-	if (on) {
+	if (self.arc !== undefined)
+		self.arc.node().setAttribute("class", cssClass)
+	if (selectOn) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
 			setTextOfInput(self.labelInput, self.label)
@@ -2376,6 +2356,7 @@ Loop.prototype.execInner = function(callerF) {
 		var iconG = mainSVG.paintingG.append("g")
 		if (i === 0) {
 			iconG.fo = iconG.append("foreignObject")
+//				.attr({width: 250 /*max-width*/, height: 25, x: 0, y: 0})
 				.attr("width", 250 /*max-width*/).attr("height", 25).attr("x", 0).attr("y", 0)
 				.on("click", function() {
 					d3.event.stopPropagation()
@@ -2413,6 +2394,7 @@ Loop.prototype.execInner = function(callerF) {
 
 		iconG.clockHand = iconG.append("path").style(clockHandStyle)
 		iconG.circleF = iconG.append("circle").style(clockStyle)
+//			.attr({cx: 0, cy: 0})
 			.attr("cx", 0).attr("cy", 0)
 		iconG.on("click", function () {
 			if (!manipulation.isCreating()) {
@@ -2440,6 +2422,7 @@ Loop.prototype.execInner = function(callerF) {
 		iconG.clockHand
 			.attr("d", arc)
 		iconG.circleF
+//			.attr({r: loopClockRadiusUsed, title: (i+1)+"/"+numberOfRepetitions})
 			.attr("r", loopClockRadiusUsed)
 			.attr("title", (i+1)+"/"+numberOfRepetitions)
 	}
@@ -2476,10 +2459,6 @@ Loop.prototype.execInner = function(callerF) {
 			updateIcon(self.iconGs[i])
 			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
-			// TODO 
-			self.classMark(self, self.iconGs[i].circleF, selection.containsAsRoot(self))
-			if (selection.contains(self))
-				self.classSelected(self, self.iconGs[i].circleF, true)
 		}
 		
 		for (var k=0; k<self.root.commands.length; k++) {
@@ -2490,6 +2469,8 @@ Loop.prototype.execInner = function(callerF) {
 			self.execCmds[pos].exec(callerF)
 		}
 	}
+	if (rebuild)
+		self.updateMarkAndSelect(true) // force reapply because new iconGs may not be painted yet
 }
 
 Loop.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
@@ -2502,21 +2483,13 @@ Loop.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	})
 }
 
-Loop.prototype.mark = function(on) {
+Loop.prototype.updateCssClass = function(cssClass, selectOn) {
 	var self = this
-	if (self.root.proxies !== undefined)
-		self.root.proxies.forEach(function(p) {
-			p.iconGs.forEach(function(i) {
-				if (i !== undefined)
-					self.classMark(p, i.circleF, on)
-			})
+	if (self.iconGs !== undefined)
+		self.iconGs.forEach(function(i) {
+			if (i !== undefined)
+				i.circleF.node().setAttribute("class", cssClass)
 		})
-}
-
-Loop.prototype.select = function(on) {
-	var self = this
-	self.mark(on)
-//	TODO classSelected ...
 }
 
 Loop.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2583,7 +2556,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	if (self.icon === undefined && drawIcons) {
 		self.icon = mainSVG.paintingG.append("foreignObject")
 			// TODO make this relative
-			.attr("width", 200).attr("height", 100).attr("x", 0).attr("y", 0)
+			.attr({width: 200, height: 100, x: 0, y: 0})
 		self.icon.argF = {}
 		self.icon.body = self.icon.append("xhtml:body")
 		self.icon.body.text = self.icon.body.append("xhtml:text")
@@ -2715,16 +2688,10 @@ FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	})
 }
 
-FuncCall.prototype.mark = function(on) {
+FuncCall.prototype.updateCssClass = function(cssClass, selectOn) {
 	var self = this
-	// TODO .icon is undefined ? ... when recursing
-}
-
-FuncCall.prototype.select = function(on) {
-	var self = this
-	// TODO mark
 	if (self.icon !== undefined)
-		self.classSelected(self, self.icon.body.text, on)
+		self.icon.body.text.node().setAttribute("class", cssClass)
 }
 
 FuncCall.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2803,9 +2770,9 @@ Branch.prototype.execInner = function(callerF) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
 //		self.iconG.append("text").text("?")
 //		callerF.paintingG
-		self.iconG.trueL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 0)
-		self.iconG.falseL = self.iconG.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 2).attr("y2", 2)
-		self.iconG.baseL = self.iconG.append("line").attr("x1", 0).attr("y1", 1).attr("x2", 1).attr("y2", 1)
+		self.iconG.trueL = self.iconG.append("line").attr({x1: 1, y1: 1, x2: 2, y2: 0})
+		self.iconG.falseL = self.iconG.append("line").attr({x1: 1, y1: 1, x2: 2, y2: 2})
+		self.iconG.baseL = self.iconG.append("line").attr({x1: 0, y1: 1, x2: 1, y2: 1})
 			.on("click", function() {
 				if (!manipulation.isCreating()) {
 					selection.add(self)
@@ -2815,7 +2782,7 @@ Branch.prototype.execInner = function(callerF) {
 			})
 		
 		self.iconG.fo = self.iconG.append("foreignObject")
-			.attr("width", 250 /*max-width*/).attr("height", 25).attr("x", 0).attr("y", 0)
+			.attr({width: 250 /*max-width*/, height: 25, x: 0, y: 0})
 			.on("click", function() {
 				d3.event.stopPropagation()
 			})
@@ -2869,16 +2836,10 @@ Branch.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	})
 }
 
-Branch.prototype.mark = function(on) {
+Branch.prototype.updateCssClass = function(cssClass, selectOn) {
 	var self = this
 	if (self.iconG !== undefined)
-		self.classMark(self, self.iconG.baseL, on)
-}
-
-Branch.prototype.select = function(on) {
-	var self = this
-	if (self.iconG !== undefined)
-		self.classSelected(self, self.iconG.baseL, on)
+		self.iconG.baseL.node().setAttribute("class", cssClass)
 }
 
 Branch.prototype.getVisibleElementsFromMainSVG = function() {
@@ -2988,254 +2949,229 @@ vogo.FuncCall = FuncCall
 vogo.Branch = Branch
 vogo.Drawing = Drawing
 
-function manualTest() {
-	var tests = []
-	
-	tests.push(function() {
-		addNewFuncToUI("nEck")
-		F_.addArgument(4, "n")
-		F_.setCommands([
-			new Loop("n", [
-				new Rotate("360/n"),
-				new Move("100/n")])])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("multiSquare")
-		F_.setCommands([
-			new Loop(36, [
-				new Loop(4, [
-					new Rotate("90"),
-					new Move(20)]),
-				new Rotate("10")])])
-	})
-	
-	// this is a performance bummer!
-	tests.push(function() {
-		addNewFuncToUI("tree")
-		F_.addArgument(150, "size")
-		F_.setCommands([
-			new Branch("size<5", [
-				new Move("size"),
-				new Move("-size")],
-				[
-				new Move("size/3"),
-				new Rotate(-30),
-				new FuncCall(F_, {size: "size*2/3"}),
-				new Rotate(30),
-				new Move("size/6"),
-				new Rotate(25),
-				new FuncCall(F_, {size: "size/2"}),
-				new Rotate(-25),
-				new Move("size/3"),
-				new Rotate(25),
-				new FuncCall(F_, {size: "size/2"}),
-				new Rotate(-25),
-				new Move("size/6"),
-				new Move("-size")
-			])
+var examples = []
+
+examples.push(function() {
+	addNewFuncToUI("nEck")
+	F_.addArgument(4, "n")
+	F_.setCommands([
+		new Loop("n", [
+			new Rotate("360/n"),
+			new Move("100/n")])])
+})
+
+examples.push(function() {
+	addNewFuncToUI("multiSquare")
+	F_.setCommands([
+		new Loop(36, [
+			new Loop(4, [
+				new Rotate("90"),
+				new Move(20)]),
+			new Rotate("10")])])
+})
+
+// this is a performance bummer!
+examples.push(function() {
+	addNewFuncToUI("tree")
+	F_.addArgument(150, "size")
+	F_.setCommands([
+		new Branch("size<5", [
+			new Move("size"),
+			new Move("-size")],
+			[
+			new Move("size/3"),
+			new Rotate(-30),
+			new FuncCall(F_, {size: "size*2/3"}),
+			new Rotate(30),
+			new Move("size/6"),
+			new Rotate(25),
+			new FuncCall(F_, {size: "size/2"}),
+			new Rotate(-25),
+			new Move("size/3"),
+			new Rotate(25),
+			new FuncCall(F_, {size: "size/2"}),
+			new Rotate(-25),
+			new Move("size/6"),
+			new Move("-size")
 		])
-	})
-	
-	// 3
-	tests.push(function() {
-		addNewFuncToUI("fern")
-		F_.addArgument(10, "size")
-		F_.addArgument(1, "sign")
-		F_.setCommands([
-			new Branch("size>=1", [
-				new Move("size"),
-				new Rotate("70*sign"),
-				new FuncCall(F_, {size: "size*0.5", sign: "-sign"}),
-				new Rotate("-70*sign"),
-				new Move("size"),
-				new Rotate("-70*sign"),
-				new FuncCall(F_, {size: "size*0.5", sign: "sign"}),
-				new Rotate("77*sign"),
-				new FuncCall(F_, {size: "size-1", sign: "sign"}),
-				new Rotate("-7*sign"),
-				new Move("-2*size")
-			], [])
+	])
+})
+
+// 3
+examples.push(function() {
+	addNewFuncToUI("fern")
+	F_.addArgument(10, "size")
+	F_.addArgument(1, "sign")
+	F_.setCommands([
+		new Branch("size>=1", [
+			new Move("size"),
+			new Rotate("70*sign"),
+			new FuncCall(F_, {size: "size*0.5", sign: "-sign"}),
+			new Rotate("-70*sign"),
+			new Move("size"),
+			new Rotate("-70*sign"),
+			new FuncCall(F_, {size: "size*0.5", sign: "sign"}),
+			new Rotate("77*sign"),
+			new FuncCall(F_, {size: "size-1", sign: "sign"}),
+			new Rotate("-7*sign"),
+			new Move("-2*size")
+		], [])
+	])
+})
+
+examples.push(function() {
+	addNewFuncToUI("circle")
+	F_.setCommands([
+		new Loop(360, [
+			new Rotate("1"),
+			new Move(1)
 		])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("circle")
-		F_.setCommands([
-			new Loop(360, [
-				new Rotate("1"),
-				new Move(1)
-			])
+	])
+})
+
+examples.push(function() {
+	addNewFuncToUI("spirale")
+	F_.addArgument(10, "a")
+	F_.setCommands([
+		new Move("a"),
+		new Rotate("25"),
+		new Branch("a<40", [
+			new FuncCall(F_, {a: "a*1.02"})
+		], [])
+	])
+})
+
+examples.push(function() {
+	addNewFuncToUI("meinBaum")
+	F_.addArgument(6, "tiefe")
+	F_.addArgument(30, "winkel")
+	F_.setCommands([
+		new Branch("tiefe>=0", [
+			new Move("tiefe*5"),
+			new Rotate("winkel"),
+			new FuncCall(F_, {tiefe: "tiefe-1"}),
+			new Rotate("-winkel*2"),
+			new FuncCall(F_, {tiefe: "tiefe-1"}),
+			new Rotate("winkel"),
+			new Move("-tiefe*5")
+		], [])
+	])
+})
+
+// 7
+examples.push(function() {
+	var nEck = addNewFuncToUI("nEck")
+	F_.addArgument(36, "ne")
+	F_.addArgument(5, "sz")
+	F_.setCommands([
+		new Loop("ne", [
+			new Rotate("360/ne"),
+			new Move("sz")])])
+
+	addNewFuncToUI("mnEck")
+	F_.addArgument(36, "ne")
+	F_.addArgument(7, "sz")
+	F_.setCommands([
+		new Loop("ne", [
+			new Rotate("360/ne"),
+			new FuncCall(nEck, {ne: "ne", sz: "sz"})
 		])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("spirale")
-		F_.addArgument(10, "a")
-		F_.setCommands([
-			new Move("a"),
-			new Rotate("25"),
-			new Branch("a<40", [
-				new FuncCall(F_, {a: "a*1.02"})
-			], [])
+	])
+})
+
+examples.push(function() {
+	var KreisC = addNewFuncToUI("KreisC")
+	F_.addArgument(180, "winkel")
+	F_.addArgument(1, "rotate")
+	F_.addArgument(0.5, "groesze")
+	F_.setCommands([
+		new Loop("winkel", [
+			new Move("groesze"),
+			new Rotate("rotate")
 		])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("meinBaum")
-		F_.addArgument(6, "tiefe")
-		F_.addArgument(30, "winkel")
-		F_.setCommands([
-			new Branch("tiefe>=0", [
-				new Move("tiefe*5"),
-				new Rotate("winkel"),
-				new FuncCall(F_, {tiefe: "tiefe-1"}),
-				new Rotate("-winkel*2"),
-				new FuncCall(F_, {tiefe: "tiefe-1"}),
-				new Rotate("winkel"),
-				new Move("-tiefe*5")
-			], [])
-		])
-	})
-	
-	// 7
-	tests.push(function() {
-		var nEck = addNewFuncToUI("nEck")
-		F_.addArgument(36, "ne")
-		F_.addArgument(5, "sz")
-		F_.setCommands([
-			new Loop("ne", [
-				new Rotate("360/ne"),
-				new Move("sz")])])
-		
-		addNewFuncToUI("mnEck")
-		F_.addArgument(36, "ne")
-		F_.addArgument(7, "sz")
-		F_.setCommands([
-			new Loop("ne", [
-				new Rotate("360/ne"),
-				new FuncCall(nEck, {ne: "ne", sz: "sz"})
-			])
-		])
-	})
-	
-	tests.push(function() {
-		var KreisC = addNewFuncToUI("KreisC")
-		F_.addArgument(180, "winkel")
-		F_.addArgument(1, "rotate")
-		F_.addArgument(0.5, "groesze")
-		F_.setCommands([
-			new Loop("winkel", [
-				new Move("groesze"),
-				new Rotate("rotate")
-			])
-		])
-		addNewFuncToUI("Welle")
-		F_.addArgument(4, "n")
-		F_.setCommands([
-			new Branch("n>0", [
+	])
+	addNewFuncToUI("Welle")
+	F_.addArgument(4, "n")
+	F_.setCommands([
+		new Branch("n>0", [
 //				new FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
 //				new FuncCall(F_, {n: "n-1"})
-			], [])
-		])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("zahnrad")
-		F_.addArgument(20, "anzahlecken")
-		F_.addArgument(9, "seitenlaenge")
-		F_.setCommands([
-			new Loop("anzahlecken", [
-				new Loop(2, [
-					new Move("seitenlaenge"),
-					new Rotate(-90)
-				]),
-				new Move("seitenlaenge"),
-				new Rotate("90 - (180 / anzahlecken)"),
-				new Move("seitenlaenge/2"),
-				new Rotate("90 - (180 / anzahlecken)")
-			])
-		])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("saege")
-		F_.addArgument(9, "zacken")
-		F_.addArgument(9, "zackenlaenge")
-		F_.setCommands([
-			new Loop("zacken", [
-				new Loop(2, [
-					new Move("zackenlaenge"),
-					new Rotate(-90)
-				]),
-				new Rotate("90 + (180 / zacken)"),
-				new Move("zackenlaenge/2"),
-				new Rotate("90 + (180 / zacken)")
-			])
-		])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("tunnel")
-		F_.addArgument(60, "a")
-		F_.addArgument(2.04, "c")
-		F_.addArgument(40, "n")
-		F_.setCommands([
-			new Loop("n", [
-				new Move("a"),
-				new Move("-a*c"),
-				new Move("a"),
-				new Rotate("360/n")])])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("swirlPyramid")
-		F_.addArgument(40, "a")
-		F_.setCommands([
-			new Loop("a", [
-				new Move("60*(i+1)/a"),
-				new Rotate("90+90/a")])])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("coincidentalSpiral")
-		F_.setCommands([
-			new Loop("400", [
-				new Move("10*i"),
-				new Rotate("153.95")])])
-	})
-	
-	tests.push(function() {
-		addNewFuncToUI("tunnel2")
-		F_.setCommands([
-			new Loop("360", [
-				new Move("400"),
-				new Rotate("151")])])
-	})
-	
-	var testsToRun = [false,false,false,
-		/*03*/false,false,false,false,
-		/*07*/true,false,false,false,
-		/*11*/false,false,false,false]
-	
-//	var testsToRun = [false,true,true,
-//		/*03*/true,true,false,true,
-//		/*07*/true,false,true,true,
-//		/*11*/true,true,false,false]
-	var benchmarkResults = []
-	
-	for (var i=0; i<testsToRun.length && i<tests.length; i++) {
-		if (testsToRun[i]) {
-			tests[i]()
-			benchmarkResults.push(i+": "+runBenchmark(3000))
-//			resetUI()
-		}
-	}
-	console.log("Benchmark Profile:\n"+benchmarkResults.join("\n"))
-	
-	run()
-}
+		], [])
+	])
+})
 
+examples.push(function() {
+	addNewFuncToUI("zahnrad")
+	F_.addArgument(20, "anzahlecken")
+	F_.addArgument(9, "seitenlaenge")
+	F_.setCommands([
+		new Loop("anzahlecken", [
+			new Loop(2, [
+				new Move("seitenlaenge"),
+				new Rotate(-90)
+			]),
+			new Move("seitenlaenge"),
+			new Rotate("90 - (180 / anzahlecken)"),
+			new Move("seitenlaenge/2"),
+			new Rotate("90 - (180 / anzahlecken)")
+		])
+	])
+})
+
+examples.push(function() {
+	addNewFuncToUI("saege")
+	F_.addArgument(9, "zacken")
+	F_.addArgument(9, "zackenlaenge")
+	F_.setCommands([
+		new Loop("zacken", [
+			new Loop(2, [
+				new Move("zackenlaenge"),
+				new Rotate(-90)
+			]),
+			new Rotate("90 + (180 / zacken)"),
+			new Move("zackenlaenge/2"),
+			new Rotate("90 + (180 / zacken)")
+		])
+	])
+})
+
+examples.push(function() {
+	addNewFuncToUI("tunnel")
+	F_.addArgument(60, "a")
+	F_.addArgument(2.04, "c")
+	F_.addArgument(40, "n")
+	F_.setCommands([
+		new Loop("n", [
+			new Move("a"),
+			new Move("-a*c"),
+			new Move("a"),
+			new Rotate("360/n")])])
+})
+
+examples.push(function() {
+	addNewFuncToUI("swirlPyramid")
+	F_.addArgument(40, "a")
+	F_.setCommands([
+		new Loop("a", [
+			new Move("60*(i+1)/a"),
+			new Rotate("90+90/a")])])
+})
+
+examples.push(function() {
+	addNewFuncToUI("coincidentalSpiral")
+	F_.setCommands([
+		new Loop("400", [
+			new Move("10*i"),
+			new Rotate("153.95")])])
+})
+
+examples.push(function() {
+	addNewFuncToUI("tunnel2")
+	F_.setCommands([
+		new Loop("360", [
+			new Move("400"),
+			new Rotate("151")])])
+})
 
 function automaticTest() {
 	if (false)
