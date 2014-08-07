@@ -447,9 +447,7 @@ function openSVG() {
 function updateLabelVisibility(self) {
 	if (self.label !== undefined)
 		self.label.classed("hide", !selection.contains(self)
-			&& manipulation.insertedCommand !== self.root
-//			&& self.root.mainParameter.isStatic()
-			)
+			&& manipulation.insertedCommand !== self.root)
 }
 
 function setTextOfInput(input, containingForeignObject, text) {
@@ -997,7 +995,8 @@ var manipulation = {
 			this.update(newMainParameter)
 			var ic = this.insertedCommand
 			this.insertedCommand = false
-			updateLabelVisibility(ic)
+			if (ic.proxies !== undefined && ic.proxies.length === 1)
+				updateLabelVisibility(ic.proxies[0])
 		}
 	},
 	remove: function() {
@@ -2275,7 +2274,8 @@ Rotate.prototype.execInner = function(callerF) {
 		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
 				+(lastRotateScaleFactorCalculated ? " scale("+lastRotateScaleFactorCalculated+")" : ""))
-			.attr("title", self.addDegreeSymbol(angleToString(angle)))
+			.append("title")
+			.text(self.addDegreeSymbol(angleToString(angle)))
 		self.indicateIfInsideAnySelectedCommandsScope()
 		lastRotateExecuted = self
 	}
@@ -2431,7 +2431,9 @@ Loop.prototype.execInner = function(callerF) {
 		iconG.circleF
 //			.attr({r: loopClockRadiusUsed, title: (i+1)+"/"+numberOfRepetitions})
 			.attr("r", loopClockRadiusUsed)
-			.attr("title", (i+1)+"/"+numberOfRepetitions)
+			// cannot do this with: .attr("title".. see https://code.google.com/p/chromium/issues/detail?id=170780
+			.append("title")
+			.text((i+1)+"/"+numberOfRepetitions)
 	}
 	
 	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length

@@ -13,6 +13,8 @@
 </head>
 
 <body>
+	<noscript>Javascript is required for Vogo to run.</noscript>
+	
 	<div id="functions">
 		<ul id="ul_f"></ul>
 		<div class="centerDiv">
