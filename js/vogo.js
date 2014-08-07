@@ -53,6 +53,7 @@ var defaultViewBox = (-defaultSvgViewboxHeight/2)
 var domSvg
 var pi = Math.PI // for use in UI
 var radiusInDegrees = true
+var showKeyStrokesInToolbar = true
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
@@ -172,7 +173,7 @@ function setupUIEventListeners() {
 		.on("drag", function (d) {
 			var id = d3.select(this).attr("id")
 			if (id === "borderL")
-				functionPanelSizePercentOfBodyWidth = Math.max(0.1, Math.min(0.4,
+				functionPanelSizePercentOfBodyWidth = Math.max(0.05, Math.min(0.4,
 					d3.event.x / document.body.clientWidth))
 			if (id === "borderR")
 				toolbarPanelSizePercentOfBodyWidth = Math.max(0.03, Math.min(0.18,
@@ -333,8 +334,14 @@ function setupUIEventListeners() {
 			if (key) {
 				var currentDown = keyPressed[key]
 				keyPressed[key] = down
-				if (down && !currentDown && onKeyDown[key])
+				if (down && !currentDown && onKeyDown[key]) {
 					onKeyDown[key]()
+					if (showKeyStrokesInToolbar)
+						d3.select("#ul_toolbar [key='"+key+"']")
+							.style("background-color", "rgba(60,200,255,0.25")
+							.transition().duration(1000)
+							.style("background-color", "rgba(60,200,255,0.01")
+				}
 				if (!down && currentDown && onKeyUp[key])
 					onKeyUp[key]()
 			} else {

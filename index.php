@@ -21,12 +21,12 @@
 			</div></div></div>
 		</div>
 	</div>
-	<div id="borderL" class="border"></div>
+	<div id="borderL" class="border"><div></div></div>
 	<div id="turtleSVGcontainer">
 		<svg id="turtleSVG"></svg>
 		<p id="notification" class="opacity0"></p>
 	</div>
-	<div id="borderR" class="border"></div>
+	<div id="borderR" class="border"><div></div></div>
 	<div id="toolbar">
 		<ul id="ul_toolbar">
 			<li key="d" title="Draw straight line"><img src="images/Move.svg"></li>

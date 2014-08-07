@@ -1,3 +1,8 @@
+@font-face {
+	font-family: "Open Sans";
+	local: "Open Sans";
+	src: url("OpenSans-Regular.ttf") format('truetype');
+}
 body {
 	margin: 0;
 	padding: 0;
@@ -10,17 +15,30 @@ a {
 .border {
 	position: absolute;
 	height: 100%;
-	width: 2px;
-	background-color: #BBB;
-	box-shadow: 0 0 5px rgba(0,0,0,0.3);
+	width: 1px;
 	cursor: col-resize;
 	z-index: 2;
 }
+.border div {
+	height: 100%;
+	width: 1px;
+	background-color: rgba(0,0,0,0.2);
+	box-shadow: 0 0 7px rgba(0,0,0,0.6);
+	cursor: col-resize;
+}
 #borderL {
 	left: 15%; /*coupled*/
+	padding-right: 7px; /*click radius*/
+}
+#borderL div {
+	left: 0;
 }
 #borderR {
 	right: 5%; /*coupled*/
+	padding-left: 7px;
+}
+#borderR div {
+	right: 0;
 }
 #functions {
 	position: absolute;
@@ -64,10 +82,6 @@ a {
 	fill-opacity: 0.3 !important;
 }
 svg line {
-/*	stroke: #000;
-	stroke-opacity: 0.8;
-	stroke-width: .25;
-	stroke-linecap: round;*/
 	cursor: pointer;
 }
 path.selected, line.selected, circle.selected {
@@ -135,7 +149,6 @@ text.mark:not(.selected) {
 	list-style: none;
 	padding-bottom: 3px;
 	padding-left: 15px;
-	font-size: 90%;
 }
 #functions .ul_args span {
 	color: #55f;
@@ -159,18 +172,24 @@ text.mark:not(.selected) {
 	width: 100%;
 }
 #functions .f_name {
-	font-weight: bold;
-	border: 0 none;
-	/*background-color: #f00;*/
-	background-color: transparent;
-	width: 100%;
 	box-sizing: border-box; /*http://stackoverflow.com/questions/17175038/css-dynamic-length-text-input-field-and-submit-button-in-one-row*/
+    font-size: 125%;
+	/*font-weight: bold;*/
+	color: #333;
+}
+#functions .f_name, #functions .f_argument {
+	width: 100%;
+	border: 0 none;
+	border-bottom: 1px solid rgba(0,0,0,0);
+	background-color: transparent;
+	transition: border-bottom 200ms ease-in-out;
+}
+#functions .f_name:hover, #functions .f_argument:hover {
+	border-bottom: 1px solid rgba(0,0,0,0.15);
 }
 #functions .f_argument {
-	border: 0 none;
-	background-color: transparent;
-	width: 100%;
 	cursor: col-resize;
+	font-size: 115%;
 }
 #functions .f_remove {
 	/*float: right;*/
@@ -254,15 +273,19 @@ svg li {
 	background: linear-gradient(to top, rgba(218,218,218,1), rgba(233,233,233,1));
 	border: 1px solid rgba(0,0,0,0.15);
 }
-#ul_toolbar img, #ul_toolbar .container-box { /*, #ul_toolbar svg*/
+#ul_toolbar img, #ul_toolbar .container-box { /* help botton and lis container box*/
 	width: 41%;
+	height: 41%;
+	padding: 10% 5% 10% 5%; /*top right bottom left*/
 }
-#ul_toolbar img {
-	padding: 5% 3% 3% 5%; /*top right bottom left*/
-}
-.container-box {
-	padding: 5% 5% 3% 3%;
+#ul_toolbar img, .container-box {
+	padding: 4%;
+	vertical-align: middle;
 	display: inline-block;
+	max-height: 100%;
+}
+.container-box svg {
+	max-width: 100%;
 	max-height: 100%;
 }
 .aspect-box {
@@ -276,6 +299,7 @@ svg li {
 	bottom: 0;
 	left: 0;
 }
+
 
 .centerDiv {
 	padding-top: 3px;
