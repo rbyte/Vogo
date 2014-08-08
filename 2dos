@@ -23,6 +23,7 @@ see also TODOs in code
 	show examples
 
 small features
+	
 	remove ° if edit in input field (rotate)
 	more tooltips, more sanity checks
 	auto-select newly created commands
@@ -66,6 +67,7 @@ big features
 	Logo output
 
 performance
+	make recursion depth depend on run execution time
 	further cache arguments eval
 	for one run cycle and the same stack position, only evaluate variables once
 	store which expression requires which variables, so I only eval those
@@ -73,6 +75,7 @@ performance
 	round dom numbers
 
 bugs
+	setArgument does not change the UI arg field
 	foreignObject relative width and height
 	code output: loop has one tab indentation too much (may also apply to other code)
 	fix: rotation/move manipulation in loop: so that line crosses mouse

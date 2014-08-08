@@ -37,13 +37,15 @@ var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
 var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
 var fcTextStyle = {cursor: "pointer"}
 var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity": 1, "fill-opacity": 0}
-var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%", top: "10%", left: "10%", border: "1px solid rgba(0,0,0,0.1)"}
+var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%",
+	top: "10%", left: "10%", border: "1px solid rgba(0,0,0,0.1)"}
 
 var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 3
-var scopeDepthLimit = 8 // for endless loops and recursion
+var scopeDepthLimit = 500 // for endless loops and recursion
+var runDurationLimitMS = 5000
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 70
 var defaultViewBox = (-defaultSvgViewboxHeight/2)
@@ -82,33 +84,38 @@ var lastRotateExecuted
 var lastRotateScaleFactorCalculated
 var mousePos = [0,0]
 var lastCopiedElements
+var lastRunStartTime
+var enforceRunDurationLimitMS = true
 
 
 vogo.init = function() {
 	domSvg = document.getElementById("turtleSVG")
 	mainSVG = new MainSVG()
 	addKeysToToolbar()
-	window.onresize = function(event) { updateScreenElemsSize()}
+	window.onresize = function(event) { updateScreenElemsSize() }
 	window.onresize()
 	addNewFuncToUI()
 	setupUIEventListeners()
 	automaticTest()
-//	benchmark()
+	benchmark(15)
 //	examples[7]()
-	run()
+//	examples.forEach(function(e) {
+//		e()
+//		run()
+//	})
 }
 
 function run() {
 //	console.log("RUNNING")
+	lastRunStartTime = Date.now()
 	F_.exec()
 	mainSVG.updateTurtle()
 	
-	// also run all functions that depend on F_
-	determineDeepFuncDependenciesFor(F_, true/*reverse search*/).forEach(function(f) {
-		f = functions[f]
-		if (f !== F_)
-			f.exec()
-	})
+	determineDeepFuncDependenciesFor(F_, true/*reverse search*/)
+		.forEach(function(f) {
+			if (f !== F_)
+				f.exec()
+		})
 }
 
 function MainSVG() {
@@ -120,10 +127,9 @@ function MainSVG() {
 }
 
 function updateScreenElemsSize() {
-//	var winW = document.body.clientWidth
-//	var winH = window.innerHeight
-	
 	var bb = document.getElementById("turtleSVGcontainer").getBoundingClientRect()
+	if (bb.width <= 0 || bb.height <= 0)
+		return
 	mainSVG.svgWidth = bb.width
 	mainSVG.svgHeight = bb.height
 	
@@ -577,17 +583,21 @@ function printFuncDependencies(dd, str) {
 // reachability search from f in dependency graph
 function determineDeepFuncDependenciesFor(f, reverse) {
 	var ds = determineFuncDependencies(reverse)
-	var list = []
+	var fIdxList = []
 	function gather(i) { // depth first search
 		ds[i].forEach(function(e) {
-			if (list.indexOf(e) === -1) {
-				list.push(e)
+			if (fIdxList.indexOf(e) === -1) {
+				fIdxList.push(e)
 				gather(e)
 			}
 		})
 	}
 	gather(functions.indexOf(f))
-	return list
+	var fList = []
+	fIdxList.forEach(function(e) {
+		fList.push(functions[e])
+	})
+	return fList
 }
 
 function commandsToCodeString(commands, scopeDepth) {
@@ -744,38 +754,39 @@ function forAllExecCmdsOfTypeDo(cmds, func, type) {
 	})
 }
 
-function runBenchmarkBasedOnRepetitions(numberOfRepetitions) {
-	var startTime = Date.now()
-	var ticks = 0
-	while (ticks++ <= numberOfRepetitions)
-		run()
-	return Date.now() - startTime
-}
-
-function benchmark() {
+function benchmark(numberOfRuns) {
 	var benchmarkResults = []
-	
 	examples.forEach(function(t) {
 		t()
-		benchmarkResults.push(runBenchmarkBasedOnRepetitions(7))
+		benchmarkResults.push(runBenchmarkBasedOnRepetitions(numberOfRuns))
 		resetUI()
 	})
-	var sum = 0
-	benchmarkResults.forEach(function(br) { sum += br })
-	
-	console.log("Benchmark Profile:\n"+sum+"; "+benchmarkResults.join("; ")+"\n")
+	console.log("Benchmark Result:\n"+Math.round(d3.sum(benchmarkResults)/numberOfRuns)
+		+"\n\tDetails: "+benchmarkResults.join("; ")+"\n")
+	loopDragPerformanceBenchmark()
 }
 
-function runBenchmarkBasedOnTime(minMillisecsToRun) {
+function loopDragPerformanceBenchmark() {
+	var mnEck = examples[7]()
+	var result = runBenchmarkBasedOnRepetitions(50, function(ticks) {
+		mnEck.setArgument(ticks < 25 ? ticks : ticks - ticks%25, "ne")
+	})
+	console.log("Loop Drag Performance:\n"+result+"\n")
+	resetUI()
+}
+
+function runBenchmarkBasedOnRepetitions(numberOfRepetitions, beforeEachRun) {
 	var startTime = Date.now()
 	var ticks = 0
-	while (true) {
+	var enforceRunDurationLimitMSpre = enforceRunDurationLimitMS
+	enforceRunDurationLimitMS = false
+	while (ticks++ <= numberOfRepetitions) {
+		if (beforeEachRun !== undefined)
+			beforeEachRun(ticks)
 		run()
-		ticks++
-		if (Date.now() - startTime > minMillisecsToRun)
-			break;
 	}
-	return Math.round((ticks * 1000) / (Date.now() - startTime) *10)/10
+	enforceRunDurationLimitMS = enforceRunDurationLimitMSpre
+	return Date.now() - startTime
 }
 
 
@@ -1244,7 +1255,8 @@ Expression.prototype.adjustDrag = function(element, alterElementValueFunc) {
 		var mouseDiff = d3.mouse(domSvg)[0] - self.dragStartMouseX
 		// the number of digits after the comma influences how much the number changes on drag
 		// 20.01 will only change slightly, whereas 100 will change rapidly
-		mouseDiff *= .6 /*feels good value*/ * Math.pow(10, self.dragPrecision)
+		// the factors change the FEEL of the drag and are really important: I found those to work well.
+		mouseDiff *= Math.pow(10, self.dragPrecision*0.6)*0.6
 		// small Bug: the order of magnitude changes unexpectedly in the next drag,
 		// when the value is left of ending with .xy0, because the 0 is forgotten
 		mouseDiff = parseFloat(mouseDiff.toFixed(Math.max(0, -self.dragPrecision)))
@@ -1482,6 +1494,10 @@ Command.prototype.exec = function(callerF) {
 	var self = this
 	console.assert(self.root !== self, "root cmds are never exec() directly.")
 	self.savedState = callerF.state.clone()
+	if (enforceRunDurationLimitMS && Date.now() - lastRunStartTime > runDurationLimitMS) {
+		updateNotification("Execution takes too long (>"+runDurationLimitMS+"ms). Stopping.", 8000)
+		return
+	}
 	self.execInner(callerF)
 }
 
@@ -1659,19 +1675,18 @@ MainSVG.prototype.updateViewbox = function(afterZoom) {
 Func.prototype.updateViewbox = function(afterZoom) {
 	var self = this
 	// the preview svg aspect ratio is coupled to the main svg
-	self.svgWidth = self.svgContainer.node().getBoundingClientRect().width
+	var svgWidth = self.svgContainer.node().getBoundingClientRect().width
+	if (svgWidth <= 0)
+		return
+	
+	self.svgWidth = svgWidth
 	self.svgHeight = self.svgWidth * mainSVG.svgHeight/mainSVG.svgWidth
 	self.svgContainer.style({height: self.svgHeight+"px"})
 	
-	try {
-		console.assert(self.svgWidth > 0)
-		console.assert(self.svgViewboxHeight > 0)
-		console.assert(mainSVG.svgWidth > 0)
-		// there have be instances (occuring when resizing the window), when this failed
-		console.assert(mainSVG.svgHeight > 0)
-	} catch(e) {
-		return
-	}
+	console.assert(self.svgViewboxHeight > 0)
+	console.assert(mainSVG.svgWidth > 0)
+	// there have be instances (occuring when resizing the window), when this failed
+	console.assert(mainSVG.svgHeight > 0)
 	
 	// keep height stable and center (on startup to 0,0)
 	var svgViewboxWidthPrevious = self.svgViewboxWidth
@@ -1862,6 +1877,8 @@ Func.prototype.exec = function(/*no caller here*/) {
 	lastRotateScaleFactorCalculated = undefined
 	
 	if (self.commands.length !== self.execCmds.length) {
+//		self.execCmds.forEach(function (e) { e.deleteProxyCommand() })
+//		self.execCmds = []
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 		console.assert(self.execCmds.length === 0)
 		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
@@ -2094,6 +2111,7 @@ Move.prototype.execInner = function(callerF) {
 	}
 	
 	for (var l in lines)
+		// slower
 //		lines[l].attr({x1: x1, y1: y1, x2: x2, y2: y2})
 		lines[l].attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
 }
@@ -2140,6 +2158,7 @@ function Rotate(angle) {
 	self.setMainParameter(angle)
 	self.arc
 	self.label
+	self.title
 	self.radiusScaleFactorCalculated
 }
 Rotate.prototype = new Command(Rotate)
@@ -2220,6 +2239,7 @@ Rotate.prototype.execInner = function(callerF) {
 					d3.select(this).classed("dragging", false)
 				})
 			)
+		self.title = self.arc.append("title")
 	}
 	
 	if (self.label === undefined && drawLabel) {
@@ -2274,8 +2294,7 @@ Rotate.prototype.execInner = function(callerF) {
 		self.arc.attr("d", arc)
 			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
 				+(lastRotateScaleFactorCalculated ? " scale("+lastRotateScaleFactorCalculated+")" : ""))
-			.append("title")
-			.text(self.addDegreeSymbol(angleToString(angle)))
+		self.title.text(self.addDegreeSymbol(angleToString(angle)))
 		self.indicateIfInsideAnySelectedCommandsScope()
 		lastRotateExecuted = self
 	}
@@ -2337,6 +2356,7 @@ function Loop(numberOfRepetitions, commands) {
 	self.execCmds = []
 	// for all repetitions
 	self.iconGs = []
+	self.i
 }
 Loop.prototype = new Command(Loop)
 
@@ -2411,35 +2431,36 @@ Loop.prototype.execInner = function(callerF) {
 				d3.event.stopPropagation()
 			}
 		})
+		iconG.title = iconG.circleF.append("title")
 		return iconG
-	}
-	
-	function updateIcon(iconG) {
-		if (i === 0) {
-			iconG.fo
-				.attr("transform", "translate("+(loopClockRadiusUsed*1.1)+","+(-loopClockRadiusUsed*1.3)+") scale(0.1)")
-			setTextOfInput(iconG.labelInput, iconG.fo, self.root.mainParameter.get())
-		}
-		
-		var arc = d3.svg.arc()
-			.innerRadius(0)
-			.outerRadius(loopClockRadiusUsed)
-			.startAngle(0)
-			.endAngle(Math.PI*2/numberOfRepetitions*(i+1))
-		iconG.clockHand
-			.attr("d", arc)
-		iconG.circleF
-//			.attr({r: loopClockRadiusUsed, title: (i+1)+"/"+numberOfRepetitions})
-			.attr("r", loopClockRadiusUsed)
-			// cannot do this with: .attr("title".. see https://code.google.com/p/chromium/issues/detail?id=170780
-			.append("title")
-			.text((i+1)+"/"+numberOfRepetitions)
 	}
 	
 	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length
 	if (rebuild) {
-		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
-		console.assert(self.execCmds.length === 0)
+//		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
+//		console.assert(self.execCmds.length === 0)
+		// remove dangling
+		// deleteProxyCommand splices j from execCmds! -> execCmds.length changes in loop
+		for (var j=self.execCmds.length-1; j>=numberOfRepetitions * self.root.commands.length; j--)
+			self.execCmds[j].deleteProxyCommand()
+		for (var i=0; i<numberOfRepetitions; i++) {
+			for (var k=0; k<self.root.commands.length; k++) {
+				var pos = i*self.root.commands.length + k
+				if (pos < self.execCmds.length) {
+					// update existing
+					// this check improves loop performance significantly, if its numberOfRepetitions is dragged
+					if (self.execCmds[pos].root !== self.root.commands[k]) {
+						self.execCmds[pos].deleteProxyCommand()
+						// deleteProxyCommand spliced pos, so we need to splice back in to retain order (do not push!)
+						self.execCmds.splice(pos, 0, self.root.commands[k].shallowClone(self))
+//						self.execCmds[pos] = self.root.commands[k].shallowClone(self)
+					}
+				} else {
+					// add new
+					self.execCmds.push(self.root.commands[k].shallowClone(self))
+				}
+			}
+		}
 	}
 	
 	if (drawIcons) {
@@ -2457,26 +2478,45 @@ Loop.prototype.execInner = function(callerF) {
 	
 	for (var i=0; i<numberOfRepetitions; i++) {
 		self.i = i
-		// TODO consider line-in and -out diretion for angle
-		// place center away from current position in 90° angle to current heading
-		var dir = correctRadius(callerF.state.r + Math.PI/2)
-		var cx = callerF.state.x + Math.sin(dir) * loopClockRadius * 1.4
-		var cy = callerF.state.y - Math.cos(dir) * loopClockRadius * 1.4
 		if (drawIcons) {
-			if (self.iconGs[i] === undefined)
+			// TODO consider line-in and -out diretion for angle
+			// place center away from current position in 90° angle to current heading
+			var dir = correctRadius(callerF.state.r + Math.PI/2)
+			var cx = callerF.state.x + Math.sin(dir) * loopClockRadius * 1.4
+			var cy = callerF.state.y - Math.cos(dir) * loopClockRadius * 1.4
+			
+			// happens when the function switched back and forth
+			var recreateItem = self.iconGs[i] === undefined
+			if (recreateItem)
 				self.iconGs[i] = createIcon()
-			updateIcon(self.iconGs[i])
+			
+			if (rebuild || recreateItem) {
+				var arc = d3.svg.arc()
+					.innerRadius(0)
+					.outerRadius(loopClockRadiusUsed)
+					.startAngle(0)
+					.endAngle(Math.PI*2/numberOfRepetitions*(i+1))
+				self.iconGs[i].clockHand
+					.attr("d", arc)
+				self.iconGs[i].circleF
+					.attr("r", loopClockRadiusUsed)
+				// cannot do this with: .attr("title".. see https://code.google.com/p/chromium/issues/detail?id=170780
+				self.iconGs[i].title
+					.text((i+1)+"/"+numberOfRepetitions)
+			}
+			
+			if (i === 0) {
+				self.iconGs[i].fo
+					.attr("transform", "translate("+(loopClockRadiusUsed*1.1)+","+(-loopClockRadiusUsed*1.3)+") scale(0.1)")
+				setTextOfInput(self.iconGs[i].labelInput, self.iconGs[i].fo, self.root.mainParameter.get())
+			}
+			
 			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
 		}
 		
-		for (var k=0; k<self.root.commands.length; k++) {
-			var pos = i*self.root.commands.length + k
-			if (rebuild) {
-				self.execCmds[pos] = self.root.commands[k].shallowClone(self)
-			}
-			self.execCmds[pos].exec(callerF)
-		}
+		for (var k=0; k<self.root.commands.length; k++)
+			self.execCmds[i*self.root.commands.length + k].exec(callerF)
 	}
 	if (rebuild)
 		self.updateMarkAndSelect(true) // force reapply because new iconGs may not be painted yet
@@ -2670,7 +2710,7 @@ FuncCall.prototype.execInner = function(callerF) {
 			}
 		}
 	}
-
+	
 	if (self.scopeDepth > scopeDepthLimit) {
 		updateNotification("Execution depth too high (>"+scopeDepthLimit+"). Endless loop/recursion? Stopping here.", 5000)
 	} else {
@@ -2830,6 +2870,8 @@ Branch.prototype.execInner = function(callerF) {
 	}
 	
 	if (rebuild) {
+//		self.execCmds.forEach(function (e) { e.deleteProxyCommand() })
+//		self.execCmds = []
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 		console.assert(self.execCmds.length === 0)
 		branchCmds.forEach(function(e) { self.execCmds.push(e.shallowClone(self)) })
@@ -2971,36 +3013,37 @@ examples.push(function() {
 
 examples.push(function() {
 	addNewFuncToUI("multiSquare")
+	F_.addArgument(36, "n")
+	F_.addArgument(4, "ecken")
 	F_.setCommands([
-		new Loop(36, [
-			new Loop(4, [
-				new Rotate("90"),
-				new Move(20)]),
-			new Rotate("10")])])
+		new Loop("n", [
+			new Loop("ecken", [
+				new Rotate("360/ecken"),
+				new Move("100/ecken")]),
+			new Rotate("360/n")])])
 })
 
 // this is a performance bummer!
 examples.push(function() {
 	addNewFuncToUI("tree")
-	F_.addArgument(150, "size")
+	F_.addArgument(18, "size")
 	F_.setCommands([
 		new Branch("size<5", [
 			new Move("size"),
 			new Move("-size")],
 			[
-			new Move("size/3"),
-			new Rotate(-30),
-			new FuncCall(F_, {size: "size*2/3"}),
-			new Rotate(30),
-			new Move("size/6"),
-			new Rotate(25),
-			new FuncCall(F_, {size: "size/2"}),
-			new Rotate(-25),
-			new Move("size/3"),
-			new Rotate(25),
-			new FuncCall(F_, {size: "size/2"}),
-			new Rotate(-25),
-			new Move("size/6"),
+			new Move("size*0.3"),
+			new Rotate(-40),
+			new FuncCall(F_, {size: "size*0.7"}),
+			new Rotate(40),
+			new Move("size*0.4"),
+			new Rotate(35),
+			new FuncCall(F_, {size: "size*0.7"}),
+			new Rotate(-35),
+			new Move("size*0.3"),
+			new Rotate(35),
+			new FuncCall(F_, {size: "size*0.7"}),
+			new Rotate(-35),
 			new Move("-size")
 		])
 	])
@@ -3009,19 +3052,21 @@ examples.push(function() {
 // 3
 examples.push(function() {
 	addNewFuncToUI("fern")
-	F_.addArgument(10, "size")
+	F_.addArgument(7, "size")
 	F_.addArgument(1, "sign")
+	F_.addArgument(0.5, "shrink")
+	F_.addArgument(0.7, "length")
 	F_.setCommands([
 		new Branch("size>=1", [
 			new Move("size"),
 			new Rotate("70*sign"),
-			new FuncCall(F_, {size: "size*0.5", sign: "-sign"}),
+			new FuncCall(F_, {size: "size*shrink", sign: "-sign"}),
 			new Rotate("-70*sign"),
 			new Move("size"),
 			new Rotate("-70*sign"),
-			new FuncCall(F_, {size: "size*0.5", sign: "sign"}),
+			new FuncCall(F_, {size: "size*shrink", sign: "sign"}),
 			new Rotate("77*sign"),
-			new FuncCall(F_, {size: "size-1", sign: "sign"}),
+			new FuncCall(F_, {size: "size*length", sign: "sign"}),
 			new Rotate("-7*sign"),
 			new Move("-2*size")
 		], [])
@@ -3040,12 +3085,13 @@ examples.push(function() {
 
 examples.push(function() {
 	addNewFuncToUI("spirale")
-	F_.addArgument(10, "a")
+	F_.addArgument(2, "step")
+	F_.addArgument(25, "angle")
 	F_.setCommands([
-		new Move("a"),
-		new Rotate("25"),
-		new Branch("a<40", [
-			new FuncCall(F_, {a: "a*1.02"})
+		new Move("step"),
+		new Rotate("angle"),
+		new Branch("step<40", [
+			new FuncCall(F_, {step: "step*1.02"})
 		], [])
 	])
 })
@@ -3069,7 +3115,7 @@ examples.push(function() {
 
 // 7
 examples.push(function() {
-	var nEck = addNewFuncToUI("nEck")
+	var nEck = addNewFuncToUI("nEck2")
 	F_.addArgument(36, "ne")
 	F_.addArgument(5, "sz")
 	F_.setCommands([
@@ -3077,8 +3123,8 @@ examples.push(function() {
 			new Rotate("360/ne"),
 			new Move("sz")])])
 
-	addNewFuncToUI("mnEck")
-	F_.addArgument(36, "ne")
+	var mnEck = addNewFuncToUI("mnEck")
+	F_.addArgument(25, "ne")
 	F_.addArgument(7, "sz")
 	F_.setCommands([
 		new Loop("ne", [
@@ -3086,6 +3132,7 @@ examples.push(function() {
 			new FuncCall(nEck, {ne: "ne", sz: "sz"})
 		])
 	])
+	return mnEck
 })
 
 examples.push(function() {
@@ -3103,8 +3150,8 @@ examples.push(function() {
 	F_.addArgument(4, "n")
 	F_.setCommands([
 		new Branch("n>0", [
-//				new FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
-//				new FuncCall(F_, {n: "n-1"})
+			new FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
+			new FuncCall(F_, {n: "n-1"})
 		], [])
 	])
 })
@@ -3168,10 +3215,12 @@ examples.push(function() {
 
 examples.push(function() {
 	addNewFuncToUI("coincidentalSpiral")
+	F_.addArgument(360, "n")
+	F_.addArgument(153.951, "angle")
 	F_.setCommands([
-		new Loop("400", [
+		new Loop("n", [
 			new Move("10*i"),
-			new Rotate("153.95")])])
+			new Rotate("angle")])])
 })
 
 examples.push(function() {
