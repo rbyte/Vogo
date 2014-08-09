@@ -97,7 +97,7 @@ vogo.init = function() {
 	addNewFuncToUI()
 	setupUIEventListeners()
 	automaticTest()
-	benchmark(15)
+//	benchmark(15)
 //	examples[7]()
 //	examples.forEach(function(e) {
 //		e()
@@ -818,21 +818,21 @@ var onKeyDown = {
 	e: function() { // export for usage in code/web
 		var jsCodeForExternalInvocation = generateJScodeForExternalInvocation()
 		console.log(jsCodeForExternalInvocation)
-var html = [
-"<!DOCTYPE html>"
-,"<html>"
-,"<head>"
-,"	<meta charset='utf-8'>"
-,"	<title>Vogo Export</title>"
-,"	<script src='http://d3js.org/d3.v3.min.js'></script>"
-,"	<script src='"+urlToSelf+"'></script>"
-,"</head>"
-,"<body>"
-,"<script>"
-,jsCodeForExternalInvocation
-,"</script>"
-,"</body>"
-,"</html>"]
+		var html = [
+			"<!DOCTYPE html>"
+			,"<html>"
+			,"<head>"
+			,"	<meta charset='utf-8'>"
+			,"	<title>Vogo Export</title>"
+			,"	<script src='http://d3js.org/d3.v3.min.js'></script>"
+			,"	<script src='"+urlToSelf+"'></script>"
+			,"</head>"
+			,"<body>"
+			,"<script>"
+			,jsCodeForExternalInvocation
+			,"</script>"
+			,"</body>"
+			,"</html>"]
 		// text/plain
 		window.open("data:text/html;charset=utf-8," + encodeURIComponent(html.join("\n")))
 	},
@@ -852,21 +852,28 @@ var html = [
 		} else {
 			// TODO if exp isStatic
 			var argName = F_.addArgument(selection.e[0].evalMainParameter())
-			selection.e[0].setMainParameter(argName)
+			selection.e.forEach(function(el) {
+				el.setMainParameter(argName)
+			})
 		}
 		run()
 	},
 	l: function() {
-		wrapSelectionInCommand("loop", function(cmdList) { return new Loop(2, cmdList) })
+		wrapSelectionInCommand("loop", function(cmdList) {
+			return new Loop(2, cmdList) })
 	},
 	b: function() {
-		wrapSelectionInCommand("branch", function(cmdList) { return new Branch("true", cmdList, []) })
+		wrapSelectionInCommand("branch", function(cmdList) {
+			return new Branch("true", cmdList, []) })
 	},
 	c: function() { // copy
 		if (keyPressed.ctrl && !selection.isEmpty()) {
-			// the overwritten have no scope links, so no need to explicitly delete them (for garbage collection)
+			// the overwritten have no scope links, 
+			// so no need to explicitly delete them (for garbage collection)
 			lastCopiedElements = []
-			selection.e.forEach(function(e) { lastCopiedElements.push(e.root.clone()) })
+			selection.e.forEach(function(e) {
+				lastCopiedElements.push(e.root.clone())
+			})
 		}
 	},
 	x: function() { // cut
@@ -880,7 +887,9 @@ var html = [
 		if (keyPressed.ctrl && lastCopiedElements !== undefined) {
 			// the order of selection is honored while inserting
 			// this makes cutting "x" be well suited for reording commands
-			lastCopiedElements.forEach(function(e) { insertCmdRespectingSelection(e.clone()) })
+			lastCopiedElements.forEach(function(e) {
+				insertCmdRespectingSelection(e.clone())
+			})
 			run()
 		}
 	},
@@ -892,7 +901,6 @@ var html = [
 		for (var i=1; i<F_.execCmds.length; i++)
 			withoutFirst.push(F_.execCmds[i])
 		forAllExecCmdsOfTypeDo(withoutFirst, function(m) {
-			// TODO construct with Array join()
 			path.push("L"+m.savedState.x+","+m.savedState.y)
 		}, Move)
 		path.push("L"+F_.state.x+","+F_.state.y)
@@ -1242,6 +1250,9 @@ Expression.prototype.adjustDragstart = function(element, dragPrecision) {
 		// TODO does this do anything?
 		element.blur()
 	} else {
+		
+		
+		
 		console.log("cannot drag non-const argument")
 	}
 }
@@ -2039,12 +2050,16 @@ Move.prototype.execInner = function(callerF) {
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
+					if (!self.root.mainParameter.isConst())
+						console.log("can not drag non-const move")
 					d3.event.sourceEvent.stopPropagation()
 				})
 				.on("drag", function (d) {
-					self.setMainParameter(fromMousePosToLineLengthWithoutChangingDirection(
-						mousePos[0], mousePos[1], self.savedState))
-					run()
+					if (self.root.mainParameter.isConst()) {
+						self.setMainParameter(fromMousePosToLineLengthWithoutChangingDirection(
+							mousePos[0], mousePos[1], self.savedState))
+						run()
+					}
 				})
 				.on("dragend", function (d) {
 					d3.event.sourceEvent.stopPropagation()
@@ -2217,26 +2232,34 @@ Rotate.prototype.execInner = function(callerF) {
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function(d) {
-					dragInProgress = true
-					mainSVG.svg.style({cursor: "move"})
-					dragStartState = self.savedState.clone()
-					d3.select(this).classed("dragging", true)
-					// to prevent drag on background
+					if (self.root.mainParameter.isConst()) {
+						dragInProgress = true
+						mainSVG.svg.style({cursor: "move"})
+						dragStartState = self.savedState.clone()
+						d3.select(this).classed("dragging", true)
+						// to prevent drag on background
+					} else {
+						console.log("can not drag non-const rotate")
+					}
 					d3.event.sourceEvent.stopPropagation()
 				})
 				.on("drag", function(d) {
-					var x = d3.event.x
-					var y = d3.event.y
-					var dx = x-dragStartState.x
-					var dy = y-dragStartState.y
-					var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
-					self.setMainParameter(angleToString(angleDelta))
-					run()
+					if (self.root.mainParameter.isConst()) {
+						var x = d3.event.x
+						var y = d3.event.y
+						var dx = x-dragStartState.x
+						var dy = y-dragStartState.y
+						var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
+						self.setMainParameter(angleToString(angleDelta))
+						run()
+					}
 				})
 				.on("dragend", function(d) {
-					dragInProgress = false
-					mainSVG.svg.style({cursor: "default"})
-					d3.select(this).classed("dragging", false)
+					if (self.root.mainParameter.isConst()) {
+						dragInProgress = false
+						mainSVG.svg.style({cursor: "default"})
+						d3.select(this).classed("dragging", false)
+					}
 				})
 			)
 		self.title = self.arc.append("title")
