@@ -60,7 +60,7 @@ var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
-	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x"}
+	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x", 90: "z"}
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -900,7 +900,12 @@ var onKeyDown = {
 		path = path.join(" ")
 		console.log(path)
 		F_.paintingG.append("path").attr("d", path)
-	}
+	},
+	z: function() { // undo
+		if (keyPressed.ctrl) {
+			updateNotification("Undo is not supported yet. Sorry about that.", 5000)
+		}
+	},
 }
 
 
@@ -2688,6 +2693,7 @@ FuncCall.prototype.execInner = function(callerF) {
 				run()
 				d3.event.stopPropagation()
 			})
+		self.updateMarkAndSelect(true)
 		self.icon.argUl = self.icon.body.append("xhtml:ul")
 	}
 	

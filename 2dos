@@ -22,7 +22,7 @@ see also TODOs in code
 	show examples
 
 small features
-	
+	funcCall: make it visible (at least the "f") when it is a proxy>1
 	remove ° if edit in input field (rotate)
 	more tooltips, more sanity checks
 	auto-select newly created commands
