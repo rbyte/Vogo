@@ -44,7 +44,7 @@ var zoomFactor = 1.3
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 3
-var scopeDepthLimit = 500 // for endless loops and recursion
+var scopeDepthLimit = 30 // for endless loops and recursion
 var runDurationLimitMS = 5000
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 70
@@ -99,7 +99,7 @@ vogo.init = function() {
 	automaticTest()
 	
 //	benchmark(15)
-//	addExampleToUI(examples[18]())
+//	addExampleToUI(examples[13]())
 //	examples.forEach(function(t) {
 //		addExampleToUI(t())
 //		run()
@@ -107,16 +107,18 @@ vogo.init = function() {
 	
 }
 
-function run() {
+function run(f) {
 //	console.log("RUNNING")
+	if (f === undefined || !(f instanceof Func))
+		f = F_
 	lastRunStartTime = Date.now()
-	F_.exec()
+	f.exec()
 	mainSVG.updateTurtle()
 	
-	determineDeepFuncDependenciesFor(F_, true/*reverse search*/)
-		.forEach(function(f) {
-			if (f !== F_)
-				f.exec()
+	determineDeepFuncDependenciesFor(f, true/*reverse search*/)
+		.forEach(function(g) {
+			if (g !== f)
+				g.exec()
 		})
 }
 
@@ -184,7 +186,7 @@ function setupUIEventListeners() {
 				functionPanelSizePercentOfBodyWidth = Math.max(0.05, Math.min(0.4,
 					d3.event.x / document.body.clientWidth))
 			if (id === "borderR")
-				toolbarPanelSizePercentOfBodyWidth = Math.max(0.03, Math.min(0.18,
+				toolbarPanelSizePercentOfBodyWidth = Math.max(0.0001, Math.min(0.18,
 					(1 - d3.event.x / document.body.clientWidth)))
 			d3.select("#borderL").style("left", functionPanelSizePercentOfBodyWidth*100+"%")
 			d3.select("#functions").style("width", functionPanelSizePercentOfBodyWidth*100+"%")
@@ -328,6 +330,7 @@ function setupUIEventListeners() {
 						})
 						selectionRect.remove()
 						selectionRect = undefined
+						console.log("running after resolved rect sel")
 						run()
 					}
 				}
@@ -656,7 +659,7 @@ function insertCmdRespectingSelection(cmd) {
 }
 
 function resolveSelectionRect(e, selectionList, x, y, w, h) {
-	var allIn = true
+	var allIn = true // all contained commands where selected flag
 	if (e.canContainCommands()) {
 		var tempList = []
 		e.execCmds.forEach(function(c) {
@@ -676,6 +679,9 @@ function resolveSelectionRect(e, selectionList, x, y, w, h) {
 	}
 	if (allIn && e !== F_)
 		selectionList.push(e)
+	// makes sure that no commands inside a funcCall can be selected
+	if (e instanceof FuncCall && !allIn)
+		selectionList = []
 //	console.log(selectionList)
 	return selectionList
 }
@@ -1140,6 +1146,7 @@ Expression.prototype.eval = function(command) {
 			loopIndex = sc.i
 		sc = sc.scope // traverse scope chain up
 	}
+	console.log(loopIndex)
 	var fc, mainArgProvider
 	if (sc instanceof FuncCall) {
 		// this is important for recusion. each proxy has to take the arguments from the previous level
@@ -1254,7 +1261,7 @@ Expression.prototype.adjustDragstart = function(element, dragPrecision) {
 	}
 }
 
-Expression.prototype.adjustDrag = function(element, alterElementValueFunc) {
+Expression.prototype.adjustDrag = function(element, alterElementValueFunc, insteadOfRunFunc) {
 	var self = this
 	console.assert(element instanceof HTMLInputElement)
 	if (self.isConst()) {
@@ -1274,7 +1281,10 @@ Expression.prototype.adjustDrag = function(element, alterElementValueFunc) {
 		if (self.eval(/*const!*/) !== newValue) {
 			self.set(newValue)
 			element.value = (alterElementValueFunc !== undefined ? alterElementValueFunc(newValue) : newValue)
-			run()
+			if (insteadOfRunFunc !== undefined)
+				insteadOfRunFunc()
+			else
+				run()
 		}
 	}
 }
@@ -1876,7 +1886,7 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 			// because argName is the crucial closured variable
 			if (argName !== newArgName)
 				argName = newArgName
-			run()
+			run(self)
 		} else {
 			// TODO restore field
 		}
@@ -1902,7 +1912,10 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 				self.args[argName].adjustDragstart(this)
 			})
 			.on("drag", function (d) {
-				self.args[argName].adjustDrag(this, function(v) { return argName+"="+v } )
+				self.args[argName].adjustDrag(this,
+					function(v) { return argName+"="+v },
+					function() { run(self) } // because self may be !== F_
+				)
 			})
 			.on("dragend", function (d) {
 				
@@ -1928,6 +1941,7 @@ Func.prototype.setCommands = function(commands) {
 // @override
 Func.prototype.exec = function(/*no caller here*/) {
 	var self = this
+	console.log("run func: "+self.name)
 //	console.log("exec: "+self.name)
 	self.state.reset()
 	lastRotateExecuted = undefined
@@ -2052,6 +2066,7 @@ Move.prototype.clone = function(scope) {
 }
 
 Move.prototype.execInner = function(callerF) {
+	console.log("move exec")
 	var self = this
 	var lineLength = self.evalMainParameter()
 	
@@ -2250,6 +2265,7 @@ Rotate.prototype.afterInputFieldUpdate = function(v) {
 }
 
 Rotate.prototype.execInner = function(callerF) {
+	console.log("Rotate exec")
 	var self = this
 	var root = self.root
 	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
@@ -2408,8 +2424,10 @@ Rotate.prototype.getVisibleElements = function() {
 
 Rotate.prototype.getPointsRequiredForSelection = function() {
 	var self = this
+	// TODO eval in creating problems!
 	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
-	// the actual rotationArcRadius may be smalled due to scaling
+//	var angle = 90
+	// the actual rotationArcRadius may be smaller due to scaling
 	var radius = rotationArcRadius * (self.radiusScaleFactorCalculated !== undefined ? self.radiusScaleFactorCalculated : 1)
 	// the 3 corners that the rotate arc spans
 	return [[self.savedState.x, self.savedState.y],
@@ -2449,6 +2467,7 @@ Loop.prototype.clone = function(scope) {
 }
 
 Loop.prototype.execInner = function(callerF) {
+	console.log("Loop exec")
 	var self = this
 	// TODO if this is 0 the loop becomes unaccessable
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
@@ -2669,6 +2688,7 @@ FuncCall.prototype.clone = function(scope) {
 }
 
 FuncCall.prototype.execInner = function(callerF) {
+	console.log("FuncCall exec")
 	var self = this
 	var root = self.root
 	console.assert(root.f !== undefined)
@@ -2801,10 +2821,12 @@ FuncCall.prototype.execInner = function(callerF) {
 				self.execCmds.push(e.shallowClone(self))
 			})
 		}
+		// clear cache. this is necessary because expression evalutation is
+		// not only done during runs but yet eval may created cached args
+		self.cachedArguments = {}
 //		console.log("exec fc with scopeDepth: "+self.scopeDepth)
 		self.execCmds.forEach(function(e) { e.exec(callerF) })
 	}
-	// clear cache
 	self.cachedArguments = {}
 }
 
@@ -3441,6 +3463,16 @@ examples.push(function() {
 })
 
 examples.push(function() {
+	var f = new Func({name: "swirlPyramidRecursive", args: {step: 20, x: 0.94, r: -94.1}})
+	f.setCommands([
+		new Move("step"),
+		new Rotate("r"),
+		new FuncCall(f, {step: "step*x"})
+	])
+	return f
+})
+
+examples.push(function() {
 	var f = new Func({
 		name: "coincidentalSpiral",
 		args: {n: 360, angle: 153.951},
@@ -3454,6 +3486,7 @@ examples.push(function() {
 	return f
 })
 
+// 15
 examples.push(function() {
 	var f = new Func({
 		name: "tunnel2",
@@ -3467,7 +3500,6 @@ examples.push(function() {
 	return f
 })
 
-// 15
 examples.push(function() {
 	var f = new Func({
 		name: "roses",
@@ -3498,6 +3530,7 @@ examples.push(function() {
 	return f
 })
 
+// 18
 examples.push(function() {
 	var f = new Func({
 		name: "simpleFlower",
@@ -3511,7 +3544,6 @@ examples.push(function() {
 	return f
 })
 
-// 18
 examples.push(function() {
 	var bar = new vogo.Func({
 		name: "bar",
@@ -3534,6 +3566,19 @@ examples.push(function() {
 			new vogo.Rotate(180)])]);
 	return [bar, barChart]
 })
+
+examples.push(function() {
+	var f = new vogo.Func({
+		name: "snapExample",
+		args: {"a": 56},
+		viewBox: {x:-30.173, y:-30.310, w:50.572, h:41.420}});
+	f.setCommands([
+		new vogo.Loop("a", [
+			new vogo.Move("21.96*(1-i/a)"),
+			new vogo.Rotate(-122.5)])]);
+	return f
+})
+
 
 return vogo
 }()

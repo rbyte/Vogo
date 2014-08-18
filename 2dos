@@ -22,6 +22,7 @@ see also TODOs in code
 	show examples
 
 small features
+	funcCall: make result of arg visible as text field on hover of arg
 	funcCall: make it visible (at least the "f") when it is a proxy>1
 	remove ° if edit in input field (rotate)
 	more tooltips, more sanity checks
@@ -61,6 +62,7 @@ big features
 	allow functions as arguments
 	undo
 	Beziers
+	store session in local browser cache
 	allow much more dragging between elements
 	code ui view/codemirror
 	Logo output
@@ -74,6 +76,8 @@ performance
 	round dom numbers
 
 bugs
+	deleting a recursing funcCall does not seem to work smoothly
+	a rename parameter is not removed from funcCall args list
 	foreignObject relative width and height
 	fix: rotation/move manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
