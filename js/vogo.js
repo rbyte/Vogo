@@ -40,7 +40,7 @@ var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity"
 var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%",
 	top: "10%", left: "10%", border: "1px solid rgba(0,0,0,0.1)"}
 
-var zoomFactor = 1.3
+var zoomFactor = 1.15 // macs tend to have finer grain mouse wheel ticks
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var rotationArcRadius = 3
@@ -58,6 +58,7 @@ var radiusInDegrees = true
 var showKeyStrokesInToolbar = true
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 
+// String.fromCharCode() ought to be a better way
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
 	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x", 90: "z"}
@@ -330,7 +331,6 @@ function setupUIEventListeners() {
 						})
 						selectionRect.remove()
 						selectionRect = undefined
-						console.log("running after resolved rect sel")
 						run()
 					}
 				}
@@ -1146,7 +1146,6 @@ Expression.prototype.eval = function(command) {
 			loopIndex = sc.i
 		sc = sc.scope // traverse scope chain up
 	}
-	console.log(loopIndex)
 	var fc, mainArgProvider
 	if (sc instanceof FuncCall) {
 		// this is important for recusion. each proxy has to take the arguments from the previous level
@@ -1941,8 +1940,6 @@ Func.prototype.setCommands = function(commands) {
 // @override
 Func.prototype.exec = function(/*no caller here*/) {
 	var self = this
-	console.log("run func: "+self.name)
-//	console.log("exec: "+self.name)
 	self.state.reset()
 	lastRotateExecuted = undefined
 	lastRotateScaleFactorCalculated = undefined
@@ -2066,7 +2063,6 @@ Move.prototype.clone = function(scope) {
 }
 
 Move.prototype.execInner = function(callerF) {
-	console.log("move exec")
 	var self = this
 	var lineLength = self.evalMainParameter()
 	
@@ -2265,7 +2261,6 @@ Rotate.prototype.afterInputFieldUpdate = function(v) {
 }
 
 Rotate.prototype.execInner = function(callerF) {
-	console.log("Rotate exec")
 	var self = this
 	var root = self.root
 	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
@@ -2467,7 +2462,6 @@ Loop.prototype.clone = function(scope) {
 }
 
 Loop.prototype.execInner = function(callerF) {
-	console.log("Loop exec")
 	var self = this
 	// TODO if this is 0 the loop becomes unaccessable
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
@@ -2688,7 +2682,6 @@ FuncCall.prototype.clone = function(scope) {
 }
 
 FuncCall.prototype.execInner = function(callerF) {
-	console.log("FuncCall exec")
 	var self = this
 	var root = self.root
 	console.assert(root.f !== undefined)
