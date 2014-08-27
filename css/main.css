@@ -239,6 +239,14 @@ svg {
 	-ms-user-select: none;
 	user-select: none;
 }
+foreignObject {
+	pointer-events: none;
+}
+svg body {
+	/*makes foreignObject bodies size scale with its contents*/
+	display: inline-block;
+	pointer-events: auto;
+}
 /*foreignObject input -> does not work. no idea why.*/
 svg input {
 	border: 0 none;

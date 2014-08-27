@@ -101,11 +101,10 @@ vogo.init = function() {
 	
 //	benchmark(15)
 //	addExampleToUI(examples[13]())
-//	examples.forEach(function(t) {
-//		addExampleToUI(t())
-//		run()
-//	})
-	
+	examples.forEach(function(t) {
+		addExampleToUI(t())
+		run()
+	})
 }
 
 function run(f) {
@@ -466,17 +465,12 @@ function updateLabelVisibility(self) {
 			&& manipulation.insertedCommand !== self.root)
 }
 
-function setTextOfInput(input, containingForeignObject, text) {
+function setTextOfInput(input, text) {
 	if (text === undefined)
 		text = input.property("value")
 	else
 		input.property("value", text)
 	input.attr("size", Math.max(1, text.toString().length))
-	if (!containingForeignObject.classed("hide")) {
-		var newWidth = input.node().offsetWidth
-		if (newWidth > 0)
-			containingForeignObject.attr("width", newWidth+5)
-	}
 }
 
 function resetUI() {
@@ -787,6 +781,18 @@ function runBenchmarkBasedOnRepetitions(numberOfRepetitions, beforeEachRun) {
 	return Date.now() - startTime
 }
 
+function createForeignObject(parent) {
+	// note that width and height are relative to the svg viewbox, not the document body!
+	// and that body and viewbox have, when you zoom in far, a very different ratio
+	// that means that the foreignObject will eventually crop its content
+	// but since the foreignObject has disabled click events and its own body scales relative
+	// to its content, the size can just be huge
+	return parent.append("foreignObject")
+		.attr("x", 0).attr("y", 0).attr("width", "9000%").attr("height", "9000%")
+		.on("click", function(d, i) { // chrome wants this
+			d3.event.stopPropagation()
+		})
+}
 
 // singletons
 var onKeyUp = {}
@@ -2133,13 +2139,7 @@ Move.prototype.execInner = function(callerF) {
 	}
 	
 	if (self.label === undefined && drawIcons) {
-		self.label = mainSVG.paintingG.append("foreignObject")
-//			.attr({width: 250, height: 25, x: 0, y: 0})
-			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
-			.on("click", function() {
-				d3.event.stopPropagation()
-			})
-		
+		self.label = createForeignObject(mainSVG.paintingG)
 		self.labelInput = self.label
 			.append("xhtml:body")
 			.append("xhtml:input")
@@ -2156,7 +2156,7 @@ Move.prototype.execInner = function(callerF) {
 			})
 			.on("input", function() {
 				// size updating
-				setTextOfInput(self.labelInput, self.label)
+				setTextOfInput(self.labelInput)
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
@@ -2187,7 +2187,7 @@ Move.prototype.execInner = function(callerF) {
 		var x = callerF.state.x + Math.sin(dir) * lineLength * -0.5
 		var y = callerF.state.y - Math.cos(dir) * lineLength * -0.5
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
-		setTextOfInput(self.labelInput, self.label, self.root.mainParameter.get())
+		setTextOfInput(self.labelInput, self.root.mainParameter.get())
 	}
 	
 	for (var l in lines)
@@ -2210,7 +2210,7 @@ Move.prototype.updateCssClass = function(cssClass, selectOn) {
 	if (selectOn) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
-			setTextOfInput(self.labelInput, self.label)
+			setTextOfInput(self.labelInput)
 		}
 	} else {
 		updateLabelVisibility(self)
@@ -2331,14 +2331,9 @@ Rotate.prototype.execInner = function(callerF) {
 	}
 	
 	if (self.label === undefined && drawLabel) {
-		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
-		self.label = mainSVG.paintingG.append("foreignObject")
-//			.attr({width: 250, height: 25, x: 0, y: 0})
-			.attr("width", 250).attr("height", 25).attr("x", 0).attr("y", 0)
-			.on("click", function() {
-				d3.event.stopPropagation()
-			})
+		self.label = createForeignObject(mainSVG.paintingG)
 		self.labelInput = self.label
+		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
 			.append("xhtml:body")
 			.append("xhtml:input")
 			.attr("type", "text")
@@ -2351,7 +2346,7 @@ Rotate.prototype.execInner = function(callerF) {
 				}
 			})
 			.on("input", function() {
-				setTextOfInput(self.labelInput, self.label)
+				setTextOfInput(self.labelInput)
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
@@ -2376,7 +2371,7 @@ Rotate.prototype.execInner = function(callerF) {
 		var text = root.mainParameter.isConst()
 			? self.addDegreeSymbol(root.mainParameter.get())
 			: root.mainParameter.get()
-		setTextOfInput(self.labelInput, self.label, text)
+		setTextOfInput(self.labelInput, text)
 	}
 	if (drawIcons) {
 		self.arc.attr("d", arc)
@@ -2402,7 +2397,7 @@ Rotate.prototype.updateCssClass = function(cssClass, selectOn) {
 	if (selectOn) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
-			setTextOfInput(self.labelInput, self.label)
+			setTextOfInput(self.labelInput)
 		}
 	} else {
 		updateLabelVisibility(self)
@@ -2472,13 +2467,7 @@ Loop.prototype.execInner = function(callerF) {
 	function createIcon() {
 		var iconG = mainSVG.paintingG.append("g")
 		if (i === 0) {
-			iconG.fo = iconG.append("foreignObject")
-//				.attr({width: 250 /*max-width*/, height: 25, x: 0, y: 0})
-				.attr("width", 250 /*max-width*/).attr("height", 25).attr("x", 0).attr("y", 0)
-				.on("click", function() {
-					d3.event.stopPropagation()
-				})
-			
+			iconG.fo = createForeignObject(iconG)
 			iconG.labelInput = iconG.fo.append("xhtml:body").append("xhtml:input")
 				.attr("type", "text")
 				.on("blur", function() {
@@ -2492,7 +2481,7 @@ Loop.prototype.execInner = function(callerF) {
 					}
 				})
 				.on("input", function() {
-					setTextOfInput(iconG.labelInput, iconG.fo)
+					setTextOfInput(iconG.labelInput)
 				})
 				.call(d3.behavior.drag()
 					.on("dragstart", function (d) {
@@ -2598,7 +2587,7 @@ Loop.prototype.execInner = function(callerF) {
 			if (i === 0) {
 				self.iconGs[i].fo
 					.attr("transform", "translate("+(loopClockRadiusUsed*1.1)+","+(-loopClockRadiusUsed*1.3)+") scale(0.1)")
-				setTextOfInput(self.iconGs[i].labelInput, self.iconGs[i].fo, self.root.mainParameter.get())
+				setTextOfInput(self.iconGs[i].labelInput, self.root.mainParameter.get())
 			}
 			
 			self.indicateIfInsideAnySelectedCommandsScope()
@@ -2693,9 +2682,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	)
 	
 	if (self.icon === undefined && drawIcons) {
-		self.icon = mainSVG.paintingG.append("foreignObject")
-			// TODO make this relative
-			.attr({width: 200, height: 100, x: 0, y: 0})
+		self.icon = createForeignObject(mainSVG.paintingG)
 		self.icon.argF = {}
 		self.icon.body = self.icon.append("xhtml:body")
 		self.icon.body.text = self.icon.body.append("xhtml:text")
@@ -2724,12 +2711,14 @@ FuncCall.prototype.execInner = function(callerF) {
 		var value = root.customArguments[a] === undefined ? root.f.args[a].get() : root.customArguments[a].get()
 		if (root.customArguments[a] === undefined)
 			root.customArguments[a] = new Expression(value)
-		self.icon.argF[a].inputDiv = self.icon.argF[a].append("xhtml:div")
+		self.icon.argF[a].inputDiv = self.icon.argF[a]
+			.append("xhtml:div")
 			.attr("class", "titleRowCellLast")
-		self.icon.argF[a].input = self.icon.argF[a].inputDiv.append("xhtml:input")
+		self.icon.argF[a].input = self.icon.argF[a].inputDiv
+			.append("xhtml:input")
 			.attr("type", "text")
 			.property("value", value)
-			.attr("size", 6)
+			.attr("size", value.toString().length)
 			.on("blur", function() {
 				root.customArguments[a].set(this.value)
 				run()
@@ -2923,12 +2912,7 @@ Branch.prototype.execInner = function(callerF) {
 				}
 			})
 		
-		self.iconG.fo = self.iconG.append("foreignObject")
-			.attr({width: 250 /*max-width*/, height: 25, x: 0, y: 0})
-			.on("click", function() {
-				d3.event.stopPropagation()
-			})
-		
+		self.iconG.fo = createForeignObject(self.iconG)
 		self.iconG.labelInput = self.iconG.fo.append("xhtml:body").append("xhtml:input")
 			.attr("type", "text")
 			.on("blur", function() {
@@ -2942,7 +2926,7 @@ Branch.prototype.execInner = function(callerF) {
 				}
 			})
 			.on("input", function() {
-				setTextOfInput(self.iconG.labelInput, self.iconG.fo)
+				setTextOfInput(self.iconG.labelInput)
 			})
 	}
 	
@@ -2959,7 +2943,7 @@ Branch.prototype.execInner = function(callerF) {
 		self.iconG.fo.attr("transform", "translate("+2.4+","+0+") scale(0.1)")
 		self.iconG.labelInput.property("value", root.mainParameter.get())
 		self.indicateIfInsideAnySelectedCommandsScope()
-		setTextOfInput(self.iconG.labelInput, self.iconG.fo)
+		setTextOfInput(self.iconG.labelInput)
 	}
 	
 	if (rebuild) {
@@ -3572,6 +3556,37 @@ examples.push(function() {
 	return f
 })
 
+examples.push(function() {
+	var circleSeg = new vogo.Func({
+		name: "circleSeg",
+		args: {"angle": 29, "step": 0.5},
+		viewBox: {x:-21.162, y:-33.392, w:52.845, h:46.026}});
+	circleSeg.setCommands([
+		new vogo.Loop("angle", [
+			new vogo.Move("step"),
+			new vogo.Rotate(1)])]);
+
+	var pie = new vogo.Func({
+		name: "pie",
+		args: {"angle": 135, "r": 8},
+		viewBox: {x:-13.018, y:-12.988, w:30.214, h:26.316}});
+	pie.setCommands([
+		new vogo.Move("r"),
+		new vogo.Rotate(90),
+		new vogo.FuncCall(circleSeg, {"step": "Math.tan(0.5/180*Math.PI)*r*2", "angle": "angle"}),
+		new vogo.Rotate(90),
+		new vogo.Move("r"),
+		new vogo.Rotate(180)]);
+	
+	var pieChart = new vogo.Func({
+		name: "pieChart",
+		args: {"data": "[3,4,6,2]", "r": 9},
+		viewBox: {x:-16.763, y:-14.205, w:39.958, h:34.802}});
+	pieChart.setCommands([
+		new vogo.Loop("data.length", [
+			new vogo.FuncCall(pie, {"angle": "data[i]/d3.sum(data)*360", "r": "r"})])]);
+	return [circleSeg, pie, pieChart]
+})
 
 return vogo
 }()

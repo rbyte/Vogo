@@ -76,9 +76,9 @@ performance
 	round dom numbers
 
 bugs
+	drawing of loop icons may fail (see pieChart example)
 	deleting a recursing funcCall does not seem to work smoothly
 	a rename parameter is not removed from funcCall args list
-	foreignObject relative width and height
 	fix: rotation/move manipulation in loop: so that line crosses mouse
 	rotate/move/loop with 0 is non-selectable/visible
 	remove loops when empty (e.g. removed last inner command)
