@@ -101,10 +101,10 @@ vogo.init = function() {
 	
 //	benchmark(15)
 //	addExampleToUI(examples[13]())
-	examples.forEach(function(t) {
-		addExampleToUI(t())
-		run()
-	})
+//	examples.forEach(function(t) {
+//		addExampleToUI(t())
+//		run()
+//	})
 }
 
 function run(f) {
@@ -2127,8 +2127,13 @@ Move.prototype.execInner = function(callerF) {
 				})
 				.on("drag", function (d) {
 					if (self.root.mainParameter.isConst()) {
-						self.setMainParameter(fromMousePosToLineLengthWithoutChangingDirection(
-							mousePos[0], mousePos[1], self.savedState))
+						var result = fromMousePosToLineLengthWithoutChangingDirection(
+							mousePos[0], mousePos[1], self.savedState)
+						self.setMainParameter(result)
+						selection.e.forEach(function(e) {
+							if (e instanceof Move && e.root !== self.root && e.root.mainParameter.isConst())
+								e.setMainParameter(result)
+						})
 						run()
 					}
 				})
@@ -2277,6 +2282,7 @@ Rotate.prototype.execInner = function(callerF) {
 		&&  (self.scopeDepth <= 1
 			|| selection.containsAsRoot(self))
 	
+	
 	if (self.arc === undefined && drawIcons) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
 			.on("mouseenter", function(d, i) {
@@ -2302,10 +2308,10 @@ Rotate.prototype.execInner = function(callerF) {
 						mainSVG.svg.style({cursor: "move"})
 						dragStartState = self.savedState.clone()
 						d3.select(this).classed("dragging", true)
-						// to prevent drag on background
 					} else {
 						console.log("can not drag non-const rotate")
 					}
+					// to prevent drag on background
 					d3.event.sourceEvent.stopPropagation()
 				})
 				.on("drag", function(d) {
@@ -2316,6 +2322,11 @@ Rotate.prototype.execInner = function(callerF) {
 						var dy = y-dragStartState.y
 						var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
 						self.setMainParameter(angleToString(angleDelta))
+						selection.e.forEach(function(e) {
+							if (e instanceof Rotate && e.root !== self.root && e.root.mainParameter.isConst()) {
+								e.setMainParameter(angleToString(angleDelta))
+							}
+						})
 						run()
 					}
 				})
