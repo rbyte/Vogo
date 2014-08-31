@@ -37,6 +37,7 @@ small features
 	manipulation preview has different style (e.g. lower opacity)
 	one selected element can contain another selected element - fix?!
 		is this creating bugs when removeDeselectAndDeleteAllCompletely ?
+	ctrl+a -> select all
 
 big features
 	automatic tests
@@ -76,6 +77,7 @@ performance
 	round dom numbers
 
 bugs
+	call a func A in B, then while B is focued, change a parameter of A: the turtle in B does not update properly (lags behind)
 	drawing of loop icons may fail (see pieChart example)
 	deleting a recursing funcCall does not seem to work smoothly
 	a rename parameter is not removed from funcCall args list

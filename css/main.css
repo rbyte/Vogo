@@ -77,10 +77,6 @@ a {
 	/*background-color: #fff;*/
     background: url("../images/cardboard_flat_030_200x200.png") repeat scroll 0 0 #fff;
 }
-.dragging {
-	fill: #f00 !important;
-	fill-opacity: 0.3 !important;
-}
 svg line {
 	cursor: pointer;
 }
@@ -98,6 +94,13 @@ path.selected, path.mark {
 path.mark:not(.selected), line.mark:not(.selected), circle.mark:not(.selected) {
 	stroke: #00f !important;
 	stroke-opacity: 1;
+}
+path.dragging { /*rotate arc path*/
+	fill: #f0f !important;
+	fill-opacity: 0.3 !important;
+}
+line.dragging { /*move line*/
+	stroke: #f0f !important;
 }
 text.mark:not(.selected) {
 	color: #44f;

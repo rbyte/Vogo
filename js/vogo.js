@@ -1249,29 +1249,20 @@ function getPrecision(n) {
 	}
 }
 
-Expression.prototype.adjustDragstart = function(element, dragPrecision) {
+Expression.prototype.adjustDragstart = function(dragPrecision) {
 	var self = this
 	if (self.isConst()) {
-//		self.dragStartMouseX = d3.mouse(element)[0]
 		self.dragStartMouseX = d3.mouse(domSvg)[0]
 		self.originalValue = self.eval()
 		self.dragPrecision = dragPrecision !== undefined ? dragPrecision : getPrecision(self.originalValue)
-		// TODO does this do anything?
-		element.blur()
 	} else {
-		
-		
-		
 		console.log("cannot drag non-const argument")
 	}
 }
 
-Expression.prototype.adjustDrag = function(element, alterElementValueFunc, insteadOfRunFunc) {
+Expression.prototype.getNewValueFromDrag = function() {
 	var self = this
-	console.assert(element instanceof HTMLInputElement)
 	if (self.isConst()) {
-		// if element is taken, the mouse jumps around
-//		var mouseDiff = d3.mouse(element)[0] - self.dragStartMouseX
 		var mouseDiff = d3.mouse(domSvg)[0] - self.dragStartMouseX
 		// the number of digits after the comma influences how much the number changes on drag
 		// 20.01 will only change slightly, whereas 100 will change rapidly
@@ -1283,15 +1274,10 @@ Expression.prototype.adjustDrag = function(element, alterElementValueFunc, inste
 		// yes, we need to do the rounding twice: mouseDiff, to reduce reruns
 		// and newValue to get the precision right (+ can reintroduce rounding errors)
 		var newValue = parseFloat((self.originalValue+mouseDiff).toFixed(Math.max(0, -self.dragPrecision)))
-		if (self.eval(/*const!*/) !== newValue) {
-			self.set(newValue)
-			element.value = (alterElementValueFunc !== undefined ? alterElementValueFunc(newValue) : newValue)
-			if (insteadOfRunFunc !== undefined)
-				insteadOfRunFunc()
-			else
-				run()
-		}
+		if (self.eval(/*const!*/) !== newValue)
+			return newValue
 	}
+	return undefined
 }
 
 
@@ -1555,6 +1541,69 @@ Command.prototype.isInsideFuncCall = function() {
 	return (this.getInnermostFuncCallOrFunc() instanceof FuncCall)
 }
 
+Command.prototype.changeSelectedInSync = function(newValue) {
+	var self = this
+	selection.e.forEach(function(e) {
+		if (e instanceof self.myConstructor
+			&& e.root !== self.root
+			&& e.root.mainParameter.isConst())
+				e.setMainParameter(newValue)
+	})
+}
+
+Command.prototype.updateMainParameter = function(newValue) {
+	var self = this
+	if (newValue !== undefined) {
+		var c = self.myConstructor
+		console.assert(c === Move || c === Rotate || c === Loop)
+		self.setMainParameter(newValue)
+		self.changeSelectedInSync(newValue)
+		run()
+	}
+}
+
+Command.prototype.createDragBehavior = function() {
+	var self = this
+	var firstDragTick = true
+	var dragStartState
+	var isNotInsideFuncCall
+	return d3.behavior.drag()
+		.on("dragstart", function(d) {
+			firstDragTick = true
+			isNotInsideFuncCall = !self.isInsideFuncCall()
+			// to prevent drag on background
+			d3.event.sourceEvent.stopPropagation()
+		})
+		.on("drag", function (d) {
+			if (firstDragTick) {
+				// this can not be done in dragstart because a click triggers it
+				if (self.root.mainParameter.isConst() && isNotInsideFuncCall) {
+					dragInProgress = true
+					mainSVG.svg.style({cursor: "move"})
+					dragStartState = self.savedState.clone()
+					d3.select(this).classed("dragging", true)
+				} else {
+					if (!isNotInsideFuncCall) {
+						updateNotification("Functions can only be edited in their own defintion.", 5000)
+					} else {
+						updateNotification("Drag only works on constants.", 5000)
+					}
+				}
+				firstDragTick = false
+			}
+			if (self.root.mainParameter.isConst() && isNotInsideFuncCall) {
+				self.updateMainParameter(self.getNewMainParameterFromDrag(dragStartState))
+			}
+		})
+		.on("dragend", function(d) {
+			if (self.root.mainParameter.isConst() && isNotInsideFuncCall) {
+				dragInProgress = false
+				mainSVG.svg.style({cursor: "default"})
+				d3.select(this).classed("dragging", false)
+			}
+		})
+}
+
 // aobj is an object that contains the argument (all optional):
 // name
 // args = {a1,a2,...}
@@ -1657,8 +1706,6 @@ Func.prototype.initUI = function() {
 			}
 		})
 		.call(d3.behavior.drag()
-			.on("dragstart", function (d) {
-			})
 			.on("drag", function (d) {
 				if (!isDragged)
 					mainSVG.svg.style({cursor: "move"})
@@ -1914,16 +1961,15 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 		})
 		.call(d3.behavior.drag()
 			.on("dragstart", function (d) {
-				self.args[argName].adjustDragstart(this)
+				self.args[argName].adjustDragstart()
 			})
 			.on("drag", function (d) {
-				self.args[argName].adjustDrag(this,
-					function(v) { return argName+"="+v },
-					function() { run(self) } // because self may be !== F_
-				)
-			})
-			.on("dragend", function (d) {
-				
+				var newValue = self.args[argName].getNewValueFromDrag()
+				if (newValue !== undefined) {
+					self.args[argName].set(newValue)
+					this.value = argName+"="+newValue
+					run(self) // because self may be !== F_
+				}
 			})
 		)
 		.property("value", argName+"="+self.args[argName].get())
@@ -2068,8 +2114,13 @@ Move.prototype.clone = function(scope) {
 	return r
 }
 
+Move.prototype.getNewMainParameterFromDrag = function(dragStartState) {
+	return fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], dragStartState)
+}
+
 Move.prototype.execInner = function(callerF) {
 	var self = this
+	var root = self.root
 	var lineLength = self.evalMainParameter()
 	
 	// TODO this is a pretty ugly quick fix solution
@@ -2119,28 +2170,7 @@ Move.prototype.execInner = function(callerF) {
 					d3.event.stopPropagation()
 				}
 			})
-			.call(d3.behavior.drag()
-				.on("dragstart", function (d) {
-					if (!self.root.mainParameter.isConst())
-						console.log("can not drag non-const move")
-					d3.event.sourceEvent.stopPropagation()
-				})
-				.on("drag", function (d) {
-					if (self.root.mainParameter.isConst()) {
-						var result = fromMousePosToLineLengthWithoutChangingDirection(
-							mousePos[0], mousePos[1], self.savedState)
-						self.setMainParameter(result)
-						selection.e.forEach(function(e) {
-							if (e instanceof Move && e.root !== self.root && e.root.mainParameter.isConst())
-								e.setMainParameter(result)
-						})
-						run()
-					}
-				})
-				.on("dragend", function (d) {
-					d3.event.sourceEvent.stopPropagation()
-				})
-			)
+			.call(self.createDragBehavior())
 	}
 	
 	if (self.label === undefined && drawIcons) {
@@ -2150,14 +2180,11 @@ Move.prototype.execInner = function(callerF) {
 			.append("xhtml:input")
 			.attr("type", "text")
 			.on("blur", function() {
-				self.setMainParameter(this.value)
-				run()
+				self.updateMainParameter(this.value)
 			})
 			.on("keypress", function() {
-				if (d3.event.keyCode === /*enter*/ 13) {
-					self.setMainParameter(this.value)
-					run()
-				}
+				if (d3.event.keyCode === /*enter*/ 13)
+					self.updateMainParameter(this.value)
 			})
 			.on("input", function() {
 				// size updating
@@ -2165,14 +2192,11 @@ Move.prototype.execInner = function(callerF) {
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
-					self.root.mainParameter.adjustDragstart(this)
+					root.mainParameter.adjustDragstart()
 					d3.event.sourceEvent.stopPropagation()
 				})
 				.on("drag", function (d) {
-					self.root.mainParameter.adjustDrag(this)
-				})
-				.on("dragend", function (d) {
-
+					self.updateMainParameter(root.mainParameter.getNewValueFromDrag())
 				})
 			)
 	}
@@ -2192,7 +2216,7 @@ Move.prototype.execInner = function(callerF) {
 		var x = callerF.state.x + Math.sin(dir) * lineLength * -0.5
 		var y = callerF.state.y - Math.cos(dir) * lineLength * -0.5
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
-		setTextOfInput(self.labelInput, self.root.mainParameter.get())
+		setTextOfInput(self.labelInput, root.mainParameter.get())
 	}
 	
 	for (var l in lines)
@@ -2255,21 +2279,26 @@ Rotate.prototype.clone = function(scope) {
 	return r
 }
 
+Rotate.prototype.getNewMainParameterFromDrag = function(dragStartState) {
+	var dx = d3.event.x - dragStartState.x
+	var dy = d3.event.y - dragStartState.y
+	var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
+	return angleToString(angleDelta)
+}
+
 Rotate.prototype.addDegreeSymbol = function(v) { return v+"°"}
 
 Rotate.prototype.afterInputFieldUpdate = function(v) {
 	var self = this
 	if (v.charAt(v.length-1) === "°")
 		v = v.substr(0, v.length-1)
-	self.setMainParameter(v)
-	run()
+	self.updateMainParameter(v)
 }
 
 Rotate.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
-	var dragStartState
 	
 	var arc = d3.svg.arc()
 		.innerRadius(0)
@@ -2281,7 +2310,6 @@ Rotate.prototype.execInner = function(callerF) {
 	var drawLabel = drawIcons
 		&&  (self.scopeDepth <= 1
 			|| selection.containsAsRoot(self))
-	
 	
 	if (self.arc === undefined && drawIcons) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
@@ -2301,43 +2329,7 @@ Rotate.prototype.execInner = function(callerF) {
 					d3.event.stopPropagation()
 				}
 			})
-			.call(d3.behavior.drag()
-				.on("dragstart", function(d) {
-					if (self.root.mainParameter.isConst()) {
-						dragInProgress = true
-						mainSVG.svg.style({cursor: "move"})
-						dragStartState = self.savedState.clone()
-						d3.select(this).classed("dragging", true)
-					} else {
-						console.log("can not drag non-const rotate")
-					}
-					// to prevent drag on background
-					d3.event.sourceEvent.stopPropagation()
-				})
-				.on("drag", function(d) {
-					if (self.root.mainParameter.isConst()) {
-						var x = d3.event.x
-						var y = d3.event.y
-						var dx = x-dragStartState.x
-						var dy = y-dragStartState.y
-						var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
-						self.setMainParameter(angleToString(angleDelta))
-						selection.e.forEach(function(e) {
-							if (e instanceof Rotate && e.root !== self.root && e.root.mainParameter.isConst()) {
-								e.setMainParameter(angleToString(angleDelta))
-							}
-						})
-						run()
-					}
-				})
-				.on("dragend", function(d) {
-					if (self.root.mainParameter.isConst()) {
-						dragInProgress = false
-						mainSVG.svg.style({cursor: "default"})
-						d3.select(this).classed("dragging", false)
-					}
-				})
-			)
+			.call(self.createDragBehavior())
 		self.title = self.arc.append("title")
 	}
 	
@@ -2361,14 +2353,11 @@ Rotate.prototype.execInner = function(callerF) {
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
-					root.mainParameter.adjustDragstart(this)
+					root.mainParameter.adjustDragstart()
 					d3.event.sourceEvent.stopPropagation()
 				})
 				.on("drag", function (d) {
-					root.mainParameter.adjustDrag(this)
-				})
-				.on("dragend", function (d) {
-					
+					self.updateMainParameter(root.mainParameter.getNewValueFromDrag())
 				})
 			)
 	}
@@ -2469,6 +2458,7 @@ Loop.prototype.clone = function(scope) {
 
 Loop.prototype.execInner = function(callerF) {
 	var self = this
+	var root = self.root
 	// TODO if this is 0 the loop becomes unaccessable
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
 	// shrink inner loops radius
@@ -2482,29 +2472,23 @@ Loop.prototype.execInner = function(callerF) {
 			iconG.labelInput = iconG.fo.append("xhtml:body").append("xhtml:input")
 				.attr("type", "text")
 				.on("blur", function() {
-					self.setMainParameter(this.value)
-					run()
+					self.updateMainParameter(this.value)
 				})
 				.on("keypress", function() {
-					if (d3.event.keyCode === /*enter*/ 13) {
-						self.setMainParameter(this.value)
-						run()
-					}
+					if (d3.event.keyCode === /*enter*/ 13)
+						self.updateMainParameter(this.value)
 				})
 				.on("input", function() {
 					setTextOfInput(iconG.labelInput)
 				})
 				.call(d3.behavior.drag()
 					.on("dragstart", function (d) {
-						self.root.mainParameter.adjustDragstart(this, 0)
+						root.mainParameter.adjustDragstart(0)
 						// drag is not called if this is not done:
 						d3.event.sourceEvent.stopPropagation()
 					})
 					.on("drag", function (d) {
-						self.root.mainParameter.adjustDrag(this)
-					})
-					.on("dragend", function (d) {
-
+						self.updateMainParameter(root.mainParameter.getNewValueFromDrag())
 					})
 				)
 		}
@@ -2525,29 +2509,29 @@ Loop.prototype.execInner = function(callerF) {
 		return iconG
 	}
 	
-	var rebuild = self.execCmds.length !== numberOfRepetitions * self.root.commands.length
+	var rebuild = self.execCmds.length !== numberOfRepetitions * root.commands.length
 	if (rebuild) {
 //		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 //		console.assert(self.execCmds.length === 0)
 		// remove dangling
 		// deleteProxyCommand splices j from execCmds! -> execCmds.length changes in loop
-		for (var j=self.execCmds.length-1; j>=numberOfRepetitions * self.root.commands.length; j--)
+		for (var j=self.execCmds.length-1; j>=numberOfRepetitions * root.commands.length; j--)
 			self.execCmds[j].deleteProxyCommand()
 		for (var i=0; i<numberOfRepetitions; i++) {
-			for (var k=0; k<self.root.commands.length; k++) {
-				var pos = i*self.root.commands.length + k
+			for (var k=0; k<root.commands.length; k++) {
+				var pos = i*root.commands.length + k
 				if (pos < self.execCmds.length) {
 					// update existing
 					// this check improves loop performance significantly, if its numberOfRepetitions is dragged
-					if (self.execCmds[pos].root !== self.root.commands[k]) {
+					if (self.execCmds[pos].root !== root.commands[k]) {
 						self.execCmds[pos].deleteProxyCommand()
 						// deleteProxyCommand spliced pos, so we need to splice back in to retain order (do not push!)
-						self.execCmds.splice(pos, 0, self.root.commands[k].shallowClone(self))
-//						self.execCmds[pos] = self.root.commands[k].shallowClone(self)
+						self.execCmds.splice(pos, 0, root.commands[k].shallowClone(self))
+//						self.execCmds[pos] = root.commands[k].shallowClone(self)
 					}
 				} else {
 					// add new
-					self.execCmds.push(self.root.commands[k].shallowClone(self))
+					self.execCmds.push(root.commands[k].shallowClone(self))
 				}
 			}
 		}
@@ -2598,15 +2582,15 @@ Loop.prototype.execInner = function(callerF) {
 			if (i === 0) {
 				self.iconGs[i].fo
 					.attr("transform", "translate("+(loopClockRadiusUsed*1.1)+","+(-loopClockRadiusUsed*1.3)+") scale(0.1)")
-				setTextOfInput(self.iconGs[i].labelInput, self.root.mainParameter.get())
+				setTextOfInput(self.iconGs[i].labelInput, root.mainParameter.get())
 			}
 			
 			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
 		}
 		
-		for (var k=0; k<self.root.commands.length; k++)
-			self.execCmds[i*self.root.commands.length + k].exec(callerF)
+		for (var k=0; k<root.commands.length; k++)
+			self.execCmds[i*root.commands.length + k].exec(callerF)
 	}
 	if (rebuild)
 		self.updateMarkAndSelect(true) // force reapply because new iconGs may not be painted yet
@@ -2745,15 +2729,16 @@ FuncCall.prototype.execInner = function(callerF) {
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
-					root.customArguments[a].adjustDragstart(this)
-					// drag is not called if this is not done:
+					root.customArguments[a].adjustDragstart()
 					d3.event.sourceEvent.stopPropagation()
 				})
 				.on("drag", function (d) {
-					root.customArguments[a].adjustDrag(this)
-				})
-				.on("dragend", function (d) {
-
+					var newValue = root.customArguments[a].getNewValueFromDrag()
+					if (newValue !== undefined) {
+						root.customArguments[a].set(newValue)
+						this.value = newValue
+						run()
+					}
 				})
 			)
 	}
@@ -2763,7 +2748,6 @@ FuncCall.prototype.execInner = function(callerF) {
 			self.icon.argF[a].text.text(a).style(fcArgTextStyle)
 			self.icon.argF[a].inputDiv.remove() // input is inside inputDiv
 			self.icon.argF[a].input = undefined
-			self.icon.argF[a] // TODO is this line correct?
 			delete root.customArguments[a]
 			run()
 		} else {
@@ -2782,7 +2766,7 @@ FuncCall.prototype.execInner = function(callerF) {
 				self.icon.argF[a].text = self.icon.argF[a].append("xhtml:div")
 					.attr("class", "titleRowCellLast")
 					.text(a).style(fcArgTextStyle)
-					// need to closure in "a" because when click is called, a changed
+					// need to closure in "a" because when click is called, "a" changed
 					.on("click", (function(a) {
 						return function() { switchInputFieldForArg(a) }
 					})(a))
