@@ -43,7 +43,8 @@ var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%",
 var zoomFactor = 1.15 // macs tend to have finer grain mouse wheel ticks
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
-var rotationArcRadius = 3
+var rotationArcRadiusMax = 3
+var rotationArcRadiusMin = 1
 var scopeDepthLimit = 30 // for endless loops and recursion
 var runDurationLimitMS = 5000
 // this determines the default zoom level
@@ -1255,8 +1256,6 @@ Expression.prototype.adjustDragstart = function(dragPrecision) {
 		self.dragStartMouseX = d3.mouse(domSvg)[0]
 		self.originalValue = self.eval()
 		self.dragPrecision = dragPrecision !== undefined ? dragPrecision : getPrecision(self.originalValue)
-	} else {
-		console.log("cannot drag non-const argument")
 	}
 }
 
@@ -1527,6 +1526,7 @@ Command.prototype.isInsideAnySelectedCommandsScope = function(includingProxies, 
 }
 
 // traverses the scope chain up, looking for the first FuncCall, and if none, returns Func
+// where inner = high scope depth
 Command.prototype.getInnermostFuncCallOrFunc = function() {
 	var self = this
 	var sc = self.scope
@@ -1537,8 +1537,32 @@ Command.prototype.getInnermostFuncCallOrFunc = function() {
 	return sc
 }
 
+// where outer = low scope depth
+Command.prototype.getOutermostFuncCallOrFunc = function() {
+	var self = this
+	var lastFC = undefined
+	var sc = self
+	// this may take long if self is inside a recursive call
+	while (!(sc instanceof Func)) {
+		if (sc instanceof FuncCall)
+			lastFC = sc
+		sc = sc.scope
+		console.assert(sc !== undefined)
+	}
+	return lastFC === undefined ? sc : lastFC
+}
+
 Command.prototype.isInsideFuncCall = function() {
-	return (this.getInnermostFuncCallOrFunc() instanceof FuncCall)
+	return this.getInnermostFuncCallOrFunc() instanceof FuncCall
+}
+
+Command.prototype.isInsideFuncCallButNotSelfRecursing = function() {
+	var f = this.getInnermostFuncCallOrFunc()
+	return f instanceof FuncCall && f.root.f !== F_
+}
+
+Command.prototype.isNotInsideFuncCallOrSelfRecursing = function() {
+	return !this.isInsideFuncCallButNotSelfRecursing()
 }
 
 Command.prototype.changeSelectedInSync = function(newValue) {
@@ -1566,24 +1590,24 @@ Command.prototype.createDragBehavior = function() {
 	var self = this
 	var firstDragTick = true
 	var dragStartState
-	var isNotInsideFuncCall
+	var isNotInsideFuncCallOrSelfRecursing
 	return d3.behavior.drag()
 		.on("dragstart", function(d) {
 			firstDragTick = true
-			isNotInsideFuncCall = !self.isInsideFuncCall()
+			isNotInsideFuncCallOrSelfRecursing = self.isNotInsideFuncCallOrSelfRecursing()
 			// to prevent drag on background
 			d3.event.sourceEvent.stopPropagation()
 		})
 		.on("drag", function (d) {
 			if (firstDragTick) {
 				// this can not be done in dragstart because a click triggers it
-				if (self.root.mainParameter.isConst() && isNotInsideFuncCall) {
+				if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
 					dragInProgress = true
 					mainSVG.svg.style({cursor: "move"})
 					dragStartState = self.savedState.clone()
 					d3.select(this).classed("dragging", true)
 				} else {
-					if (!isNotInsideFuncCall) {
+					if (!isNotInsideFuncCallOrSelfRecursing) {
 						updateNotification("Functions can only be edited in their own defintion.", 5000)
 					} else {
 						updateNotification("Drag only works on constants.", 5000)
@@ -1591,12 +1615,12 @@ Command.prototype.createDragBehavior = function() {
 				}
 				firstDragTick = false
 			}
-			if (self.root.mainParameter.isConst() && isNotInsideFuncCall) {
+			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
 				self.updateMainParameter(self.getNewMainParameterFromDrag(dragStartState))
 			}
 		})
 		.on("dragend", function(d) {
-			if (self.root.mainParameter.isConst() && isNotInsideFuncCall) {
+			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
 				dragInProgress = false
 				mainSVG.svg.style({cursor: "default"})
 				d3.select(this).classed("dragging", false)
@@ -2125,9 +2149,10 @@ Move.prototype.execInner = function(callerF) {
 	
 	// TODO this is a pretty ugly quick fix solution
 	if (lastRotateExecuted !== undefined
-		&& lastRotateExecuted.arc !== undefined
-		&& lastRotateExecuted.scope.root === self.scope.root) {
-		lastRotateScaleFactorCalculated = Math.min(rotationArcRadius, Math.abs(lineLength)*0.3)/rotationArcRadius
+	&& lastRotateExecuted.arc !== undefined
+	&& lastRotateExecuted.scope.root === self.scope.root) {
+		lastRotateScaleFactorCalculated = Math.min(rotationArcRadiusMax, Math.max(rotationArcRadiusMin,
+			Math.abs(lineLength)*0.3))/rotationArcRadiusMax
 		// TODO do this more efficiently
 		// be aware of the fact that lastRotateExecuted may not be the last command executed or even be in the same function
 		var match = /^(translate\([^\)]*\))/.exec(lastRotateExecuted.arc.attr("transform"))
@@ -2149,19 +2174,19 @@ Move.prototype.execInner = function(callerF) {
 			.style(lineStyle)
 	}
 	var drawOnMainSVG = callerF === F_
-	var isInsideFuncCall = self.isInsideFuncCall()
 	var drawIcons = drawOnMainSVG
 		&& (self.scopeDepth <= 1
 			|| selection.containsAsRoot(self))
-		&& !isInsideFuncCall
+		&& self.isNotInsideFuncCallOrSelfRecursing()
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line")
 			.style(lineStyle)
 		self.lineMainSVG
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
-					if (isInsideFuncCall) {
-						selection.add(self.getInnermostFuncCallOrFunc())
+					if (self.isInsideFuncCallButNotSelfRecursing()) {
+						// this is the FuncCall that is visible (a direct child) in F_
+						selection.add(self.getOutermostFuncCallOrFunc())
 					} else {
 						selection.add(self)
 					}
@@ -2302,11 +2327,11 @@ Rotate.prototype.execInner = function(callerF) {
 	
 	var arc = d3.svg.arc()
 		.innerRadius(0)
-		.outerRadius(rotationArcRadius)
+		.outerRadius(rotationArcRadiusMax)
 		.startAngle(callerF.state.r)
 		.endAngle(callerF.state.r + angle)
 	callerF.state.addRadius(angle)
-	var drawIcons = callerF === F_ && !self.isInsideFuncCall()
+	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
 	var drawLabel = drawIcons
 		&&  (self.scopeDepth <= 1
 			|| selection.containsAsRoot(self))
@@ -2365,8 +2390,8 @@ Rotate.prototype.execInner = function(callerF) {
 	if (drawLabel) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r - angle/2)
-		var x = callerF.state.x + Math.sin(dir) * rotationArcRadius * 0.6
-		var y = callerF.state.y - Math.cos(dir) * rotationArcRadius * 0.6 - 1 // vertical alignment
+		var x = callerF.state.x + Math.sin(dir) * rotationArcRadiusMax * 0.6
+		var y = callerF.state.y - Math.cos(dir) * rotationArcRadiusMax * 0.6 - 1 // vertical alignment
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
 		var text = root.mainParameter.isConst()
 			? self.addDegreeSymbol(root.mainParameter.get())
@@ -2417,8 +2442,8 @@ Rotate.prototype.getPointsRequiredForSelection = function() {
 	// TODO eval in creating problems!
 	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
 //	var angle = 90
-	// the actual rotationArcRadius may be smaller due to scaling
-	var radius = rotationArcRadius * (self.radiusScaleFactorCalculated !== undefined ? self.radiusScaleFactorCalculated : 1)
+	// the actual rotationArcRadiusMax may be smaller due to scaling
+	var radius = rotationArcRadiusMax * (self.radiusScaleFactorCalculated !== undefined ? self.radiusScaleFactorCalculated : 1)
 	// the 3 corners that the rotate arc spans
 	return [[self.savedState.x, self.savedState.y],
 		[self.savedState.x + Math.sin(self.savedState.r) * radius,
@@ -2463,7 +2488,7 @@ Loop.prototype.execInner = function(callerF) {
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius * Math.pow(0.7, self.refDepthOfSameType+1)
-	var drawIcons = callerF === F_ && !self.isInsideFuncCall()
+	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
 	
 	function createIcon() {
 		var iconG = mainSVG.paintingG.append("g")

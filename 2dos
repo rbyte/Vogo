@@ -67,6 +67,7 @@ big features
 	allow much more dragging between elements
 	code ui view/codemirror
 	Logo output
+	asynchronous (endless) recursion progression
 
 performance
 	make recursion depth depend on run execution time
