@@ -1,20 +1,8 @@
 /*
-	Vogo
+	Vogo is free software.
+	License: GNU Affero General Public License 3
 	Copyright (C) 2014 Matthias Graf
 	matthias.graf <a> mgrf.de
-	
-	This program is free software: you can redistribute it and/or modify
-	it under the terms of the GNU Affero General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-	GNU Affero General Public License for more details.
-
-	You should have received a copy of the GNU Affero General Public License
-	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 var vogo = function() {// spans everything - not indented
@@ -54,7 +42,6 @@ var defaultViewBox = (-defaultSvgViewboxHeight/2)
 	+" "+defaultSvgViewboxHeight
 	+" "+defaultSvgViewboxHeight
 var domSvg
-var pi = Math.PI // for use in UI
 var radiusInDegrees = true
 var showKeyStrokesInToolbar = true
 var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
@@ -62,7 +49,8 @@ var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 // String.fromCharCode() ought to be a better way
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
-	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x", 90: "z"}
+	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x", 90: "z", 112: "f1", 113: "f2",
+	114: "f2", 115: "f4" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -99,9 +87,9 @@ vogo.init = function() {
 	new Func().addToUI()
 	setupUIEventListeners()
 	automaticTest()
-	
-//	benchmark(15)
-//	addExampleToUI(examples[13]())
+//	addExampleToUI(examples[26]())
+
+	benchmark(15)
 //	examples.forEach(function(t) {
 //		addExampleToUI(t())
 //		run()
@@ -919,6 +907,27 @@ var onKeyDown = {
 			updateNotification("Undo is not supported yet. Sorry about that.", 5000)
 		}
 	},
+	f2: function() {
+		function addOne(i) {
+			if (i < examples.length) {
+				addExampleToUI(examples[i]())
+				run()
+				// force redraw; to make progression visible
+				setTimeout(function() {
+					addOne(i+1)
+				}, 10)
+			}
+		}
+		addOne(0)
+
+//		examples.forEach(function(t) {
+//			addExampleToUI(t())
+//			run()
+//		})
+	},
+	f3: function() {
+
+	}
 }
 
 
@@ -1586,7 +1595,7 @@ Command.prototype.updateMainParameter = function(newValue) {
 	}
 }
 
-Command.prototype.createDragBehavior = function() {
+Command.prototype.createDragBehavior = function(element) {
 	var self = this
 	var firstDragTick = true
 	var dragStartState
@@ -1616,7 +1625,7 @@ Command.prototype.createDragBehavior = function() {
 				firstDragTick = false
 			}
 			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
-				self.updateMainParameter(self.getNewMainParameterFromDrag(dragStartState))
+				self.updateMainParameter(self.getNewMainParameterFromDrag(dragStartState, element))
 			}
 		})
 		.on("dragend", function(d) {
@@ -1674,6 +1683,9 @@ Func.prototype.addToUI = function() {
 	self.initUI()
 	functions.push(self)
 	self.switchTo()
+	// scroll down functions panel
+	var objDiv = document.getElementById("functions")
+	objDiv.scrollTop = objDiv.scrollHeight
 	return self
 }
 
@@ -2138,7 +2150,7 @@ Move.prototype.clone = function(scope) {
 	return r
 }
 
-Move.prototype.getNewMainParameterFromDrag = function(dragStartState) {
+Move.prototype.getNewMainParameterFromDrag = function(dragStartState, element) {
 	return fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], dragStartState)
 }
 
@@ -2195,7 +2207,8 @@ Move.prototype.execInner = function(callerF) {
 					d3.event.stopPropagation()
 				}
 			})
-			.call(self.createDragBehavior())
+			.call(self.createDragBehavior(self.lineMainSVG))
+		self.updateMarkAndSelect(true)
 	}
 	
 	if (self.label === undefined && drawIcons) {
@@ -2204,6 +2217,9 @@ Move.prototype.execInner = function(callerF) {
 			.append("xhtml:body")
 			.append("xhtml:input")
 			.attr("type", "text")
+			.on("click", function() {
+				this.select() // selects all text
+			})
 			.on("blur", function() {
 				self.updateMainParameter(this.value)
 			})
@@ -2304,7 +2320,7 @@ Rotate.prototype.clone = function(scope) {
 	return r
 }
 
-Rotate.prototype.getNewMainParameterFromDrag = function(dragStartState) {
+Rotate.prototype.getNewMainParameterFromDrag = function(dragStartState, element) {
 	var dx = d3.event.x - dragStartState.x
 	var dy = d3.event.y - dragStartState.y
 	var angleDelta = getAngleDeltaTo(dx, dy, dragStartState.r)
@@ -2312,13 +2328,7 @@ Rotate.prototype.getNewMainParameterFromDrag = function(dragStartState) {
 }
 
 Rotate.prototype.addDegreeSymbol = function(v) { return v+"°"}
-
-Rotate.prototype.afterInputFieldUpdate = function(v) {
-	var self = this
-	if (v.charAt(v.length-1) === "°")
-		v = v.substr(0, v.length-1)
-	self.updateMainParameter(v)
-}
+Rotate.prototype.removeDegreeSymbol = function(v) { return v.replace("°", "")}
 
 Rotate.prototype.execInner = function(callerF) {
 	var self = this
@@ -2343,7 +2353,6 @@ Rotate.prototype.execInner = function(callerF) {
 					self.arc.style({fill: "#f00"})
 			})
 			.on("mouseleave", function(d, i) {
-				// TODO self.arc is sometimes undefined
 				self.arc.style(arcStyle)
 			})
 			.on("click", function(d, i) {
@@ -2354,8 +2363,9 @@ Rotate.prototype.execInner = function(callerF) {
 					d3.event.stopPropagation()
 				}
 			})
-			.call(self.createDragBehavior())
+			.call(self.createDragBehavior(self.arc))
 		self.title = self.arc.append("title")
+		self.updateMarkAndSelect(true)
 	}
 	
 	if (self.label === undefined && drawLabel) {
@@ -2365,12 +2375,16 @@ Rotate.prototype.execInner = function(callerF) {
 			.append("xhtml:body")
 			.append("xhtml:input")
 			.attr("type", "text")
+			.on("click", function() {
+				self.labelInput.property("value", self.removeDegreeSymbol(this.value))
+				this.select() // selects all text
+			})
 			.on("blur", function() {
-				self.afterInputFieldUpdate(this.value)
+				self.updateMainParameter(self.removeDegreeSymbol(this.value))
 			})
 			.on("keypress", function() {
 				if (d3.event.keyCode === /*enter*/ 13) {
-					self.afterInputFieldUpdate(this.value)
+					self.updateMainParameter(this.value)
 				}
 			})
 			.on("input", function() {
@@ -2481,15 +2495,38 @@ Loop.prototype.clone = function(scope) {
 	return r
 }
 
+Loop.prototype.getNewMainParameterFromDrag = function(dragStartState, element) {
+	var self = this
+	// cx, cy is center of loop clock
+	var dx = d3.event.x - parseFloat(element.attr("cx"))
+	var dy = d3.event.y - parseFloat(element.attr("cy"))
+	var angle = convertToDegrees(Math.atan2(dy, dx) + Math.PI/2)
+	if (angle < 0) // in [-90, 0]
+		angle = 360 + angle
+	// angle is now in [0, 360]; 0 is North, 90 is East, 180 is South, 270 is West
+	// iteration starts from 0
+	var iteration = parseFloat(element.attr("i"))
+	// x can not get lower then iteration, because that would destroy the dragged "loop clock"
+	var x = iteration
+	var test
+	do {
+		x++
+		// pie division: for x, each is 360°/x big. get angle between pies, then multiply by current piece.
+		// for iteration = 0: 270, 150, 104, 81, 66, ...
+		test = ( 360/x + 360/(x+1) )/2*(iteration+1)
+	} while (angle < test)
+	return x
+}
+
 Loop.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
-	// TODO if this is 0 the loop becomes unaccessable
+	// TODO if this is 0 the loop becomes inaccessible
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius * Math.pow(0.7, self.refDepthOfSameType+1)
 	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
-	
+
 	function createIcon() {
 		var iconG = mainSVG.paintingG.append("g")
 		if (i === 0) {
@@ -2530,10 +2567,20 @@ Loop.prototype.execInner = function(callerF) {
 				d3.event.stopPropagation()
 			}
 		})
+		.call(self.createDragBehavior(iconG))
+//		.call(d3.behavior.drag()
+//			.on("dragstart", function (d) {
+//				d3.event.sourceEvent.stopPropagation()
+//			})
+//			.on("drag", function (d) {
+//
+//				self.updateMainParameter(x)
+//			})
+//		)
 		iconG.title = iconG.circleF.append("title")
 		return iconG
 	}
-	
+
 	var rebuild = self.execCmds.length !== numberOfRepetitions * root.commands.length
 	if (rebuild) {
 //		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
@@ -2602,6 +2649,7 @@ Loop.prototype.execInner = function(callerF) {
 				// cannot do this with: .attr("title".. see https://code.google.com/p/chromium/issues/detail?id=170780
 				self.iconGs[i].title
 					.text((i+1)+"/"+numberOfRepetitions)
+				self.iconGs[i].attr("i", i)
 			}
 			
 			if (i === 0) {
@@ -2612,6 +2660,7 @@ Loop.prototype.execInner = function(callerF) {
 			
 			self.indicateIfInsideAnySelectedCommandsScope()
 			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
+				.attr("cx", cx).attr("cy", cy)
 		}
 		
 		for (var k=0; k<root.commands.length; k++)
@@ -3103,6 +3152,15 @@ vogo.Loop = Loop
 vogo.FuncCall = FuncCall
 vogo.Branch = Branch
 vogo.Drawing = Drawing
+
+// for use in UI
+vogo.pi = Math.PI
+vogo.sin = function(x) { return Math.sin(convertToRadian(x)) }
+vogo.cos = function(x) { return Math.cos(convertToRadian(x)) }
+vogo.tan = function(x) { return Math.tan(convertToRadian(x)) }
+vogo.asin = function(x) { return convertToDegrees(Math.asin(x)) }
+vogo.acos = function(x) { return convertToDegrees(Math.acos(x)) }
+vogo.atan = function(x) { return convertToDegrees(Math.atan(x)) }
 
 function automaticTest() {
 	if (false)
@@ -3606,6 +3664,132 @@ examples.push(function() {
 		new vogo.Loop("data.length", [
 			new vogo.FuncCall(pie, {"angle": "data[i]/d3.sum(data)*360", "r": "r"})])]);
 	return [circleSeg, pie, pieChart]
+})
+
+// 22
+examples.push(function() {
+	var bar = new vogo.Func({
+		name: "zig",
+		args: {"a": 20, "b": 3},
+		viewBox: {x:-23.520, y:-49.398, w:80.449, h:70.000}});
+	bar.setCommands([
+		new vogo.Move("a"),
+		new vogo.Rotate(90),
+		new vogo.Move("b"),
+		new vogo.Rotate(90),
+		new vogo.Move("a"),
+		new vogo.Rotate(-90),
+		new vogo.Move("b"),
+		new vogo.Rotate(-90)]);
+
+	var grid = new vogo.Func({
+		name: "grid",
+		args: {"cols": 3, "rows": 4, "size": 3},
+		viewBox: {x:-22.064, y:-34.486, w:60.831, h:52.930}});
+	grid.setCommands([
+		new vogo.Loop("cols", [
+			new vogo.FuncCall(bar, {"a": "rows*size*2", "b": "size"})]),
+		new vogo.Move("rows*size*2"),
+		new vogo.Move("-rows*size*2"),
+		new vogo.Rotate(-90),
+		new vogo.Loop("rows", [
+			new vogo.FuncCall(bar, {"a": "cols*size*2", "b": "size"})]),
+		new vogo.Move("cols*size*2")]);
+
+	return [bar, grid]
+})
+
+examples.push(function() {
+	var step = new vogo.Func({
+		name: "lcStep",
+		args: {"start": 11, "end": 7, "width": 6},
+		viewBox: {x:-26.118, y:-21.001, w:45.997, h:40.023}});
+	step.setCommands([
+		new vogo.Rotate("-Math.atan((end-start)/width)/Math.PI*180"),
+		new vogo.Move("Math.sqrt(width*width+(end-start)*(end-start))"),
+		new vogo.Rotate("Math.atan((end-start)/width)/Math.PI*180")]);
+
+	var lineChart = new vogo.Func({
+		name: "lineChart",
+		args: {"data": "[7,12,7,5,8]", "width": 21},
+		viewBox: {x:-9.863, y:-19.838, w:39.998, h:34.803}});
+	lineChart.setCommands([
+		new vogo.Move("data[0]"),
+		new vogo.Rotate(90),
+		new vogo.Loop("data.length-1", [
+			new vogo.FuncCall(step, {"start": "data[i]", "end": "data[i+1]", "width": "width/(data.length-1)"})]),
+		new vogo.Rotate(90),
+		new vogo.Move("data[data.length-1]"),
+		new vogo.Rotate(90),
+		new vogo.Move("width")]);
+
+	return [step, lineChart]
+})
+
+examples.push(function() {
+	var nikolausHaus = new vogo.Func({
+		name: "nikolausHaus",
+		viewBox: {x:-13.572, y:-25.251, w:39.997, h:34.802}});
+	nikolausHaus.setCommands([
+		new vogo.Move(10),
+		new vogo.Rotate(90),
+		new vogo.Move(10),
+		new vogo.Rotate(90),
+		new vogo.Move(10),
+		new vogo.Rotate(90),
+		new vogo.Move(10),
+		new vogo.Rotate("90+45"),
+		new vogo.Move(14.15),
+		new vogo.Rotate(-72),
+		new vogo.Move(11),
+		new vogo.Rotate(-126.1),
+		new vogo.Move(11),
+		new vogo.Rotate(-71.7),
+		new vogo.Move(14.14)]);
+
+	return nikolausHaus
+})
+
+examples.push(function() {
+	var αrrowhead = new vogo.Func({
+		name: "αrrowhead",
+		args: {"sharpness": 19, "cut": 34},
+		viewBox: {x:-14.391, y:-19.769, w:32.712, h:34.802}});
+	αrrowhead.setCommands([
+		new vogo.Move(14),
+		new vogo.Rotate("-(180-sharpness)"),
+		new vogo.Move(25),
+		new vogo.Rotate("-(90+sharpness+cut)"),
+		new vogo.Move("vogo.sin(sharpness)*25/vogo.cos(cut)"),
+		new vogo.Rotate("cut*2"),
+		new vogo.Move("vogo.sin(sharpness)*25/vogo.cos(cut)"),
+		new vogo.Rotate("-(90+sharpness+cut)"),
+		new vogo.Move(25)]);
+
+	return αrrowhead
+})
+
+// 26
+examples.push(function() {
+	var square4Clam = new vogo.Func({
+		name: "square4Clam",
+		args: {"a": 11.01},
+		viewBox: {x:-18.571, y:-24.039, w:45.997, h:40.023}});
+	square4Clam.setCommands([
+		new vogo.Loop(4, [
+			new vogo.Move("a"),
+			new vogo.Rotate(90)])]);
+
+	var clam = new vogo.Func({
+		name: "clam",
+		args: {"a": 7.5, "b": 49},
+		viewBox: {x:-39.608, y:-39.427, w:80.449, h:70.000}});
+	clam.setCommands([
+		new vogo.Loop("b", [
+			new vogo.FuncCall(square4Clam, {"a": "3+i*0.4"}),
+			new vogo.Rotate("a")])]);
+
+	return [square4Clam, clam]
 })
 
 return vogo

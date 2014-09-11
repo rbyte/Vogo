@@ -318,6 +318,9 @@ svg li {
 	text-align: center;
 	/*background-color: #000;*/
 }
+#functions .centerDiv {
+    padding-bottom: 25px;
+}
 .helpSVGcontainer {
 	width: 40%;
 }
