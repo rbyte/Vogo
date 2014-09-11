@@ -92,7 +92,7 @@ vogo.init = function() {
 	automaticTest()
 //	addExampleToUI(examples[26]())
 
-	benchmark(15)
+//	benchmark(15)
 //	examples.forEach(function(t) {
 //		addExampleToUI(t())
 //		run()
