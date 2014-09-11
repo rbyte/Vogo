@@ -90,7 +90,7 @@ vogo.init = function() {
 	automaticTest()
 //	addExampleToUI(examples[26]())
 
-	benchmark(15)
+//	benchmark(15)
 //	examples.forEach(function(t) {
 //		addExampleToUI(t())
 //		run()
@@ -2645,7 +2645,7 @@ Loop.prototype.execInner = function(callerF) {
 						.outerRadius(loopClockRadiusUsed * rFactor)
 						.startAngle(0)
 						.endAngle(Math.PI*2/numberOfRepetitions*(i+1))
-					self.iconGs[i].clockHand.node().setAttribute("d", arc)
+					self.iconGs[i].clockHand.attr("d", arc)
 				}
 				self.iconGs[i].circleF
 					.node().setAttribute("r", loopClockRadiusUsed * rFactor)
