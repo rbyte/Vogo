@@ -31,6 +31,7 @@ var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%",
 var zoomFactor = 1.15 // macs tend to have finer grain mouse wheel ticks
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
+var maximumNumberOfIterationsForLoopClocksToBeDrawn = 50 // performance improvement
 var rotationArcRadiusMax = 3
 var rotationArcRadiusMin = 1
 var scopeDepthLimit = 30 // for endless loops and recursion
@@ -1464,7 +1465,7 @@ Command.prototype.removeVisibleElements = function(props, fromMainSVG) {
 //					console.assert(self[p][i] !== undefined)
 					if (self[p][i] === undefined) {
 						// TODO unfixed bug: repeated removal. happens when removing fc for f that contains a loop
-						console.log(":( "+(fromMainSVG ? "fromMainSVG" : "")+self.myConstructor.name+" "+p+" ")
+						//console.log(":( "+(fromMainSVG ? "fromMainSVG" : "")+self.myConstructor.name+" "+p+" ")
 					} else {
 						if (self[p][i].remove === undefined) { // 3
 							fromMainSVG
@@ -2246,11 +2247,6 @@ Move.prototype.execInner = function(callerF) {
 		self.label.remove()
 		self.label = undefined
 	}
-	var lines = [self.line]
-	if (drawOnMainSVG) {
-		lines.push(self.lineMainSVG)
-		self.indicateIfInsideAnySelectedCommandsScope()
-	}
 	if (drawIcons) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r)
@@ -2259,11 +2255,22 @@ Move.prototype.execInner = function(callerF) {
 		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
 		setTextOfInput(self.labelInput, root.mainParameter.get())
 	}
-	
-	for (var l in lines)
-		// slower
-//		lines[l].attr({x1: x1, y1: y1, x2: x2, y2: y2})
-		lines[l].attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
+
+	if (drawOnMainSVG) {
+		self.indicateIfInsideAnySelectedCommandsScope()
+		self.lineMainSVG.node().setAttribute("x1", x1)
+		self.lineMainSVG.node().setAttribute("y1", y1)
+		self.lineMainSVG.node().setAttribute("x2", x2)
+		self.lineMainSVG.node().setAttribute("y2", y2)
+	}
+	self.line.node().setAttribute("x1", x1)
+	self.line.node().setAttribute("y1", y1)
+	self.line.node().setAttribute("x2", x2)
+	self.line.node().setAttribute("y2", y2)
+
+	// slower
+//.attr({x1: x1, y1: y1, x2: x2, y2: y2})
+//.attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
 }
 
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
@@ -2557,8 +2564,6 @@ Loop.prototype.execInner = function(callerF) {
 
 		iconG.clockHand = iconG.append("path").style(clockHandStyle)
 		iconG.circleF = iconG.append("circle").style(clockStyle)
-//			.attr({cx: 0, cy: 0})
-			.attr("cx", 0).attr("cy", 0)
 		iconG.on("click", function () {
 			if (!manipulation.isCreating()) {
 				selection.add(self)
@@ -2567,16 +2572,9 @@ Loop.prototype.execInner = function(callerF) {
 				d3.event.stopPropagation()
 			}
 		})
-		.call(self.createDragBehavior(iconG))
-//		.call(d3.behavior.drag()
-//			.on("dragstart", function (d) {
-//				d3.event.sourceEvent.stopPropagation()
-//			})
-//			.on("drag", function (d) {
-//
-//				self.updateMainParameter(x)
-//			})
-//		)
+		if (i < maximumNumberOfIterationsForLoopClocksToBeDrawn)
+			iconG.call(self.createDragBehavior(iconG))
+
 		iconG.title = iconG.circleF.append("title")
 		return iconG
 	}
@@ -2637,30 +2635,38 @@ Loop.prototype.execInner = function(callerF) {
 				self.iconGs[i] = createIcon()
 			
 			if (rebuild || recreateItem) {
-				var arc = d3.svg.arc()
-					.innerRadius(0)
-					.outerRadius(loopClockRadiusUsed)
-					.startAngle(0)
-					.endAngle(Math.PI*2/numberOfRepetitions*(i+1))
-				self.iconGs[i].clockHand
-					.attr("d", arc)
+				// above 20, the bigger the loop, the smaller the icons
+				var rFactor = 1/Math.pow(Math.max(1, numberOfRepetitions-20), 0.3)
+				// also, decrease the relative size
+				rFactor *= 1-i/(numberOfRepetitions+40)
+				if (i < maximumNumberOfIterationsForLoopClocksToBeDrawn) {
+					var arc = d3.svg.arc()
+						.innerRadius(0)
+						.outerRadius(loopClockRadiusUsed * rFactor)
+						.startAngle(0)
+						.endAngle(Math.PI*2/numberOfRepetitions*(i+1))
+					self.iconGs[i].clockHand.node().setAttribute("d", arc)
+				}
 				self.iconGs[i].circleF
-					.attr("r", loopClockRadiusUsed)
+					.node().setAttribute("r", loopClockRadiusUsed * rFactor)
+
 				// cannot do this with: .attr("title".. see https://code.google.com/p/chromium/issues/detail?id=170780
 				self.iconGs[i].title
 					.text((i+1)+"/"+numberOfRepetitions)
-				self.iconGs[i].attr("i", i)
+				self.iconGs[i].node().setAttribute("i", i)
 			}
 			
 			if (i === 0) {
 				self.iconGs[i].fo
-					.attr("transform", "translate("+(loopClockRadiusUsed*1.1)+","+(-loopClockRadiusUsed*1.3)+") scale(0.1)")
+					.node().setAttribute("transform", "translate("+(loopClockRadiusUsed*1.1)+","+(-loopClockRadiusUsed*1.3)+") scale(0.1)")
 				setTextOfInput(self.iconGs[i].labelInput, root.mainParameter.get())
 			}
 			
 			self.indicateIfInsideAnySelectedCommandsScope()
-			self.iconGs[i].attr("transform", "translate("+cx+","+cy+")")
-				.attr("cx", cx).attr("cy", cy)
+			var elem = self.iconGs[i].node()
+			elem.setAttribute("transform", "translate("+cx+","+cy+")")
+			elem.setAttribute("cx", cx)
+			elem.setAttribute("cy", cy)
 		}
 		
 		for (var k=0; k<root.commands.length; k++)
@@ -2799,7 +2805,8 @@ FuncCall.prototype.execInner = function(callerF) {
 				}
 			})
 			.on("input", function() {
-				self.icon.argF[a].input.attr("size", Math.max(1, self.icon.argF[a].input.property("value").toString().length))
+				self.icon.argF[a].input.attr("size", Math.max(1,
+					self.icon.argF[a].input.property("value").toString().length))
 			})
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
