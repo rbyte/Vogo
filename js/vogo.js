@@ -14,9 +14,11 @@ var version = 0.1
 //var urlToSelf = "http://mgrf.de/vogo/js/vogo.js"
 var urlToSelf = "http://localhost/dev/vogo/js/vogo.js"
 
-var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": .2, "stroke-linecap": "round"}
+var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": .2}
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
-var lineStyle = {stroke: "#000", "stroke-opacity": 0.8, "stroke-width": .25, "stroke-linecap": "round"}
+// this is used inside every svg <style>. eases the DOM and is compatible with svg export.
+var lineDefaultStyle = "stroke: #000; stroke-opacity: 0.8; stroke-width: .25; stroke-linecap: round;"
+var lineStyle = {stroke: "#000", "stroke-opacity": 0.8, "stroke-width": .25}
 var lineStyleInScope = {stroke: "#500", "stroke-opacity": 0.4}
 var arcStyle = {fill: "#000", "fill-opacity": 0.1}
 var arcStyleInScope = {fill: "#500", "fill-opacity": 0.05}
@@ -90,7 +92,7 @@ vogo.init = function() {
 	automaticTest()
 //	addExampleToUI(examples[26]())
 
-//	benchmark(15)
+	benchmark(15)
 //	examples.forEach(function(t) {
 //		addExampleToUI(t())
 //		run()
@@ -116,7 +118,7 @@ function MainSVG() {
 	var self = this
 	self.svgWidth
 	self.svgHeight
-	self.svg = d3.select("#turtleSVG").attr("xmlns", "http://www.w3.org/2000/svg")
+	self.svg = d3.select("#turtleSVG").call(setupSVG)
 	self.svgInit()
 }
 
@@ -782,6 +784,21 @@ function createForeignObject(parent) {
 		.on("click", function(d, i) { // chrome wants this
 			d3.event.stopPropagation()
 		})
+}
+
+function setupSVG(svg) {
+	svg.attr("xmlns", "http://www.w3.org/2000/svg")
+	// the line is the most used element, so I default it here in order not to crowd the DOM
+	svg.append("style").text("svg line { "+lineDefaultStyle+" }")
+	return svg
+}
+
+function setLinePosition(line, x1, y1, x2, y2) {
+	var ll = line.node()
+	ll.setAttribute("x1", x1.toFixed(3))
+	ll.setAttribute("y1", y1.toFixed(3))
+	ll.setAttribute("x2", x2.toFixed(3))
+	ll.setAttribute("y2", y2.toFixed(3))
 }
 
 // singletons
@@ -1735,7 +1752,7 @@ Func.prototype.initUI = function() {
 	self.svgContainer = self.li_f.append("div").attr("class", "fSVGcontainer")
 	var isDragged = false
 	self.svg = self.svgContainer.append("svg").attr("class", "fSVG")
-		.attr("xmlns", "http://www.w3.org/2000/svg")
+		.call(setupSVG)
 		.on("click", function() {
 			// dragstart and click are fired at the same time, so I have to check for myself
 			if (!isDragged) {
@@ -2184,7 +2201,7 @@ Move.prototype.execInner = function(callerF) {
 	var y2 = callerF.state.y
 	if (self.line === undefined) {
 		self.line = callerF.paintingG.append("line")
-			.style(lineStyle)
+//			.style(lineStyle) // === css defaults. better performance
 	}
 	var drawOnMainSVG = callerF === F_
 	var drawIcons = drawOnMainSVG
@@ -2193,7 +2210,7 @@ Move.prototype.execInner = function(callerF) {
 		&& self.isNotInsideFuncCallOrSelfRecursing()
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line")
-			.style(lineStyle)
+//			.style(lineStyle)
 		self.lineMainSVG
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
@@ -2258,19 +2275,9 @@ Move.prototype.execInner = function(callerF) {
 
 	if (drawOnMainSVG) {
 		self.indicateIfInsideAnySelectedCommandsScope()
-		self.lineMainSVG.node().setAttribute("x1", x1)
-		self.lineMainSVG.node().setAttribute("y1", y1)
-		self.lineMainSVG.node().setAttribute("x2", x2)
-		self.lineMainSVG.node().setAttribute("y2", y2)
+		setLinePosition(self.lineMainSVG, x1, y1, x2, y2)
 	}
-	self.line.node().setAttribute("x1", x1)
-	self.line.node().setAttribute("y1", y1)
-	self.line.node().setAttribute("x2", x2)
-	self.line.node().setAttribute("y2", y2)
-
-	// slower
-//.attr({x1: x1, y1: y1, x2: x2, y2: y2})
-//.attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
+	setLinePosition(self.line, x1, y1, x2, y2)
 }
 
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
@@ -3105,7 +3112,7 @@ function Drawing(f, opt) {
 		&& f.svgViewboxHeight !== undefined
 	if (opt.container === undefined) {
 		var svg = d3.select("body").append("svg")
-			.attr("xmlns", "http://www.w3.org/2000/svg")
+			.call(setupSVG)
 			.attr("viewBox", ( fHasViewBox
 				? f.svgViewboxX+" "+f.svgViewboxY+" "+f.svgViewboxWidth+" "+f.svgViewboxHeight
 				: defaultViewBox))
