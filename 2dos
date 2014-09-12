@@ -1,14 +1,6 @@
 see also TODOs in code
 
-### MA release version
-	tutorial videos/help
-		text
-	test, test, test
-	github upload
-		clean git
-	email Bret & Toby :)
-
-### community
+community
 	upload results to server/community results page
 		adapt API to allow import to UI
 		define & document API
@@ -21,10 +13,12 @@ see also TODOs in code
 		clientside share
 	show examples
 
-small features
+small
+	drawIcons -> improve in funCall and branch! -> hide labels when not selected (as in move and rotate)
+	put styles into css
+	selection is not undone if commands are added in function scope (see TODO)
 	funcCall: make result of arg visible as text field on hover of arg
 	funcCall: make it visible (at least the "f") when it is a proxy>1
-	remove ° if edit in input field (rotate)
 	more tooltips, more sanity checks
 	auto-select newly created commands
 	indicateIfInsideAnySelectedCommandsScope on hover
@@ -33,13 +27,17 @@ small features
 	show results of expressions beneath input field "=..."
 	cycle (select) through elements (as in code) with arrow keys
 	add switch for add before or after selected element
-	if loop is set to an array, automatically detect this and iterate over length
 	manipulation preview has different style (e.g. lower opacity)
 	one selected element can contain another selected element - fix?!
 		is this creating bugs when removeDeselectAndDeleteAllCompletely ?
 	ctrl+a -> select all
+	2 subsequent moves cannot be distinguished
+	if an Expression is set to say Math.random(), it is considered static because it does not depend on arguments
+	rotate/move/loop with 0 is not visible
+	remove loops when empty (e.g. removed last inner command)
+	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
 
-big features
+big
 	automatic tests
 	edit Move style (colour, breadth)
 	close path command
@@ -48,7 +46,6 @@ big features
 		check same state of commands, then shift y ?
 	new command: goto, go home, go to point in past
 		go back X states in time
-	store history in local browser cache
 	add svg-native circle/arc
 	constraint solving
 		snapping/line end handles
@@ -68,25 +65,14 @@ big features
 	code ui view/codemirror
 	Logo output
 	asynchronous (endless) recursion progression
-
-performance
-	make recursion depth depend on run execution time
-	further cache arguments eval
-	for one run cycle and the same stack position, only evaluate variables once
+		make recursion depth depend on run execution time
 	store which expression requires which variables, so I only eval those
-	put svg styles in svg css (inkscape compatibility?)
-	round dom numbers
+	drag in input field with expressions
 
 bugs
-	call a func A in B, then while B is focued, change a parameter of A: the turtle in B does not update properly (lags behind)
-	drawing of loop icons may fail (see pieChart example)
-	deleting a recursing funcCall does not seem to work smoothly
-	a rename parameter is not removed from funcCall args list
-	fix: rotation/move manipulation in loop: so that line crosses mouse
-	rotate/move/loop with 0 is non-selectable/visible
-	remove loops when empty (e.g. removed last inner command)
-	if an Expression is set to say Math.random(), it is considered static because it does not depend on arguments
-	2 subsequent moves cannot be distinguished
-	chromium only (chrome works): the input fields inside foreign objects do not update
-	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
+	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)
+	call a func A in B, then while B is focused, rename/remove a parameter of A: old remains in argsList of funcCall
+	deleting a recursing funcCall does not seem to work smoothly (reproducable?)
+	chromium only (chrome works): the input fields inside foreign objects do not update on manual editing
+
 

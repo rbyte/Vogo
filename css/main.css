@@ -95,13 +95,24 @@ path.mark:not(.selected), line.mark:not(.selected), circle.mark:not(.selected) {
 	stroke: #00f !important;
 	stroke-opacity: 1;
 }
-path.dragging { /*rotate arc path*/
+
+path.dragging { /*rotate*/
 	fill: #f0f !important;
-	fill-opacity: 0.3 !important;
+	fill-opacity: 1 !important;
 }
 line.dragging { /*move line*/
 	stroke: #f0f !important;
+    stroke-opacity: 1 !important;
 }
+g.dragging path { /*loop clock*/
+    fill: #f0f !important;
+    fill-opacity: 1 !important;
+}
+line.inScope {
+    stroke: #500;
+    stroke-opacity: 0.4;
+}
+
 text.mark:not(.selected) {
 	color: #44f;
 }

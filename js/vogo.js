@@ -11,15 +11,13 @@ var vogo = {}
 
 // CONSTANTS
 var version = 0.1
-//var urlToSelf = "http://mgrf.de/vogo/js/vogo.js"
-var urlToSelf = "http://localhost/dev/vogo/js/vogo.js"
+var urlToSelf = "http://mgrf.de/vogo/js/vogo.js"
+//var urlToSelf = "http://localhost/dev/vogo/js/vogo.js"
 
 var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": .2}
 var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
-// this is used inside every svg <style>. eases the DOM and is compatible with svg export.
+// this is used inside every svg <style>. eases the DOM and is compatible with svg export (& Inkscape).
 var lineDefaultStyle = "stroke: #000; stroke-opacity: 0.8; stroke-width: .25; stroke-linecap: round;"
-var lineStyle = {stroke: "#000", "stroke-opacity": 0.8, "stroke-width": .25}
-var lineStyleInScope = {stroke: "#500", "stroke-opacity": 0.4}
 var arcStyle = {fill: "#000", "fill-opacity": 0.1}
 var arcStyleInScope = {fill: "#500", "fill-opacity": 0.05}
 var clockStyle = {fill: "#fff", "fill-opacity": 0.01 /*for clickability*/, stroke: "#777", "stroke-width": .05}
@@ -91,12 +89,7 @@ vogo.init = function() {
 	setupUIEventListeners()
 	automaticTest()
 //	addExampleToUI(examples[26]())
-
 //	benchmark(15)
-//	examples.forEach(function(t) {
-//		addExampleToUI(t())
-//		run()
-//	})
 }
 
 function run(f) {
@@ -236,7 +229,7 @@ function setupUIEventListeners() {
 			manipulation.update()
 		})
 		.on("click", function (d, i) {
-			// prevent click triggered after dragend
+			// prevent click triggered after dragend. Works in Chromium 27 & Firefox 31, BUT NOT IN Chrome 36
 			if (d3.event.defaultPrevented)
 				return
 			mousePos = d3.mouse(this)
@@ -1034,6 +1027,7 @@ var manipulation = {
 	},
 	update: function(newMainParameter) {
 		if (this.isCreating()) {
+
 			if (newMainParameter === undefined) {
 				if (this.insertedCommand instanceof Move)
 					newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], this.savedState)
@@ -1596,8 +1590,8 @@ Command.prototype.changeSelectedInSync = function(newValue) {
 	var self = this
 	selection.e.forEach(function(e) {
 		if (e instanceof self.myConstructor
-			&& e.root !== self.root
-			&& e.root.mainParameter.isConst())
+			&& e.root !== self.root)
+//			&& e.root.mainParameter.isConst()
 				e.setMainParameter(newValue)
 	})
 }
@@ -1621,8 +1615,9 @@ Command.prototype.createDragBehavior = function(element) {
 	return d3.behavior.drag()
 		.on("dragstart", function(d) {
 			firstDragTick = true
+			dragInProgress = true
 			isNotInsideFuncCallOrSelfRecursing = self.isNotInsideFuncCallOrSelfRecursing()
-			// to prevent drag on background
+			// to prevent drag on background (silence other listeners)
 			d3.event.sourceEvent.stopPropagation()
 		})
 		.on("drag", function (d) {
@@ -1857,8 +1852,10 @@ Func.prototype.updateViewbox = function(afterZoom) {
 Func.prototype.checkName = function(newName) {
 	var regEx = /^[a-zA-Zα-ω][a-zA-Zα-ω0-9]*$/
 	if (!newName.match(regEx)) {
-		this.nameInput.classed({"inputInWrongState": true})
-		updateNotification("The function name has to be alphanumeric and start with a letter: "+regEx)
+		if (this.nameInput !== undefined) {
+			this.nameInput.classed({"inputInWrongState": true})
+			updateNotification("The function name has to be alphanumeric and start with a letter: "+regEx)
+		}
 		return false
 	}
 	// check for duplicates
@@ -1894,7 +1891,7 @@ Func.prototype.setName = function(newName) {
 	if (newName === undefined) {
 		newName = self.searchForName(945/*=α*/, 26/*=ω*/, function (s) { return self.checkName(s) }, "", 1)
 	}
-	
+
 	var r = self.checkName(newName)
 	if (r)
 		self.name = newName
@@ -2053,6 +2050,8 @@ Func.prototype.exec = function(/*no caller here*/) {
 	if (self.commands.length !== self.execCmds.length) {
 //		self.execCmds.forEach(function (e) { e.deleteProxyCommand() })
 //		self.execCmds = []
+		// TODO if a command is selected and something is inserted before it, it gets deselected due to this
+		// this is only true within immediate function scope. inside a loop, this is not called.
 		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
 		console.assert(self.execCmds.length === 0)
 		self.commands.forEach(function (e) { self.execCmds.push(e.shallowClone(self)) })
@@ -2201,7 +2200,6 @@ Move.prototype.execInner = function(callerF) {
 	var y2 = callerF.state.y
 	if (self.line === undefined) {
 		self.line = callerF.paintingG.append("line")
-//			.style(lineStyle) // === css defaults. better performance
 	}
 	var drawOnMainSVG = callerF === F_
 	var drawIcons = drawOnMainSVG
@@ -2210,7 +2208,6 @@ Move.prototype.execInner = function(callerF) {
 		&& self.isNotInsideFuncCallOrSelfRecursing()
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line")
-//			.style(lineStyle)
 		self.lineMainSVG
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
@@ -2283,7 +2280,12 @@ Move.prototype.execInner = function(callerF) {
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
-		self.lineMainSVG.style(on ? lineStyleInScope : lineStyle)
+		self.lineMainSVG.classed("inScope", on)
+//		if (on) {
+//		} else {
+//			// assumes that nothing else styles lines
+//			self.lineMainSVG.node().removeAttribute("style")
+//		}
 	})
 }
 
@@ -2342,7 +2344,7 @@ Rotate.prototype.getNewMainParameterFromDrag = function(dragStartState, element)
 }
 
 Rotate.prototype.addDegreeSymbol = function(v) { return v+"°"}
-Rotate.prototype.removeDegreeSymbol = function(v) { return v.replace("°", "")}
+Rotate.prototype.removeDegreeSymbol = function(v) { return v.replace(/°/g, "")}
 
 Rotate.prototype.execInner = function(callerF) {
 	var self = this
@@ -2381,6 +2383,8 @@ Rotate.prototype.execInner = function(callerF) {
 		self.title = self.arc.append("title")
 		self.updateMarkAndSelect(true)
 	}
+
+	function editInputField(v) { self.updateMainParameter(self.removeDegreeSymbol(v)) }
 	
 	if (self.label === undefined && drawLabel) {
 		self.label = createForeignObject(mainSVG.paintingG)
@@ -2394,11 +2398,11 @@ Rotate.prototype.execInner = function(callerF) {
 				this.select() // selects all text
 			})
 			.on("blur", function() {
-				self.updateMainParameter(self.removeDegreeSymbol(this.value))
+				editInputField(this.value)
 			})
 			.on("keypress", function() {
 				if (d3.event.keyCode === /*enter*/ 13) {
-					self.updateMainParameter(this.value)
+					editInputField(this.value)
 				}
 			})
 			.on("input", function() {
@@ -2547,6 +2551,9 @@ Loop.prototype.execInner = function(callerF) {
 			iconG.fo = createForeignObject(iconG)
 			iconG.labelInput = iconG.fo.append("xhtml:body").append("xhtml:input")
 				.attr("type", "text")
+				.on("click", function() {
+					this.select() // selects all text
+				})
 				.on("blur", function() {
 					self.updateMainParameter(this.value)
 				})
@@ -2756,7 +2763,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	console.assert(root.f !== undefined)
-	
+
 	var drawIcons = callerF === F_ && (
 		self.scopeDepth <= 1
 		|| selection.containsAsRoot(self)
@@ -2975,6 +2982,7 @@ Branch.prototype.execInner = function(callerF) {
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
 	rebuild |= branchCmds.length !== self.execCmds.length
+//	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
 	var drawIcons = callerF === F_ && (
 		self.scopeDepth <= 1
 		|| selection.containsAsRoot(self)
