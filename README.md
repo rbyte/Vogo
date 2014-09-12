@@ -5,6 +5,6 @@ is an experimental, web-based, spatially-oriented, direct manipulation, live pro
 
 http://mgrf.de/vogo/
 
-Vogo is free software.
-License: GNU Affero General Public License 3
+Vogo is free software.<br />
+License: GNU Affero General Public License 3<br />
 Author: Matthias Graf
