@@ -3814,5 +3814,37 @@ examples.push(function() {
 	return [square4Clam, clam]
 })
 
+examples.push(function() {
+	var heart = new vogo.Func({
+		name: "heart",
+		viewBox: {x:-19.296, y:-21.199, w:38.866, h:26.316}});
+	heart.setCommands([
+		new vogo.Rotate(-47.6),
+		new vogo.Move(12),
+		new vogo.Loop(2, [
+			new vogo.Loop(6, [
+				new vogo.Rotate(31.7),
+				new vogo.Move(2.65)]),
+			new vogo.Rotate(-139.1)]),
+		new vogo.Rotate(-9.1),
+		new vogo.Move(-12)]);
+
+	return heart
+})
+
+examples.push(function() {
+	var star = new vogo.Func({
+		name: "star",
+		args: {"cut": 140, "spikes": 6, "size": 100},
+		viewBox: {x:-24.810, y:-8.536, w:45.997, h:40.023}});
+	star.setCommands([
+		new vogo.Loop("spikes", [
+			new vogo.Rotate("360/spikes+cut"),
+			new vogo.Move("size/spikes"),
+			new vogo.Rotate("-cut"),
+			new vogo.Move("size/spikes")])]);
+	return star
+})
+
 return vogo
 }()

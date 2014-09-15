@@ -16,6 +16,8 @@ community
 small
 	drawIcons -> improve in funCall and branch! -> hide labels when not selected (as in move and rotate)
 	put styles into css
+	allow esc during drag (of line/rotate/loop) to abort and revert to previous parameters
+	ctrl+d = duplicate selected command -> create proxy, instead of copy (ctrl+c) (can be emulated by funcCall)
 	selection is not undone if commands are added in function scope (see TODO)
 	funcCall: make result of arg visible as text field on hover of arg
 	funcCall: make it visible (at least the "f") when it is a proxy>1
@@ -40,12 +42,8 @@ small
 big
 	automatic tests
 	edit Move style (colour, breadth)
-	close path command
-		edit fill
 	Collision-Free positioning
 		check same state of commands, then shift y ?
-	new command: goto, go home, go to point in past
-		go back X states in time
 	add svg-native circle/arc
 	constraint solving
 		snapping/line end handles
@@ -59,7 +57,6 @@ big
 		http://mozilla.6506.n7.nabble.com/Event-Bubbling-through-Layers-td247852.html
 	allow functions as arguments
 	undo
-	Beziers
 	store session in local browser cache
 	allow much more dragging between elements
 	code ui view/codemirror
@@ -68,6 +65,16 @@ big
 		make recursion depth depend on run execution time
 	store which expression requires which variables, so I only eval those
 	drag in input field with expressions
+
+new commands
+	mirror
+	close path
+		edit fill
+	goto, go home, go to point in past
+		go back X states in time
+	Beziers
+	resize, rotate, shear
+
 
 bugs
 	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)

@@ -19,7 +19,7 @@
 		<ul id="ul_f"></ul>
 		<div class="centerDiv">
 			<div class="container-box"><div class="aspect-box"><div class="content-box">
-				<img id="f_addNew" class="roundButton" src="images/NewFunction.svg" title="Add new function"></a>
+				<img id="f_addNew" class="roundButton" src="images/NewFunction.svg" title="Add new function">
 			</div></div></div>
 		</div>
 	</div>
