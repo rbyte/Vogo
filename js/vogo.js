@@ -34,8 +34,8 @@ var loopClockRadius = 1.3
 var maximumNumberOfIterationsForLoopClocksToBeDrawn = 50 // performance improvement
 var rotationArcRadiusMax = 3
 var rotationArcRadiusMin = 1
-var scopeDepthLimit = 30 // for endless loops and recursion
-var runDurationLimitMS = 5000
+var scopeDepthLimit = 90 // for endless loops and recursion
+var runDurationLimitMS = 9000
 // this determines the default zoom level
 var defaultSvgViewboxHeight = 70
 var defaultViewBox = (-defaultSvgViewboxHeight/2)
@@ -77,6 +77,8 @@ var mousePos = [0,0]
 var lastCopiedElements
 var lastRunStartTime
 var enforceRunDurationLimitMS = true
+// a list of functions the return a single or a list of vogo func's that can be integrated into the UI
+var examples = []
 
 
 vogo.init = function() {
@@ -88,7 +90,7 @@ vogo.init = function() {
 	new Func().addToUI()
 	setupUIEventListeners()
 	automaticTest()
-//	addExampleToUI(examples[26]())
+//	addExampleToUI(examples[30]())
 //	benchmark(15)
 }
 
@@ -2202,10 +2204,13 @@ Move.prototype.execInner = function(callerF) {
 		self.line = callerF.paintingG.append("line")
 	}
 	var drawOnMainSVG = callerF === F_
-	var drawIcons = drawOnMainSVG
-		&& (self.scopeDepth <= 1
-			|| selection.containsAsRoot(self))
+	var drawInputField = drawOnMainSVG
+		// TODO: self.scopeDepth <= 1 this needs to be refactored. this is done so that if a line or rotate is
+		// in the creation, it can have the input field visible, but only inside function scope. input fields
+		// should not be hidden, but always be destoyed -> see updateLabelVisibility
+		&& (self.scopeDepth <= 1 || selection.containsAsRoot(self))
 		&& self.isNotInsideFuncCallOrSelfRecursing()
+
 	if (self.lineMainSVG === undefined && drawOnMainSVG) {
 		self.lineMainSVG = mainSVG.paintingG.append("line")
 		self.lineMainSVG
@@ -2226,7 +2231,7 @@ Move.prototype.execInner = function(callerF) {
 		self.updateMarkAndSelect(true)
 	}
 	
-	if (self.label === undefined && drawIcons) {
+	if (self.label === undefined && drawInputField) {
 		self.label = createForeignObject(mainSVG.paintingG)
 		self.labelInput = self.label
 			.append("xhtml:body")
@@ -2257,11 +2262,11 @@ Move.prototype.execInner = function(callerF) {
 			)
 	}
 	
-	if (self.label !== undefined && !drawIcons) {
+	if (self.label !== undefined && !drawInputField) {
 		self.label.remove()
 		self.label = undefined
 	}
-	if (drawIcons) {
+	if (drawInputField) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r)
 		var x = callerF.state.x + Math.sin(dir) * lineLength * -0.5
@@ -2281,11 +2286,6 @@ Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
 		self.lineMainSVG.classed("inScope", on)
-//		if (on) {
-//		} else {
-//			// assumes that nothing else styles lines
-//			self.lineMainSVG.node().removeAttribute("style")
-//		}
 	})
 }
 
@@ -2882,7 +2882,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	}
 	
 	if (self.scopeDepth > scopeDepthLimit) {
-		updateNotification("Execution depth too high (>"+scopeDepthLimit+"). Endless loop/recursion? Stopping here.", 5000)
+		updateNotification("Depth limit reached (>"+scopeDepthLimit+"). Stopping.", 5000)
 	} else {
 		if (self.execCmds.length !== root.f.commands.length) {
 //			self.execCmds.forEach(function(e) { e.deleteProxyCommand() })
@@ -2982,13 +2982,15 @@ Branch.prototype.execInner = function(callerF) {
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
 	rebuild |= branchCmds.length !== self.execCmds.length
-//	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
-	var drawIcons = callerF === F_ && (
-		self.scopeDepth <= 1
-		|| selection.containsAsRoot(self)
-		|| root.proxies[0] === self)
+	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
+	// either the first proxy or the selected command shows the field
+	var drawInputField = drawIcons && (
+		selection.contains(self)
+		|| (root.proxies[0] === self && !selection.containsAsRoot(self))
+		)
+//	var drawInputField = drawIcons && selection.containsAsRoot(self)
 	
-	if (self.iconG === undefined && drawIcons) {
+	if (drawIcons && self.iconG === undefined) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
 //		self.iconG.append("text").text("?")
 //		callerF.paintingG
@@ -3002,7 +3004,23 @@ Branch.prototype.execInner = function(callerF) {
 					d3.event.stopPropagation()
 				}
 			})
-		
+	}
+
+	if (drawIcons) {
+		var size = 1/Math.pow(Math.max(1,self.scopeDepth), 0.3)
+		self.iconG.attr("transform", "translate("+(callerF.state.x+1.5*size)+","+(callerF.state.y-1*size)+") scale("+size+")")
+		var takenBranchColor = branchCmds.length === 0 ? /*dead end branch*/ "#b00" : "#0b0"
+		self.iconG.trueL.style({stroke: condEval ? takenBranchColor : "#bbb"})
+		self.iconG.falseL.style({stroke: condEval ? "#bbb" : takenBranchColor})
+		self.indicateIfInsideAnySelectedCommandsScope()
+	}
+
+	if (!drawIcons && self.iconG !== undefined) {
+		self.iconG.remove()
+		self.iconG = undefined
+	}
+
+	if (drawInputField && self.iconG.fo === undefined) {
 		self.iconG.fo = createForeignObject(self.iconG)
 		self.iconG.labelInput = self.iconG.fo.append("xhtml:body").append("xhtml:input")
 			.attr("type", "text")
@@ -3019,24 +3037,19 @@ Branch.prototype.execInner = function(callerF) {
 			.on("input", function() {
 				setTextOfInput(self.iconG.labelInput)
 			})
-	}
-	
-	if (self.iconG !== undefined && !drawIcons) {
-		self.iconG.remove()
-		self.iconG = undefined
-	}
-	
-	if (drawIcons) {
-		self.iconG.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+")")
-		var takenBranchColor = branchCmds.length === 0 ? /*dead end branch*/ "#b00" : "#0b0"
-		self.iconG.trueL.style({stroke: condEval ? takenBranchColor : "#000"})
-		self.iconG.falseL.style({stroke: condEval ? "#000" : takenBranchColor})
 		self.iconG.fo.attr("transform", "translate("+2.4+","+0+") scale(0.1)")
+	}
+
+	if (drawInputField) {
 		self.iconG.labelInput.property("value", root.mainParameter.get())
-		self.indicateIfInsideAnySelectedCommandsScope()
 		setTextOfInput(self.iconG.labelInput)
 	}
-	
+
+	if (!drawInputField && self.iconG !== undefined && self.iconG.fo !== undefined) {
+		self.iconG.fo.remove()
+		self.iconG.fo = undefined
+	}
+
 	if (rebuild) {
 //		self.execCmds.forEach(function (e) { e.deleteProxyCommand() })
 //		self.execCmds = []
@@ -3174,6 +3187,7 @@ vogo.Loop = Loop
 vogo.FuncCall = FuncCall
 vogo.Branch = Branch
 vogo.Drawing = Drawing
+vogo.examples = examples
 
 // for use in UI
 vogo.pi = Math.PI
@@ -3217,6 +3231,7 @@ function automaticTest() {
 	console.assert(mv !== mvP)
 	console.assert(mv.scope === F_)
 	console.assert(mvP.scope === F_)
+	// TODO fix this. mv.scopeDepth ought to be 1
 	console.assert(mv.scopeDepth === 0)
 	console.assert(mvP.scopeDepth === 1)
 	console.assert(mv.proxies.length === 1)
@@ -3327,301 +3342,300 @@ function automaticTest() {
 	F_.removeArgument(varName)
 }
 
-var examples = []
 
-examples.push(function() {
-	var f = new Func({name: "nEck", args: {n: 4}})
+
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "nEck", args: {n: 4}})
 	f.setCommands([
-		new Loop("n", [
-			new Rotate("360/n"),
-			new Move("100/n")])
+		new vogo.Loop("n", [
+			new vogo.Rotate("360/n"),
+			new vogo.Move("100/n")])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({name: "multiSquare", args: {n: 36, ecken: 4}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "multiSquare", args: {n: 36, ecken: 4}})
 	f.setCommands([
-		new Loop("n", [
-			new Loop("ecken", [
-				new Rotate("360/ecken"),
-				new Move("100/ecken")]),
-			new Rotate("360/n")])
+		new vogo.Loop("n", [
+			new vogo.Loop("ecken", [
+				new vogo.Rotate("360/ecken"),
+				new vogo.Move("100/ecken")]),
+			new vogo.Rotate("360/n")])
 	])
 	return f
 })
 
-// this is a performance bummer!
-examples.push(function() {
-	var f = new Func({name: "tree", args: {size: 18}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "tree", args: {size: 18}})
 	f.setCommands([
-		new Branch("size<5", [
-			new Move("size"),
-			new Move("-size")],
+		new vogo.Branch("size<5", [
+				new vogo.Move("size"),
+				new vogo.Move("-size")],
 			[
-			new Move("size*0.3"),
-			new Rotate(-40),
-			new FuncCall(f, {size: "size*0.7"}),
-			new Rotate(40),
-			new Move("size*0.4"),
-			new Rotate(35),
-			new FuncCall(f, {size: "size*0.7"}),
-			new Rotate(-35),
-			new Move("size*0.3"),
-			new Rotate(35),
-			new FuncCall(f, {size: "size*0.7"}),
-			new Rotate(-35),
-			new Move("-size")
-		])
+				new vogo.Move("size*0.3"),
+				new vogo.Rotate(-40),
+				new vogo.FuncCall(f, {size: "size*0.7"}),
+				new vogo.Rotate(40),
+				new vogo.Move("size*0.4"),
+				new vogo.Rotate(35),
+				new vogo.FuncCall(f, {size: "size*0.7"}),
+				new vogo.Rotate(-35),
+				new vogo.Move("size*0.3"),
+				new vogo.Rotate(35),
+				new vogo.FuncCall(f, {size: "size*0.7"}),
+				new vogo.Rotate(-35),
+				new vogo.Move("-size")
+			])
 	])
 	return f
 })
 
 // 3
-examples.push(function() {
-	var f = new Func({name: "fern", args: {size: 7, sign: 1, shrink: 0.5, length: 0.7}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "fern", args: {size: 7, sign: 1, shrink: 0.5, length: 0.7}})
 	f.setCommands([
-		new Branch("size>=1", [
-			new Move("size"),
-			new Rotate("70*sign"),
-			new FuncCall(f, {size: "size*shrink", sign: "-sign"}),
-			new Rotate("-70*sign"),
-			new Move("size"),
-			new Rotate("-70*sign"),
-			new FuncCall(f, {size: "size*shrink", sign: "sign"}),
-			new Rotate("77*sign"),
-			new FuncCall(f, {size: "size*length", sign: "sign"}),
-			new Rotate("-7*sign"),
-			new Move("-2*size")
+		new vogo.Branch("size>=1", [
+			new vogo.Move("size"),
+			new vogo.Rotate("70*sign"),
+			new vogo.FuncCall(f, {size: "size*shrink", sign: "-sign"}),
+			new vogo.Rotate("-70*sign"),
+			new vogo.Move("size"),
+			new vogo.Rotate("-70*sign"),
+			new vogo.FuncCall(f, {size: "size*shrink", sign: "sign"}),
+			new vogo.Rotate("77*sign"),
+			new vogo.FuncCall(f, {size: "size*length", sign: "sign"}),
+			new vogo.Rotate("-7*sign"),
+			new vogo.Move("-2*size")
 		], [])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({name: "circle", viewBox: {x:-33.397, y:-74.088, w:176.746, h:153.790}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "circle", viewBox: {x:-33.397, y:-74.088, w:176.746, h:153.790}})
 	f.setCommands([
-		new Loop(360, [
-			new Rotate(1),
-			new Move(1)
+		new vogo.Loop(360, [
+			new vogo.Rotate(1),
+			new vogo.Move(1)
 		])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({name: "spirale", args: {step: 2, angle: 25}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "spirale", args: {step: 2, angle: 25}})
 	f.setCommands([
-		new Move("step"),
-		new Rotate("angle"),
-		new Branch("step<40", [
-			new FuncCall(f, {step: "step*1.02"})
+		new vogo.Move("step"),
+		new vogo.Rotate("angle"),
+		new vogo.Branch("step<40", [
+			new vogo.FuncCall(f, {step: "step*1.02"})
 		], [])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "meinBaum",
 		args: {"tiefe": 6, "winkel": 30},
 		viewBox: {x:-39.046, y:-56.526, w:80.449, h:70.000}
 	})
 	f.setCommands([
-		new Branch("tiefe>=0", [
-			new Move("tiefe*2"),
-			new Rotate("winkel"),
-			new FuncCall(f, {tiefe: "tiefe-1"}),
-			new Rotate("-winkel*2"),
-			new FuncCall(f, {tiefe: "tiefe-1"}),
-			new Rotate("winkel"),
-			new Move("-tiefe*2")
+		new vogo.Branch("tiefe>=0", [
+			new vogo.Move("tiefe*2"),
+			new vogo.Rotate("winkel"),
+			new vogo.FuncCall(f, {tiefe: "tiefe-1"}),
+			new vogo.Rotate("-winkel*2"),
+			new vogo.FuncCall(f, {tiefe: "tiefe-1"}),
+			new vogo.Rotate("winkel"),
+			new vogo.Move("-tiefe*2")
 		], [])
 	])
 	return f
 })
 
 // 7
-examples.push(function() {
-	var nEck = new Func({name: "nEck2", args: {ne: 36, sz: 5}})
+vogo.examples.push(function() {
+	var nEck = new vogo.Func({name: "nEck2", args: {ne: 36, sz: 5}})
 	nEck.setCommands([
-		new Loop("ne", [
-			new Rotate("360/ne"),
-			new Move("sz")])
+		new vogo.Loop("ne", [
+			new vogo.Rotate("360/ne"),
+			new vogo.Move("sz")])
 	])
-	var mnEck = new Func({name: "mnEck", args: {ne: 25, sz: 7}})
+	var mnEck = new vogo.Func({name: "mnEck", args: {ne: 25, sz: 7}})
 	mnEck.setCommands([
-		new Loop("ne", [
-			new Rotate("360/ne"),
-			new FuncCall(nEck, {ne: "ne", sz: "sz"})])
+		new vogo.Loop("ne", [
+			new vogo.Rotate("360/ne"),
+			new vogo.FuncCall(nEck, {ne: "ne", sz: "sz"})])
 	])
 	return [nEck, mnEck]
 })
 
-examples.push(function() {
-	var KreisC = new Func({name: "KreisC", args: {winkel: 180, rotate: 1, groesze: 0.1}})
+vogo.examples.push(function() {
+	var KreisC = new vogo.Func({name: "KreisC", args: {winkel: 180, rotate: 1, groesze: 0.1}})
 	KreisC.setCommands([
-		new Loop("winkel", [
-			new Move("groesze"),
-			new Rotate("rotate")])
+		new vogo.Loop("winkel", [
+			new vogo.Move("groesze"),
+			new vogo.Rotate("rotate")])
 	])
-	var Welle = new Func({name: "Welle", args: {n: 4}})
+	var Welle = new vogo.Func({name: "Welle", args: {n: 4}})
 	Welle.setCommands([
-		new Branch("n>0", [
-			new FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
-			new FuncCall(Welle, {n: "n-1"})
+		new vogo.Branch("n>0", [
+			new vogo.FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
+			new vogo.FuncCall(Welle, {n: "n-1"})
 		], [])
 	])
 	return [KreisC, Welle]
 })
 
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "zahnrad",
 		args: {anzahlecken: 20, seitenlaenge: 7},
 		viewBox: {x:-55.356, y:-12.091, w:104.584, h:91.000}
 	})
 	f.setCommands([
-		new Loop("anzahlecken", [
-			new Loop(2, [
-				new Move("seitenlaenge"),
-				new Rotate(-90)
+		new vogo.Loop("anzahlecken", [
+			new vogo.Loop(2, [
+				new vogo.Move("seitenlaenge"),
+				new vogo.Rotate(-90)
 			]),
-			new Move("seitenlaenge"),
-			new Rotate("90 - (180 / anzahlecken)"),
-			new Move("seitenlaenge/2"),
-			new Rotate("90 - (180 / anzahlecken)")
+			new vogo.Move("seitenlaenge"),
+			new vogo.Rotate("90 - (180 / anzahlecken)"),
+			new vogo.Move("seitenlaenge/2"),
+			new vogo.Rotate("90 - (180 / anzahlecken)")
 		])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "saege",
 		args: {"zacken": 9, "zackenlaenge": 9},
 		viewBox: {x:-30.875, y:-57.548, w:80.449, h:70.000}
 	})
 	f.setCommands([
-		new Loop("zacken", [
-			new Loop(2, [
-				new Move("zackenlaenge"),
-				new Rotate(-90)
+		new vogo.Loop("zacken", [
+			new vogo.Loop(2, [
+				new vogo.Move("zackenlaenge"),
+				new vogo.Rotate(-90)
 			]),
-			new Rotate("90 + (180 / zacken)"),
-			new Move("zackenlaenge/2"),
-			new Rotate("90 + (180 / zacken)")
+			new vogo.Rotate("90 + (180 / zacken)"),
+			new vogo.Move("zackenlaenge/2"),
+			new vogo.Rotate("90 + (180 / zacken)")
 		])
 	])
 	return f
 })
 
 // 11
-examples.push(function() {
-	var f = new Func({name: "tunnel", args: {a: 60, c: 2.04, n: 40}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "tunnel", args: {a: 60, c: 2.04, n: 40}})
 	f.setCommands([
-		new Loop("n", [
-			new Move("a"),
-			new Move("-a*c"),
-			new Move("a"),
-			new Rotate("360/n")])
+		new vogo.Loop("n", [
+			new vogo.Move("a"),
+			new vogo.Move("-a*c"),
+			new vogo.Move("a"),
+			new vogo.Rotate("360/n")])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({name: "swirlPyramid", args: {a: 40}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "swirlPyramid", args: {a: 40}})
 	f.setCommands([
-		new Loop("a", [
-			new Move("60*(i+1)/a"),
-			new Rotate("90+90/a")])
+		new vogo.Loop("a", [
+			new vogo.Move("60*(i+1)/a"),
+			new vogo.Rotate("90+90/a")])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({name: "swirlPyramidRecursive", args: {step: 20, x: 0.94, r: -94.1}})
+vogo.examples.push(function() {
+	var f = new vogo.Func({name: "swirlPyramidRecursive", args: {step: 20, x: 0.94, r: -94.1}})
 	f.setCommands([
-		new Move("step"),
-		new Rotate("r"),
-		new FuncCall(f, {step: "step*x"})
+		new vogo.Move("step"),
+		new vogo.Rotate("r"),
+		new vogo.FuncCall(f, {step: "step*x"})
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "coincidentalSpiral",
 		args: {n: 360, angle: 153.951},
 		viewBox: {x:-554.877, y:-457.912, w:1149.034, h:965.009}
 	})
 	f.setCommands([
-		new Loop("n", [
-			new Move("10*i"),
-			new Rotate("angle")])
+		new vogo.Loop("n", [
+			new vogo.Move("10*i"),
+			new vogo.Rotate("angle")])
 	])
 	return f
 })
 
 // 15
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "tunnel2",
 		viewBox: {x:-36.173, y:-275.308, w:176.746, h:153.790}
 	})
 	f.setCommands([
-		new Loop("360", [
-			new Move("400"),
-			new Rotate("151")])
+		new vogo.Loop("360", [
+			new vogo.Move("400"),
+			new vogo.Rotate("151")])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "roses",
 		args: {stepSize: 2, count: 5, order: 3}
 	})
 	f.setCommands([
-		new Loop("360*count", [
-			new Move("stepSize"),
-			new Rotate("i + (2 * order - count) / (2 * count)")])
+		new vogo.Loop("360*count", [
+			new vogo.Move("stepSize"),
+			new vogo.Rotate("i + (2 * order - count) / (2 * count)")])
 	])
 	return f
 })
 
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "dahlia",
 		args: {kind: 3}
 	})
 	f.setCommands([
-		new Loop(8, [
-			new Rotate(45),
-			new Loop("kind", [
-				new Loop(45, [
-					new Move(0.5),
-					new Rotate(4)]),
-				new Rotate(90)])])
+		new vogo.Loop(8, [
+			new vogo.Rotate(45),
+			new vogo.Loop("kind", [
+				new vogo.Loop(45, [
+					new vogo.Move(0.5),
+					new vogo.Rotate(4)]),
+				new vogo.Rotate(90)])])
 	])
 	return f
 })
 
 // 18
-examples.push(function() {
-	var f = new Func({
+vogo.examples.push(function() {
+	var f = new vogo.Func({
 		name: "simpleFlower",
 		args: {"outer": 10, "inner": 28, "angle": 240.12, "step": 5},
 		viewBox: {x:-70.534, y:-91.840, w:174.720, h:118.300}});
 	f.setCommands([
-		new Loop("outer", [
-			new Loop("inner", [
-				new Move("step"),
-				new Rotate("Math.sin(i/360)*angle")])])]);
+		new vogo.Loop("outer", [
+			new vogo.Loop("inner", [
+				new vogo.Move("step"),
+				new vogo.Rotate("Math.sin(i/360)*angle")])])]);
 	return f
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var bar = new vogo.Func({
 		name: "bar",
 		args: {"a": 18},
@@ -3644,7 +3658,7 @@ examples.push(function() {
 	return [bar, barChart]
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var f = new vogo.Func({
 		name: "snapExample",
 		args: {"a": 56},
@@ -3656,7 +3670,7 @@ examples.push(function() {
 	return f
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var circleSeg = new vogo.Func({
 		name: "circleSeg",
 		args: {"angle": 29, "step": 0.5},
@@ -3677,7 +3691,7 @@ examples.push(function() {
 		new vogo.Rotate(90),
 		new vogo.Move("r"),
 		new vogo.Rotate(180)]);
-	
+
 	var pieChart = new vogo.Func({
 		name: "pieChart",
 		args: {"data": "[3,4,6,2]", "r": 9},
@@ -3689,7 +3703,7 @@ examples.push(function() {
 })
 
 // 22
-examples.push(function() {
+vogo.examples.push(function() {
 	var bar = new vogo.Func({
 		name: "zig",
 		args: {"a": 20, "b": 3},
@@ -3721,7 +3735,7 @@ examples.push(function() {
 	return [bar, grid]
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var step = new vogo.Func({
 		name: "lcStep",
 		args: {"start": 11, "end": 7, "width": 6},
@@ -3748,7 +3762,7 @@ examples.push(function() {
 	return [step, lineChart]
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var nikolausHaus = new vogo.Func({
 		name: "nikolausHaus",
 		viewBox: {x:-13.572, y:-25.251, w:39.997, h:34.802}});
@@ -3772,7 +3786,7 @@ examples.push(function() {
 	return nikolausHaus
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var αrrowhead = new vogo.Func({
 		name: "αrrowhead",
 		args: {"sharpness": 19, "cut": 34},
@@ -3792,7 +3806,7 @@ examples.push(function() {
 })
 
 // 26
-examples.push(function() {
+vogo.examples.push(function() {
 	var square4Clam = new vogo.Func({
 		name: "square4Clam",
 		args: {"a": 11.01},
@@ -3814,7 +3828,7 @@ examples.push(function() {
 	return [square4Clam, clam]
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var heart = new vogo.Func({
 		name: "heart",
 		viewBox: {x:-19.296, y:-21.199, w:38.866, h:26.316}});
@@ -3832,7 +3846,7 @@ examples.push(function() {
 	return heart
 })
 
-examples.push(function() {
+vogo.examples.push(function() {
 	var star = new vogo.Func({
 		name: "star",
 		args: {"cut": 140, "spikes": 6, "size": 100},
@@ -3845,6 +3859,58 @@ examples.push(function() {
 			new vogo.Move("size/spikes")])]);
 	return star
 })
+
+vogo.examples.push(function() {
+	var bTree = new vogo.Func({
+		name: "bTree",
+		args: {"size": 10, "angle": 50, "sizeF": 0.7, "angleF": 0.8},
+		viewBox: {x:-25.170, y:-35.270, w:52.896, h:46.026}});
+	bTree.setCommands([
+		new vogo.Branch("size>1.5", [
+			new vogo.Move("size"),
+			new vogo.Rotate("-angle"),
+			new vogo.FuncCall(bTree, {"size": "size*sizeF", "angle": "angle*angleF"}),
+			new vogo.Rotate("angle*2"),
+			new vogo.FuncCall(bTree, {"size": "size*sizeF", "angle": "angle*angleF"}),
+			new vogo.Rotate("-angle"),
+			new vogo.Move("-size")], [])]);
+
+	return bTree
+})
+
+// 30
+vogo.examples.push(function() {
+	var vortex = new vogo.Func({
+		name: "vortex",
+		args: {"a": 10, "factor": 0.94},
+		viewBox: {x:-14.464, y:-29.286, w:59.110, h:40.022}});
+	vortex.setCommands([
+		new vogo.Branch("a>1", [
+			new vogo.Move("a"),
+			new vogo.Rotate(26.3),
+			new vogo.FuncCall(vortex, {"a": "a*factor"})], [])]);
+
+	return vortex
+})
+
+vogo.examples.push(function() {
+	var wildTree = new vogo.Func({
+		name: "wildTree",
+		args: {"a": 10, "angle": 40},
+		viewBox: {x:-41.409, y:-57.154, w:103.385, h:70.000}});
+	wildTree.setCommands([
+		new vogo.Branch("a>3", [
+			new vogo.Move("a"),
+			new vogo.Rotate("-angle"),
+			new vogo.FuncCall(wildTree, {"a": "a*0.8"}),
+			new vogo.Rotate("2*angle"),
+			new vogo.FuncCall(wildTree, {"a": "a*0.9", "angle": "angle*0.5"}),
+			new vogo.Rotate("-angle"),
+			new vogo.Move("-a")], [])]);
+
+	return wildTree
+})
+
 
 return vogo
 }()

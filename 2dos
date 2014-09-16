@@ -14,10 +14,13 @@ community
 	show examples
 
 small
+	refactor the naming of label, foreignObject, fo, input, inputField, drawLabel and drawIcons ... very confusing
 	drawIcons -> improve in funCall and branch! -> hide labels when not selected (as in move and rotate)
 	put styles into css
 	allow esc during drag (of line/rotate/loop) to abort and revert to previous parameters
 	ctrl+d = duplicate selected command -> create proxy, instead of copy (ctrl+c) (can be emulated by funcCall)
+		refactor "set scope" first
+		think about how export should handle proxies
 	selection is not undone if commands are added in function scope (see TODO)
 	funcCall: make result of arg visible as text field on hover of arg
 	funcCall: make it visible (at least the "f") when it is a proxy>1
@@ -79,7 +82,8 @@ new commands
 bugs
 	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)
 	call a func A in B, then while B is focused, rename/remove a parameter of A: old remains in argsList of funcCall
-	deleting a recursing funcCall does not seem to work smoothly (reproducable?)
+	deleting a recursing funcCall does not seem to work smoothly
+		reproducable: in the tree example, delete one branch of the recursion -> the other funcCall is hidden then
 	chromium only (chrome works): the input fields inside foreign objects do not update on manual editing
 
 
