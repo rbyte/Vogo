@@ -38,6 +38,7 @@
 			<li key="a" title="Abstract/create new function parameter"><img src="images/Abstract.svg"></li>
 			<li key="e" title="Export to code"><img src="images/Export.svg"></li>
 			<li key="s" title="SVG output"><img src="images/Svg.svg"></li>
+			<li key="x" title="Load examples"><img src="images/Examples.svg"></li>
 		</ul>
 		<div class="centerDiv">
 			<div class="container-box helpSVGcontainer"><div class="aspect-box"><div class="content-box">

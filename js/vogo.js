@@ -51,7 +51,7 @@ var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
 	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x", 90: "z", 112: "f1", 113: "f2",
-	114: "f2", 115: "f4" }
+	114: "f3", 115: "f4" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -633,7 +633,7 @@ function insertCmdRespectingSelection(cmd) {
 			stateAtInsertionPoint = selectedElem.savedState.clone()
 			console.assert(cmdSelIdx !== -1)
 		}
-		// TODO this should be scope, not rootscope, becaus cmd is not a root either.
+		// TODO this should be scope, not rootscope, because cmd is not a root either.
 		cmd.scope = rootScope
 		cmdsRef.splice(cmdSelIdx, 0, cmd)
 	}
@@ -883,11 +883,31 @@ var onKeyDown = {
 			})
 		}
 	},
-	x: function() { // cut
-		if (keyPressed.ctrl && !selection.isEmpty()) {
-			onKeyDown.c()
-			selection.removeDeselectAndDeleteAllCompletely()
-			run()
+	x: function() {
+		function loadExample(i) {
+			if (i === undefined)
+				i = 0
+			if (i < examples.length) {
+				addExampleToUI(examples[i]())
+				run()
+				// force redraw; to make progression visible
+				setTimeout(function() {
+					loadExample(i+1)
+				}, 10)
+			}
+		}
+		if (keyPressed.ctrl) {
+			if (!selection.isEmpty()) { // cut
+				onKeyDown.c()
+				selection.removeDeselectAndDeleteAllCompletely()
+				run()
+			}
+		} else { // load all examples
+			loadExample()
+//			examples.forEach(function(t) {
+//				addExampleToUI(t())
+//				run()
+//			})
 		}
 	},
 	v: function() { // paste
@@ -922,24 +942,6 @@ var onKeyDown = {
 		}
 	},
 	f2: function() {
-		function addOne(i) {
-			if (i < examples.length) {
-				addExampleToUI(examples[i]())
-				run()
-				// force redraw; to make progression visible
-				setTimeout(function() {
-					addOne(i+1)
-				}, 10)
-			}
-		}
-		addOne(0)
-
-//		examples.forEach(function(t) {
-//			addExampleToUI(t())
-//			run()
-//		})
-	},
-	f3: function() {
 
 	}
 }
@@ -3776,12 +3778,12 @@ vogo.examples.push(function() {
 		new vogo.Rotate(90),
 		new vogo.Move(10),
 		new vogo.Rotate("90+45"),
-		new vogo.Move(14.15),
-		new vogo.Rotate(-72),
-		new vogo.Move(11),
-		new vogo.Rotate(-126.1),
-		new vogo.Move(11),
-		new vogo.Rotate(-71.7),
+		new vogo.Move(14.14),
+		new vogo.Rotate("-(180-45-60)"),
+		new vogo.Move(10),
+		new vogo.Rotate(-120),
+		new vogo.Move(10),
+		new vogo.Rotate("-(180-45-60)"),
 		new vogo.Move(14.14)]);
 
 	return nikolausHaus
