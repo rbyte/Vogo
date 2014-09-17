@@ -633,6 +633,7 @@ function insertCmdRespectingSelection(cmd) {
 			stateAtInsertionPoint = selectedElem.savedState.clone()
 			console.assert(cmdSelIdx !== -1)
 		}
+		// TODO this should be scope, not rootscope, becaus cmd is not a root either.
 		cmd.scope = rootScope
 		cmdsRef.splice(cmdSelIdx, 0, cmd)
 	}
@@ -2489,15 +2490,15 @@ function Loop(numberOfRepetitions, commands) {
 	var self = this
 	self.commonCommandConstructor()
 	self.setMainParameter(numberOfRepetitions)
-	self.commands = commands === undefined ? [] : commands
-	self.commands.forEach(function (e) {
-		console.assert(e.proxies === undefined)
-		e.scope = self.root
-	})
 	// "unfolded" loop
 	self.execCmds = []
 	// for all repetitions
 	self.iconGs = []
+	self.commands = commands === undefined ? [] : commands
+	self.commands.forEach(function (e) {
+		console.assert(e.proxies === undefined)
+		e.scope = self
+	})
 	self.i
 }
 Loop.prototype = new Command(Loop)
@@ -2950,11 +2951,11 @@ function Branch(cond, ifTrueCmds, ifFalseCmds) {
 	self.commonCommandConstructor()
 	self.setMainParameter(cond)
 	self.lastCondEvalResult
+	self.execCmds = []
 	self.ifTrueCmds = ifTrueCmds === undefined ? [] : ifTrueCmds
 	self.ifTrueCmds.forEach(function (e) { e.scope = self })
 	self.ifFalseCmds = ifFalseCmds === undefined ? [] : ifFalseCmds
 	self.ifFalseCmds.forEach(function (e) { e.scope = self })
-	self.execCmds = []
 	self.iconG
 }
 Branch.prototype = new Command(Branch)
