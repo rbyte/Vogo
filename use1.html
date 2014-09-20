@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <title>Vogo Export</title>
+    <script src='http://d3js.org/d3.v3.min.js'></script>
+    <script src='http://mgrf.de/vogo/js/vogo.js'></script>
+</head>
+<body>
+<script>
+var regularPolygon = new vogo.Func({
+    name: "regularPolygon",
+    args: {"n": 5},
+    viewBox: {x:-17, y:-17, w:60, h:52}});
+regularPolygon.setCommands([
+    new vogo.Loop("n", [
+        new vogo.Rotate("360/n"),
+        new vogo.Move("100/n")])]);
+
+var fd = new vogo.Drawing(regularPolygon, {arguments: {n: 20}})
+fd.update({n: 3})
+</script>
+</body>
+</html>

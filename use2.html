@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<title>Vogo Export</title>
+	<script src='http://d3js.org/d3.v3.min.js'></script>
+	<script src='js/vogo.js'></script>
+
+    <style>
+        #mysvg {
+            position: fixed;
+            width: 80%;
+            height: 80%;
+            top: 10%;
+            left: 10%;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+<svg id="mysvg"
+     xmlns="http://www.w3.org/2000/svg"
+     viewBox="-100 -50 200 100">
+    <style>svg line { stroke: #000; stroke-opacity: 0.8; stroke-width: .25; stroke-linecap: round; }</style>
+</svg>
+
+<script>
+var regularPolygon = new vogo.Func({
+    name: "regularPolygon",
+    args: {"n": 5},
+    viewBox: {x:-17, y:-17, w:60, h:52}});
+regularPolygon.setCommands([
+    new vogo.Loop("n", [
+        new vogo.Rotate("360/n"),
+        new vogo.Move("100/n")])]);
+
+if (true)
+    d3.select("#mysvg").append("g")
+        .call(vogo.draw(regularPolygon, {n: 10}))
+        .call(vogo.update({n: 3}))
+
+if (false) {
+    var data = [3, 5, 7]
+    data.forEach(function(e) {
+        new vogo.Drawing(regularPolygon, {
+            arguments: {n: e},
+            container: d3.select("#mysvg").append("g")
+        })
+    })
+}
+</script>
+</body>
+</html>

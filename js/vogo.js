@@ -1150,7 +1150,8 @@ Expression.prototype.eval = function(command) {
 	
 	if (self.isStatic())
 		return self.cachedEvalFromStaticExp
-	
+
+	// TODO fails during parameterisation of branches with the condition "true"
 	console.assert(typeof self.exp === "string")
 	
 	function evalWithChecks(toEval) {
@@ -1342,8 +1343,10 @@ Command.prototype.setMainParameter = function(x) {
 
 Command.prototype.evalMainParameter = function() {
 	var self = this
-	console.assert(self.root.mainParameter instanceof Expression)
-	return self.root.mainParameter.eval(self)
+	if (self.root.mainParameter !== undefined) { // FuncCall never sets it
+		console.assert(self.root.mainParameter instanceof Expression)
+		return self.root.mainParameter.eval(self)
+	}
 }
 
 Command.prototype.shallowClone = function(scope) {
@@ -2180,7 +2183,7 @@ Move.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	var lineLength = self.evalMainParameter()
-	
+
 	// TODO this is a pretty ugly quick fix solution
 	if (lastRotateExecuted !== undefined
 	&& lastRotateExecuted.arc !== undefined
@@ -2353,7 +2356,7 @@ Rotate.prototype.execInner = function(callerF) {
 	var self = this
 	var root = self.root
 	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
-	
+
 	var arc = d3.svg.arc()
 		.innerRadius(0)
 		.outerRadius(rotationArcRadiusMax)
@@ -2369,10 +2372,10 @@ Rotate.prototype.execInner = function(callerF) {
 		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
 			.on("mouseenter", function(d, i) {
 				if (!dragInProgress && !manipulation.isCreating(Rotate))
-					self.arc.style({fill: "#f00"})
+					self.arc.style("fill", "#f00")
 			})
 			.on("mouseleave", function(d, i) {
-				self.arc.style(arcStyle)
+				self.arc.style("fill", arcStyle.fill)
 			})
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
@@ -2435,7 +2438,7 @@ Rotate.prototype.execInner = function(callerF) {
 	}
 	if (drawIcons) {
 		self.arc.attr("d", arc)
-			.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
+		self.arc.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
 				+(lastRotateScaleFactorCalculated ? " scale("+lastRotateScaleFactorCalculated+")" : ""))
 		self.title.text(self.addDegreeSymbol(angleToString(angle)))
 		self.indicateIfInsideAnySelectedCommandsScope()
@@ -2772,7 +2775,7 @@ FuncCall.prototype.execInner = function(callerF) {
 		|| selection.containsAsRoot(self)
 		|| root.proxies[0] === self
 	)
-	
+
 	if (self.icon === undefined && drawIcons) {
 		self.icon = createForeignObject(mainSVG.paintingG)
 		self.icon.argF = {}
@@ -3160,10 +3163,11 @@ function Drawing(f, opt) {
 		console.assert(fc instanceof FuncCall)
 		if (newArgs !== undefined) {
 			// leave old, just override
-			for (var a in newArgs)
-				fc.customArguments[a] = !(newArgs[a] instanceof Expression)
-					? new Expression(newArgs[a]) 
+			for (var a in newArgs) {
+				fc.root.customArguments[a] = !(newArgs[a] instanceof Expression)
+					? new Expression(newArgs[a])
 					: newArgs[a]
+			}
 		}
 		this.state.reset()
 		return this.exec()
@@ -3476,20 +3480,25 @@ vogo.examples.push(function() {
 })
 
 vogo.examples.push(function() {
-	var KreisC = new vogo.Func({name: "KreisC", args: {winkel: 180, rotate: 1, groesze: 0.1}})
-	KreisC.setCommands([
-		new vogo.Loop("winkel", [
-			new vogo.Move("groesze"),
-			new vogo.Rotate("rotate")])
-	])
-	var Welle = new vogo.Func({name: "Welle", args: {n: 4}})
-	Welle.setCommands([
-		new vogo.Branch("n>0", [
-			new vogo.FuncCall(KreisC, {rotate: "(n%2-0.5)*2"}),
-			new vogo.FuncCall(Welle, {n: "n-1"})
-		], [])
-	])
-	return [KreisC, Welle]
+	var circleSector = new vogo.Func({
+		name: "circleSector",
+		args: {"size": 0.12, "angle": 180, "direction": 1},
+		viewBox: {x:-4.056, y:-10.198, w:23.355, h:15.046}});
+	circleSector.setCommands([
+		new vogo.Loop("angle", [
+			new vogo.Move("size"),
+			new vogo.Rotate("direction")])]);
+
+	var Wave = new vogo.Func({
+		name: "Wave",
+		args: {"n": 7},
+		viewBox: {x:-13.436, y:-25.773, w:94.485, h:60.870}});
+	Wave.setCommands([
+		new vogo.FuncCall(circleSector, {"direction": "n%2*2-1", "size": "0.12*n/7"}),
+		new vogo.Branch("n>1", [
+			new vogo.FuncCall(Wave, {"n": "n-1"})], [])]);
+
+	return [circleSector, Wave]
 })
 
 vogo.examples.push(function() {
@@ -3690,7 +3699,7 @@ vogo.examples.push(function() {
 	pie.setCommands([
 		new vogo.Move("r"),
 		new vogo.Rotate(90),
-		new vogo.FuncCall(circleSeg, {"step": "Math.tan(0.5/180*Math.PI)*r*2", "angle": "angle"}),
+		new vogo.FuncCall(circleSeg, {"step": "vogo.tan(0.5)*r*2", "angle": "angle"}),
 		new vogo.Rotate(90),
 		new vogo.Move("r"),
 		new vogo.Rotate(180)]);
@@ -3707,35 +3716,30 @@ vogo.examples.push(function() {
 
 // 22
 vogo.examples.push(function() {
-	var bar = new vogo.Func({
+	var zig = new vogo.Func({
 		name: "zig",
-		args: {"a": 20, "b": 3},
-		viewBox: {x:-23.520, y:-49.398, w:80.449, h:70.000}});
-	bar.setCommands([
-		new vogo.Move("a"),
-		new vogo.Rotate(90),
-		new vogo.Move("b"),
-		new vogo.Rotate(90),
-		new vogo.Move("a"),
-		new vogo.Rotate(-90),
-		new vogo.Move("b"),
-		new vogo.Rotate(-90)]);
+		args: {"reverse": "false", "side": 11, "cellSize": 3},
+		viewBox: {x:-16.449, y:-27.028, w:59.110, h:40.023}});
+	zig.setCommands([
+		new vogo.Move("side"),
+		new vogo.Rotate("90*(reverse ? -1 : 1)"),
+		new vogo.Move("cellSize"),
+		new vogo.Rotate("90*(reverse ? -1 : 1)")]);
 
 	var grid = new vogo.Func({
 		name: "grid",
-		args: {"cols": 3, "rows": 4, "size": 3},
-		viewBox: {x:-22.064, y:-34.486, w:60.831, h:52.930}});
+		args: {"cols": 7, "rows": 5, "cellSize": 5},
+		viewBox: {x:-15.615, y:-34.887, w:67.977, h:46.026}});
 	grid.setCommands([
 		new vogo.Loop("cols", [
-			new vogo.FuncCall(bar, {"a": "rows*size*2", "b": "size"})]),
-		new vogo.Move("rows*size*2"),
-		new vogo.Move("-rows*size*2"),
-		new vogo.Rotate(-90),
+			new vogo.FuncCall(zig, {"reverse": "i%2==1", "side": "rows*cellSize", "cellSize": "cellSize"})]),
+		new vogo.Move("rows*cellSize"),
+		new vogo.Rotate("90*(cols%2==1 ? 1 : -1)"),
 		new vogo.Loop("rows", [
-			new vogo.FuncCall(bar, {"a": "cols*size*2", "b": "size"})]),
-		new vogo.Move("cols*size*2")]);
+			new vogo.FuncCall(zig, {"reverse": "i%2==(cols%2)", "side": "cols*cellSize", "cellSize": "cellSize"})]),
+		new vogo.Move("cols*cellSize")]);
 
-	return [bar, grid]
+	return [zig, grid]
 })
 
 vogo.examples.push(function() {
@@ -3744,9 +3748,9 @@ vogo.examples.push(function() {
 		args: {"start": 11, "end": 7, "width": 6},
 		viewBox: {x:-26.118, y:-21.001, w:45.997, h:40.023}});
 	step.setCommands([
-		new vogo.Rotate("-Math.atan((end-start)/width)/Math.PI*180"),
+		new vogo.Rotate("-vogo.atan((end-start)/width)"),
 		new vogo.Move("Math.sqrt(width*width+(end-start)*(end-start))"),
-		new vogo.Rotate("Math.atan((end-start)/width)/Math.PI*180")]);
+		new vogo.Rotate("vogo.atan((end-start)/width)")]);
 
 	var lineChart = new vogo.Func({
 		name: "lineChart",
