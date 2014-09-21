@@ -3267,7 +3267,6 @@ function automaticTest() {
 	console.assert(p.getFirst().x === 1)
 	console.assert(p.add({x: 2}) === 1)
 	console.assert(p.getFirst().x === 1)
-	console.log(p.getLength())
 	console.assert(p.getLength() === 2)
 	p.delete(0)
 	console.assert(p.getLength() === 1)
