@@ -1051,8 +1051,8 @@ var manipulation = {
 			this.update(newMainParameter)
 			var ic = this.insertedCommand
 			this.insertedCommand = false
-			if (ic.proxies !== undefined && ic.proxies.length === 1)
-				updateLabelVisibility(ic.proxies[0])
+			if (ic.proxies !== undefined && ic.proxies.getLength() === 1)
+				updateLabelVisibility(ic.proxies.getFirst())
 		}
 	},
 	remove: function() {
@@ -1064,6 +1064,57 @@ var manipulation = {
 	}
 }
 
+// Proxies could be a simple array, but this implementation is faster
+function Proxies() {
+	var self = this
+	self.nextKey = 0 // 1,2,3,4 .. ever increasing
+}
+
+Proxies.prototype.add = function(p) {
+	var self = this
+	var key = self.nextKey
+	self[key] = p
+	self.nextKey++
+	return key
+}
+
+// each proxy stores its "position" in this object, which avoids the use of indexOf() and splice()
+Proxies.prototype.delete = function(key) {
+	var self = this
+	console.assert(self[key] !== undefined)
+	// this punches holes in the object properties "list"
+	delete self[key]
+}
+
+Proxies.prototype.forEach = function(f) {
+	var self = this
+	for (var key in self) {
+		if (self.hasOwnProperty(key) && key !== "nextKey") {
+//			console.log(self[key])
+			f(self[key])
+		}
+	}
+}
+
+Proxies.prototype.getFirst = function() {
+	var self = this
+	if (self.nextKey === 0)
+		return undefined
+	var key = 0
+	while (self[key] === undefined)
+		if (key < self.nextKey)
+			key++
+		else
+			return undefined
+	return self[key]
+}
+
+Proxies.prototype.getLength = function() {
+	var self = this
+	var l = 0
+	self.forEach(function() { l++ })
+	return l
+}
 
 function State() {
 	this.reset()
@@ -1250,6 +1301,7 @@ Expression.prototype.eval = function(command) {
 	}
 	try {
 		// THIS IS THE CRUCIAL LINE. construct function that has all the arguments for expression eval
+		// TODO this is the #1 performance killer
 		result = new Function(argsKeys, "return "+self.exp).apply(this, argsValues)
 	} catch(e) {
 		errorMsg(e)
@@ -1322,6 +1374,7 @@ Command.prototype.commonCommandConstructor = function() {
 	self.root = self
 	// each shallowClone is a proxy (child) to the root
 	self.proxies
+	self.proxyKey
 	self.scope
 	self.mainParameter
 	self.scopeDepth = 0
@@ -1369,9 +1422,9 @@ Command.prototype.shallowClone = function(scope) {
 	if (self.root !== self)
 		console.assert(self.proxies === undefined)
 	if (self.root.proxies === undefined)
-		self.root.proxies = []
+		self.root.proxies = new Proxies()
 	// TODO may want to c.proxyPos =
-	self.root.proxies.push(c)
+	c.proxyKey = self.root.proxies.add(c)
 	// scope is the initiator of the clone
 	console.assert(scope !== undefined)
 	console.assert(scope.canContainCommands())
@@ -1396,8 +1449,8 @@ Command.prototype.deleteCompletely = function() {
 	}
 	if (root.proxies !== undefined) {
 		// "self" may be in proxies
-		forEachSelfRemovingDoCall(root.proxies, "deleteProxyCommand")
-		console.assert(root.proxies.length === 0)
+		root.proxies.forEach(function(e) { e.deleteProxyCommand() })
+		console.assert(root.proxies.getLength() === 0)
 	}
 	// root is never exec() so it has no visible elements
 //	root.removeVisible()
@@ -1429,13 +1482,9 @@ Command.prototype.deleteProxyCommand = function() {
 	var self = this
 	console.assert(self.root !== self)
 	console.assert(self.proxies === undefined) // -> is proxy
-	console.assert(self.root.proxies.length > 0)
+	console.assert(self.proxyKey >= 0)
 	self.removeVisible()
-
-	// TODO self.root.proxies.length may be huge -> indexOf slow
-	var idx = self.root.proxies.indexOf(self)
-	console.assert(idx !== -1)
-	self.root.proxies.splice(idx, 1)
+	self.root.proxies.delete(self.proxyKey)
 
 	console.assert(self.scope.canContainCommands())
 	console.assert(self.scope.execCmds.length > 0)
@@ -2776,7 +2825,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	var drawIcons = callerF === F_ && (
 		self.scopeDepth <= 1
 		|| selection.containsAsRoot(self)
-		|| root.proxies[0] === self
+		|| root.proxies.getFirst() === self
 	)
 
 	if (self.icon === undefined && drawIcons) {
@@ -2995,7 +3044,7 @@ Branch.prototype.execInner = function(callerF) {
 	// either the first proxy or the selected command shows the field
 	var drawInputField = drawIcons && (
 		selection.contains(self)
-		|| (root.proxies[0] === self && !selection.containsAsRoot(self))
+		|| (root.proxies.getFirst() === self && !selection.containsAsRoot(self))
 		)
 //	var drawInputField = drawIcons && selection.containsAsRoot(self)
 	
@@ -3211,7 +3260,19 @@ vogo.atan = function(x) { return convertToDegrees(Math.atan(x)) }
 function automaticTest() {
 	if (false)
 		return
-	
+
+	var p = new Proxies()
+	console.assert(p.getFirst() === undefined)
+	console.assert(p.add({x: 1}) === 0)
+	console.assert(p.getFirst().x === 1)
+	console.assert(p.add({x: 2}) === 1)
+	console.assert(p.getFirst().x === 1)
+	console.log(p.getLength())
+	console.assert(p.getLength() === 2)
+	p.delete(0)
+	console.assert(p.getLength() === 1)
+	console.assert(p.getFirst().x === 2)
+
 	function arrayTypesEqual(arr, types) {
 		if (arr.length !== types.length)
 			return false
@@ -3244,8 +3305,8 @@ function automaticTest() {
 	// TODO fix this. mv.scopeDepth ought to be 1
 	console.assert(mv.scopeDepth === 0)
 	console.assert(mvP.scopeDepth === 1)
-	console.assert(mv.proxies.length === 1)
-	console.assert(mv.proxies[0] === mvP)
+	console.assert(mv.proxies.getLength() === 1)
+	console.assert(mv.proxies.getFirst() === mvP)
 	console.assert(mvP.proxies === undefined)
 	console.assert(mvP.evalMainParameter() === 10)
 	console.assert(mv.mainParameter.get() === 10)
@@ -3303,8 +3364,8 @@ function automaticTest() {
 	console.assert(rtP.root.scope === lpP.root)
 	console.assert(mvP.scope === lpP)
 	console.assert(mvP.root.scope === lpP.root)
-	console.assert(mvP.root.proxies.length === 3)
-	console.assert(mvP.root.proxies[0] === mvP)
+	console.assert(mvP.root.proxies.getLength() === 3)
+	console.assert(mvP.root.proxies.getFirst() === mvP)
 	
 	var prevF = F_
 	var nf = new Func().addToUI()
