@@ -1149,10 +1149,12 @@ function Expression(exp) {
 }
 
 Expression.prototype.set = function(exp) {
-	this.cachedEvalFromStaticExp = undefined
+	var self = this
+	self.cachedEvalFromStaticExp = undefined
+	self.cachedParsedFunction = undefined
 	if (isRegularNumber(exp)) {
 		// if exp already is a number, parseFloat does just return it
-		this.exp = parseFloat(exp)
+		self.exp = parseFloat(exp)
 		return
 	}
 	
@@ -1160,9 +1162,9 @@ Expression.prototype.set = function(exp) {
 		var result
 		try {
 			result = eval(exp)
-			if (this.isNormalResult(result)) {
-				this.cachedEvalFromStaticExp = result
-				this.exp = exp
+			if (self.isNormalResult(result)) {
+				self.cachedEvalFromStaticExp = result
+				self.exp = exp
 				return
 			}
 		} catch(e) {
@@ -1171,8 +1173,7 @@ Expression.prototype.set = function(exp) {
 	} else {
 		console.log("Expression: set: warning: exp is irregular: "+exp)
 	}
-	
-	this.exp = exp
+	self.exp = exp
 }
 
 Expression.prototype.get = function() {
@@ -1922,10 +1923,11 @@ Func.prototype.updateViewbox = function(afterZoom) {
 }
 
 Func.prototype.checkName = function(newName) {
+	var self = this
 	var regEx = /^[a-zA-Zα-ω][a-zA-Zα-ω0-9]*$/
 	if (!newName.match(regEx)) {
-		if (this.nameInput !== undefined) {
-			this.nameInput.classed({"inputInWrongState": true})
+		if (self.nameInput !== undefined) {
+			self.nameInput.classed({"inputInWrongState": true})
 			updateNotification("The function name has to be alphanumeric and start with a letter: "+regEx)
 		}
 		return false
@@ -1933,29 +1935,30 @@ Func.prototype.checkName = function(newName) {
 	// check for duplicates
 	for (var i=0; i<functions.length; i++) {
 		if (functions[i] !== this && functions[i].name === newName) {
-			if (this.nameInput !== undefined) {
-				this.nameInput.classed({"inputInWrongState": true})
+			if (self.nameInput !== undefined) {
+				self.nameInput.classed({"inputInWrongState": true})
 				updateNotification("Function name duplication.")
 			}
 			return false
 		}
 	}
-	if (this.nameInput !== undefined) {
-		this.nameInput.classed({"inputInWrongState": false})
+	if (self.nameInput !== undefined) {
+		self.nameInput.classed({"inputInWrongState": false})
 		hideNotification()
 	}
 	return true
 }
 
 Func.prototype.searchForName = function(charCodeStart, range, checkFunc, s, depth) {
+	var self = this
 	if (depth === 0)
 		return (checkFunc(s) ? s : false)
 	for (var i=0; i<range; i++) {
-		var r = this.searchForName(charCodeStart, range, checkFunc, s + String.fromCharCode(charCodeStart+i), depth-1)
+		var r = self.searchForName(charCodeStart, range, checkFunc, s + String.fromCharCode(charCodeStart+i), depth-1)
 		if (r !== false)
 			return r
 	}
-	return this.searchForName(charCodeStart, range, checkFunc, s, depth+1)
+	return self.searchForName(charCodeStart, range, checkFunc, s, depth+1)
 }
 
 Func.prototype.setName = function(newName) {
@@ -1976,13 +1979,14 @@ Func.prototype.setName = function(newName) {
 }
 
 Func.prototype.checkArgumentName = function(newName) {
+	var self = this
 	var regEx = /^[a-zA-Z][a-zA-Z0-9]*$/
 	if (!newName.match(regEx)) {
 		updateNotification("The argument name has to be alphanumeric and start with a letter: "+regEx)
 		return false
 	}
 	// check for duplicates
-	for (var name in this.args) {
+	for (var name in self.args) {
 		if (name === newName) {
 			updateNotification("Argument name duplication.")
 			return false
@@ -2067,7 +2071,7 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 		}
 	}
 	
-	self.argLi[argName] = this.ul_args.append("li")
+	self.argLi[argName] = self.ul_args.append("li")
 	self.argLi[argName].append("input")
 		.attr("class", "f_argument")
 		.attr("type", "text")
@@ -3195,6 +3199,7 @@ Branch.prototype.getRootCommandsRef = function() {
 // opt is an object containing optional arguments
 // TODO "new" is not required for invoking
 function Drawing(f, opt) {
+	var self = this
 	if (opt === undefined)
 		opt = {}
 	var fHasViewBox = f.svgViewboxX !== undefined
@@ -3221,9 +3226,9 @@ function Drawing(f, opt) {
 	wrapperF.exec()
 	opt.container.node().vogo = wrapperF
 	wrapperF.update = function(newArgs) {
-		console.assert(this.getRootCommandsRef().length === 1)
+		console.assert(self.getRootCommandsRef().length === 1)
 		// TODO is this right?
-		var fc = this.execCmds[0]
+		var fc = self.execCmds[0]
 		console.assert(fc instanceof FuncCall)
 		if (newArgs !== undefined) {
 			// leave old, just override
@@ -3233,8 +3238,8 @@ function Drawing(f, opt) {
 					: newArgs[a]
 			}
 		}
-		this.state.reset()
-		return this.exec()
+		self.state.reset()
+		return self.exec()
 	}
 	return wrapperF
 }
