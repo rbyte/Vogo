@@ -943,7 +943,7 @@ var onKeyDown = {
 		}
 	},
 	f2: function() {
-		benchmark(15)
+		benchmark(5)
 	}
 }
 
@@ -1143,6 +1143,8 @@ State.prototype.clone = function() {
 function Expression(exp) {
 	// result of expressions that do not depend on arguments (e.g. "Math.PI/2")
 	this.cachedEvalFromStaticExp
+	this.cachedArgsKeys
+	this.cachedParsedFunction
 	this.set(exp)
 }
 
@@ -1199,27 +1201,12 @@ Expression.prototype.eval = function(command) {
 	console.assert(self.exp !== undefined, "Expression eval: Warning: exp is undefined!")
 	if (self.isConst())
 		return self.exp
-	
 	if (self.isStatic())
 		return self.cachedEvalFromStaticExp
 
 	// TODO fails during parameterisation of branches with the condition "true"
 	console.assert(typeof self.exp === "string")
-	
-	function evalWithChecks(toEval) {
-		var result
-		try {
-			result = eval(toEval)
-		} catch(e) {
-			console.log(toEval)
-			console.log(e)
-			return 1 // be a bit robust
-		}
-		console.assert(self.isNormalResult(result), "eval result is bullshit: "+result)
-		return result
-	}
-	if (command === undefined) // can this ever be true? -> isStatic
-		return evalWithChecks(self.exp)
+	console.assert(command !== undefined)
 	
 	// check whether this command is inside a function call context (which has its own custom arguments)
 	// or, if none, get the calling function
@@ -1252,9 +1239,6 @@ Expression.prototype.eval = function(command) {
 	}
 	
 	var argsCount = Object.keys(mainArgProvider).length
-	if (argsCount === 0 && loopIndex === undefined)
-		return evalWithChecks(self.exp)
-	
 	var shortCut = mainArgProvider[self.exp]
 	if (shortCut !== undefined) { // exp is just a variable
 	// shortCut here is an argument of the global scope (a function)
@@ -1266,6 +1250,7 @@ Expression.prototype.eval = function(command) {
 	// TODO speed up further.
 	var argsKeys = Object.keys(mainArgProvider)
 	var argsValues = []
+
 	for (var arg in mainArgProvider) { // arguments itself are Expressions
 		// TODO args are evaluated in a chain -> this is very slow! it spans a tree
 		var argV
@@ -1280,11 +1265,9 @@ Expression.prototype.eval = function(command) {
 		} else {
 			argV = mainArgProvider[arg].eval()
 		}
-//		fc !== undefined && fc.root.customArguments[arg] !== undefined
-//			? fc.root.customArguments[arg].eval(fc)
-//			: mainArgProvider[arg].eval()
 		argsValues.push(argV)
 	}
+
 	if (loopIndex !== undefined) {
 		argsKeys.push("i")
 		argsValues.push(loopIndex)
@@ -1299,17 +1282,46 @@ Expression.prototype.eval = function(command) {
 		console.log(self.exp)
 		console.log(e)
 	}
+
 	try {
-		// THIS IS THE CRUCIAL LINE. construct function that has all the arguments for expression eval
-		// TODO this is the #1 performance killer
-		result = new Function(argsKeys, "return "+self.exp).apply(this, argsValues)
+		if (self.cachedParsedFunction === undefined || !arraysEqual(self.cachedArgsKeys, argsKeys)) {
+			// construct function that has all the arguments for expression eval
+			// cache result of parse -> very important for performance!
+			self.cachedParsedFunction = new Function(argsKeys, "return "+self.exp)
+			self.cachedArgsKeys = argsKeys
+		}
+		result = self.cachedParsedFunction.apply(this, argsValues)
 	} catch(e) {
 		errorMsg(e)
 		return 1 // be a bit robust
 	}
-	if (!self.isNormalResult(result))
+	if (!self.isNormalResult(result)) {
 		errorMsg("is not a normal result.")
+	}
 	return result
+}
+
+// http://stackoverflow.com/questions/3115982/how-to-check-javascript-array-equals
+function arraysEqual(a, b) {
+	if (a === b)
+		return true
+	if (a == null || b == null)
+		return false
+	if (a.length !== b.length)
+		return false
+	for (var i = 0; i < a.length; ++i)
+		if (a[i] !== b[i])
+			return false
+	return true
+}
+
+function arrayTypesEqual(arr, types) {
+	if (arr.length !== types.length)
+		return false
+	for (var i=0; i<arr.length; i++)
+		if(!(arr[i] instanceof types[i]))
+			return false
+	return true
 }
 
 // this is used to determine the precision of the interactive drag-adjustment for numbers
@@ -3271,15 +3283,6 @@ function automaticTest() {
 	p.delete(0)
 	console.assert(p.getLength() === 1)
 	console.assert(p.getFirst().x === 2)
-
-	function arrayTypesEqual(arr, types) {
-		if (arr.length !== types.length)
-			return false
-		for (var i=0; i<arr.length; i++)
-			if(!(arr[i] instanceof types[i]))
-				return false
-		return true
-	}
 	
 	console.assert(F_.commands.length === 0)
 	
