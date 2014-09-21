@@ -894,7 +894,7 @@ var onKeyDown = {
 				// force redraw; to make progression visible
 				setTimeout(function() {
 					loadExample(i+1)
-				}, 10)
+				}, 50)
 			}
 		}
 		if (keyPressed.ctrl) {
@@ -3992,10 +3992,10 @@ vogo.examples.push(function() {
 vogo.examples.push(function() {
 	var αGrow = new vogo.Func({
 		name: "αGrow",
-		args: {"a": 12, "b": 40, "aF": 0.6, "bF": 0.6, "aFM": 0.8, "bFM": 1},
-		viewBox: {x:-44.660, y:-58.454, w:92.516, h:80.500}});
+		args: {"a": 8, "b": 50, "aF": 0.611, "bF": 1.03, "aFM": 0.768, "bFM": 0.512},
+		viewBox: {x:-35.852, y:-42.357, w:73.112, h:52.930}});
 	αGrow.setCommands([
-		new vogo.Branch("a>3", [
+		new vogo.Branch("a>1", [
 			new vogo.Move("a"),
 			new vogo.Rotate("-b"),
 			new vogo.FuncCall(αGrow, {"a": "a*aF", "b": "b*bF"}),
@@ -4008,8 +4008,8 @@ vogo.examples.push(function() {
 
 	var snowflake = new vogo.Func({
 		name: "snowflake",
-		args: {"branches": 5},
-		viewBox: {x:-51.586, y:-50.478, w:106.394, h:92.575}});
+		args: {"branches": 6},
+		viewBox: {x:-63.999, y:-44.259, w:127.873, h:92.575}});
 	snowflake.setCommands([
 		new vogo.Loop("branches", [
 			new vogo.FuncCall(αGrow, {}),
