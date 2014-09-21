@@ -90,8 +90,7 @@ vogo.init = function() {
 	new Func().addToUI()
 	setupUIEventListeners()
 	automaticTest()
-//	addExampleToUI(examples[30]())
-//	benchmark(15)
+//	addExampleToUI(examples[32]())
 }
 
 function run(f) {
@@ -733,14 +732,16 @@ function addExampleToUI(fs) {
 }
 
 function benchmark(numberOfRuns) {
+	updateNotification("Running Benchmark...", 9000)
 	var benchmarkResults = []
 	examples.forEach(function(t) {
 		addExampleToUI(t())
 		benchmarkResults.push(runBenchmarkBasedOnRepetitions(numberOfRuns))
 		resetUI()
 	})
-	console.log("Benchmark Result:\n"+Math.round(d3.sum(benchmarkResults)/numberOfRuns)
-		+"\n\tDetails: "+benchmarkResults.join("; ")+"\n")
+	var result = "Benchmark Result: \n"+Math.round(d3.sum(benchmarkResults)/numberOfRuns)
+	updateNotification(result, 9000)
+	console.log(result+"\n\tDetails: "+benchmarkResults.join("; ")+"\n")
 	loopDragPerformanceBenchmark()
 }
 
@@ -942,7 +943,7 @@ var onKeyDown = {
 		}
 	},
 	f2: function() {
-
+		benchmark(15)
 	}
 }
 
@@ -1369,6 +1370,7 @@ Command.prototype.shallowClone = function(scope) {
 		console.assert(self.proxies === undefined)
 	if (self.root.proxies === undefined)
 		self.root.proxies = []
+	// TODO may want to c.proxyPos =
 	self.root.proxies.push(c)
 	// scope is the initiator of the clone
 	console.assert(scope !== undefined)
@@ -1429,17 +1431,18 @@ Command.prototype.deleteProxyCommand = function() {
 	console.assert(self.proxies === undefined) // -> is proxy
 	console.assert(self.root.proxies.length > 0)
 	self.removeVisible()
-	
+
+	// TODO self.root.proxies.length may be huge -> indexOf slow
 	var idx = self.root.proxies.indexOf(self)
 	console.assert(idx !== -1)
 	self.root.proxies.splice(idx, 1)
-	
+
 	console.assert(self.scope.canContainCommands())
 	console.assert(self.scope.execCmds.length > 0)
-	idx = self.scope.execCmds.indexOf(self)
+	var idx = self.scope.execCmds.indexOf(self)
 	console.assert(idx !== -1)
 	self.scope.execCmds.splice(idx, 1)
-	
+
 	delete self.root
 	delete self.scope
 }
@@ -3918,6 +3921,34 @@ vogo.examples.push(function() {
 	return wildTree
 })
 
+vogo.examples.push(function() {
+	var αGrow = new vogo.Func({
+		name: "αGrow",
+		args: {"a": 12, "b": 40, "aF": 0.6, "bF": 0.6, "aFM": 0.8, "bFM": 1},
+		viewBox: {x:-44.660, y:-58.454, w:92.516, h:80.500}});
+	αGrow.setCommands([
+		new vogo.Branch("a>3", [
+			new vogo.Move("a"),
+			new vogo.Rotate("-b"),
+			new vogo.FuncCall(αGrow, {"a": "a*aF", "b": "b*bF"}),
+			new vogo.Rotate("b"),
+			new vogo.Rotate("b"),
+			new vogo.FuncCall(αGrow, {"a": "a*aF", "b": "b*bF"}),
+			new vogo.Rotate("-b"),
+			new vogo.FuncCall(αGrow, {"a": "a*aFM", "b": "b*bFM"}),
+			new vogo.Move("-a")], [])]);
+
+	var snowflake = new vogo.Func({
+		name: "snowflake",
+		args: {"branches": 5},
+		viewBox: {x:-51.586, y:-50.478, w:106.394, h:92.575}});
+	snowflake.setCommands([
+		new vogo.Loop("branches", [
+			new vogo.FuncCall(αGrow, {}),
+			new vogo.Rotate("360/branches")])]);
+
+	return [αGrow, snowflake]
+})
 
 return vogo
 }()
