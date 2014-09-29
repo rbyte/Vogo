@@ -68,6 +68,7 @@ big
 		make recursion depth depend on run execution time
 	store which expression requires which variables, so I only eval those
 	drag in input field with expressions
+	similar to "a" -> create parameters, new command to encapsulate selection into new function
 
 new commands
 	mirror

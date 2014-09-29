@@ -77,6 +77,9 @@ a {
 	/*background-color: #fff;*/
     background: url("../images/cardboard_flat_030_200x200.png") repeat scroll 0 0 #fff;
 }
+.turtle, .turtleHome {
+    pointer-events: none;
+}
 svg line {
 	cursor: pointer;
 }

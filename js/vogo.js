@@ -1399,6 +1399,14 @@ Command.prototype.commonCommandConstructor = function() {
 	self.isSelectedCache = false
 }
 
+Command.prototype.evalMainParameter = function() {
+	var self = this
+	if (self.root.mainParameter !== undefined) { // FuncCall never sets it
+		console.assert(self.root.mainParameter instanceof Expression)
+		return self.root.mainParameter.eval(self)
+	}
+}
+
 Command.prototype.setMainParameter = function(x) {
 	var self = this
 	if (x !== undefined)
@@ -1408,11 +1416,26 @@ Command.prototype.setMainParameter = function(x) {
 			self.root.mainParameter.set(x)
 }
 
-Command.prototype.evalMainParameter = function() {
+Command.prototype.changeSelectedInSync = function(newValue) {
 	var self = this
-	if (self.root.mainParameter !== undefined) { // FuncCall never sets it
-		console.assert(self.root.mainParameter instanceof Expression)
-		return self.root.mainParameter.eval(self)
+	selection.e.forEach(function(e) {
+		if (e instanceof self.myConstructor
+			&& e.root !== self.root)
+//			&& e.root.mainParameter.isConst()
+			e.setMainParameter(newValue)
+	})
+}
+
+Command.prototype.updateMainParameter = function(newValue) {
+	var self = this
+	if (newValue !== undefined) {
+		if (newValue !== "") {
+			var c = self.myConstructor
+			console.assert(c === Move || c === Rotate || c === Loop)
+			self.setMainParameter(newValue)
+			self.changeSelectedInSync(newValue)
+		}
+		run()
 	}
 }
 
@@ -1657,27 +1680,6 @@ Command.prototype.isInsideFuncCallButNotSelfRecursing = function() {
 
 Command.prototype.isNotInsideFuncCallOrSelfRecursing = function() {
 	return !this.isInsideFuncCallButNotSelfRecursing()
-}
-
-Command.prototype.changeSelectedInSync = function(newValue) {
-	var self = this
-	selection.e.forEach(function(e) {
-		if (e instanceof self.myConstructor
-			&& e.root !== self.root)
-//			&& e.root.mainParameter.isConst()
-				e.setMainParameter(newValue)
-	})
-}
-
-Command.prototype.updateMainParameter = function(newValue) {
-	var self = this
-	if (newValue !== undefined) {
-		var c = self.myConstructor
-		console.assert(c === Move || c === Rotate || c === Loop)
-		self.setMainParameter(newValue)
-		self.changeSelectedInSync(newValue)
-		run()
-	}
 }
 
 Command.prototype.createDragBehavior = function(element) {
