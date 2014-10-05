@@ -51,7 +51,7 @@ var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
 	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x", 90: "z", 112: "f1", 113: "f2",
-	114: "f3", 115: "f4" }
+	114: "f3", 115: "f4", 8: "backspace" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -851,6 +851,12 @@ var onKeyDown = {
 		selection.removeDeselectAndDeleteAllCompletely()
 		run()
 	},
+	backspace: function() {
+		selection.removeDeselectAndDeleteAllCompletely()
+		run()
+		// intended to prevent the browser to go back in the history
+		d3.event.stopPropagation()
+	},
 	esc: function() {
 		manipulation.remove()
 	},
@@ -1346,7 +1352,9 @@ function getPrecision(n) {
 Expression.prototype.adjustDragstart = function(dragPrecision) {
 	var self = this
 	if (self.isConst()) {
-		self.dragStartMouseX = d3.mouse(domSvg)[0]
+		var mouse = d3.mouse(domSvg)
+		self.dragStartMouseX = mouse[0]
+		self.dragStartMouseY = mouse[1]
 		self.originalValue = self.eval()
 		self.dragPrecision = dragPrecision !== undefined ? dragPrecision : getPrecision(self.originalValue)
 	}
@@ -1355,17 +1363,23 @@ Expression.prototype.adjustDragstart = function(dragPrecision) {
 Expression.prototype.getNewValueFromDrag = function() {
 	var self = this
 	if (self.isConst()) {
-		var mouseDiff = d3.mouse(domSvg)[0] - self.dragStartMouseX
+		var mouse = d3.mouse(domSvg)
+		var mouseDiffX = mouse[0] - self.dragStartMouseX
+		var mouseDiffY = mouse[1] - self.dragStartMouseY
+
+		// is approx in 0.3 (down) - 3.0 (up)
+		var yFactor = Math.pow(10, -mouseDiffY/F_.svgViewboxHeight)
+		
 		// the number of digits after the comma influences how much the number changes on drag
 		// 20.01 will only change slightly, whereas 100 will change rapidly
 		// the factors change the FEEL of the drag and are really important: I found those to work well.
-		mouseDiff *= Math.pow(10, self.dragPrecision*0.6)*0.6
+		var delta = mouseDiffX * Math.pow(10, self.dragPrecision*0.6)*0.6*yFactor
 		// small Bug: the order of magnitude changes unexpectedly in the next drag,
 		// when the value is left of ending with .xy0, because the 0 is forgotten
-		mouseDiff = parseFloat(mouseDiff.toFixed(Math.max(0, -self.dragPrecision)))
-		// yes, we need to do the rounding twice: mouseDiff, to reduce reruns
+		delta = parseFloat(delta.toFixed(Math.max(0, -self.dragPrecision)))
+		// yes, we need to do the rounding twice: delta, to reduce reruns
 		// and newValue to get the precision right (+ can reintroduce rounding errors)
-		var newValue = parseFloat((self.originalValue+mouseDiff).toFixed(Math.max(0, -self.dragPrecision)))
+		var newValue = parseFloat((self.originalValue + delta).toFixed(Math.max(0, -self.dragPrecision)))
 		if (self.eval(/*const!*/) !== newValue)
 			return newValue
 	}
@@ -3068,11 +3082,6 @@ Branch.prototype.execInner = function(callerF) {
 	
 	if (drawIcons && self.iconG === undefined) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
-//		self.iconG.append("text").text("?")
-//		callerF.paintingG
-		self.iconG.trueL = self.iconG.append("line").attr({x1: 1, y1: 1, x2: 2, y2: 0})
-		self.iconG.falseL = self.iconG.append("line").attr({x1: 1, y1: 1, x2: 2, y2: 2})
-		self.iconG.baseL = self.iconG.append("line").attr({x1: 0, y1: 1, x2: 1, y2: 1})
 			.on("click", function() {
 				if (!manipulation.isCreating()) {
 					selection.add(self)
@@ -3080,6 +3089,11 @@ Branch.prototype.execInner = function(callerF) {
 					d3.event.stopPropagation()
 				}
 			})
+//		self.iconG.append("text").text("?")
+//		callerF.paintingG
+		self.iconG.trueL = self.iconG.append("line").attr({x1: 1, y1: 1, x2: 2, y2: 0})
+		self.iconG.falseL = self.iconG.append("line").attr({x1: 1, y1: 1, x2: 2, y2: 2})
+		self.iconG.baseL = self.iconG.append("line").attr({x1: 0, y1: 1, x2: 1, y2: 1})
 	}
 
 	if (drawIcons) {

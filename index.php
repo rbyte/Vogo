@@ -22,9 +22,9 @@
 	</div>
 	<!-- poster="videos/platzhalter.png"  -->
 	<div class="videoBox">
-		<video controls="" preload="auto">
-			<source src="videos/ffmpegOut.webm" type='video/webm; codecs="vp8, vorbis"'>
-			<source src="http://mgrf.de/vogo/videos/ffmpegOut.webm" type='video/webm; codecs="vp8, vorbis"'> 
+		<video controls="" preload="auto" poster="videos/placeholder.png">
+			<!-- <source src="videos/ffmpegOut.webm" type='video/webm; codecs="vp8, vorbis"'> -->
+			<!-- <source src="http://mgrf.de/vogo/videos/ffmpegOut.webm" type='video/webm; codecs="vp8, vorbis"'> -->
 		</video>
 		<p>This video demonstrates how to get started.</p>
 	</div>

@@ -41,6 +41,7 @@ small
 	rotate/move/loop with 0 is not visible
 	remove loops when empty (e.g. removed last inner command)
 	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
+	pan home feature
 
 big
 	automatic tests
