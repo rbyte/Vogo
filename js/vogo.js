@@ -3442,138 +3442,146 @@ function automaticTest() {
 
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "nEck", args: {n: 4}})
-	f.setCommands([
+	var nEck = new vogo.Func({
+		name: "nEck",
+		args: {"n": 4},
+		viewBox: {x:-40.250, y:-23.760, w:103.385, h:70.000}});
+	nEck.setCommands([
 		new vogo.Loop("n", [
 			new vogo.Rotate("360/n"),
-			new vogo.Move("100/n")])
-	])
-	return f
+			new vogo.Move("100/n")])]);
+	return nEck
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "multiSquare", args: {n: 36, ecken: 4}})
-	f.setCommands([
+	var multiSquare = new vogo.Func({
+		name: "multiSquare",
+		args: {"n": 36, "ecken": 4},
+		viewBox: {x:-60.301, y:-39.762, w:118.892, h:80.500}});
+	multiSquare.setCommands([
 		new vogo.Loop("n", [
 			new vogo.Loop("ecken", [
 				new vogo.Rotate("360/ecken"),
 				new vogo.Move("100/ecken")]),
-			new vogo.Rotate("360/n")])
-	])
-	return f
+			new vogo.Rotate("360/n")])]);
+	return multiSquare
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "tree", args: {size: 18}})
-	f.setCommands([
+	var tree = new vogo.Func({
+		name: "tree",
+		args: {"size": 18},
+		viewBox: {x:-51.288, y:-52.769, w:103.385, h:70.000}});
+	tree.setCommands([
 		new vogo.Branch("size<5", [
-				new vogo.Move("size"),
-				new vogo.Move("-size")],
-			[
-				new vogo.Move("size*0.3"),
-				new vogo.Rotate(-40),
-				new vogo.FuncCall(f, {size: "size*0.7"}),
-				new vogo.Rotate(40),
-				new vogo.Move("size*0.4"),
-				new vogo.Rotate(35),
-				new vogo.FuncCall(f, {size: "size*0.7"}),
-				new vogo.Rotate(-35),
-				new vogo.Move("size*0.3"),
-				new vogo.Rotate(35),
-				new vogo.FuncCall(f, {size: "size*0.7"}),
-				new vogo.Rotate(-35),
-				new vogo.Move("-size")
-			])
-	])
-	return f
+			new vogo.Move("size"),
+			new vogo.Move("-size")], [
+			new vogo.Move("size*0.3"),
+			new vogo.Rotate(-40),
+			new vogo.FuncCall(tree, {"size": "size*0.7"}),
+			new vogo.Rotate(40),
+			new vogo.Move("size*0.4"),
+			new vogo.Rotate(35),
+			new vogo.FuncCall(tree, {"size": "size*0.7"}),
+			new vogo.Rotate(-35),
+			new vogo.Move("size*0.3"),
+			new vogo.Rotate(35),
+			new vogo.FuncCall(tree, {"size": "size*0.7"}),
+			new vogo.Rotate(-35),
+			new vogo.Move("-size")])]);
+	return tree
 })
 
 // 3
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "fern", args: {size: 7, sign: 1, shrink: 0.5, length: 0.7}})
-	f.setCommands([
+	var fern = new vogo.Func({
+		name: "fern",
+		args: {"size": 7, "sign": 1, "shrink": 0.5, "length": 0.7},
+		viewBox: {x:-49.942, y:-53.577, w:103.385, h:70.000}});
+	fern.setCommands([
 		new vogo.Branch("size>=1", [
 			new vogo.Move("size"),
 			new vogo.Rotate("70*sign"),
-			new vogo.FuncCall(f, {size: "size*shrink", sign: "-sign"}),
+			new vogo.FuncCall(fern, {"size": "size*shrink", "sign": "-sign"}),
 			new vogo.Rotate("-70*sign"),
 			new vogo.Move("size"),
 			new vogo.Rotate("-70*sign"),
-			new vogo.FuncCall(f, {size: "size*shrink", sign: "sign"}),
+			new vogo.FuncCall(fern, {"size": "size*shrink", "sign": "sign"}),
 			new vogo.Rotate("77*sign"),
-			new vogo.FuncCall(f, {size: "size*length", sign: "sign"}),
+			new vogo.FuncCall(fern, {"size": "size*length", "sign": "sign"}),
 			new vogo.Rotate("-7*sign"),
-			new vogo.Move("-2*size")
-		], [])
-	])
-	return f
+			new vogo.Move("-2*size")], [])]);
+	return fern
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "circle", viewBox: {x:-33.397, y:-74.088, w:176.746, h:153.790}})
-	f.setCommands([
+	var circle = new vogo.Func({
+		name: "circle",
+		viewBox: {x:-58.592, y:-74.088, w:227.136, h:153.790}});
+	circle.setCommands([
 		new vogo.Loop(360, [
 			new vogo.Rotate(1),
-			new vogo.Move(1)
-		])
-	])
-	return f
+			new vogo.Move(1)])]);
+	return circle
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "spirale", args: {step: 2, angle: 25}})
-	f.setCommands([
+	var spirale = new vogo.Func({
+		name: "spirale",
+		args: {"step": 2, "angle": 25},
+		viewBox: {x:-25.934, y:-21.345, w:59.110, h:40.023}});
+	spirale.setCommands([
 		new vogo.Move("step"),
 		new vogo.Rotate("angle"),
 		new vogo.Branch("step<40", [
-			new vogo.FuncCall(f, {step: "step*1.02"})
-		], [])
-	])
-	return f
+			new vogo.FuncCall(spirale, {"step": "step*1.02"})], [])]);
+	return spirale
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({
+	var meinBaum = new vogo.Func({
 		name: "meinBaum",
 		args: {"tiefe": 6, "winkel": 30},
-		viewBox: {x:-39.046, y:-56.526, w:80.449, h:70.000}
-	})
-	f.setCommands([
+		viewBox: {x:-50.514, y:-56.526, w:103.385, h:70.000}});
+	meinBaum.setCommands([
 		new vogo.Branch("tiefe>=0", [
 			new vogo.Move("tiefe*2"),
 			new vogo.Rotate("winkel"),
-			new vogo.FuncCall(f, {tiefe: "tiefe-1"}),
+			new vogo.FuncCall(meinBaum, {"tiefe": "tiefe-1"}),
 			new vogo.Rotate("-winkel*2"),
-			new vogo.FuncCall(f, {tiefe: "tiefe-1"}),
+			new vogo.FuncCall(meinBaum, {"tiefe": "tiefe-1"}),
 			new vogo.Rotate("winkel"),
-			new vogo.Move("-tiefe*2")
-		], [])
-	])
-	return f
+			new vogo.Move("-tiefe*2")], [])]);
+	return meinBaum
 })
 
 // 7
 vogo.examples.push(function() {
-	var nEck = new vogo.Func({name: "nEck2", args: {ne: 36, sz: 5}})
-	nEck.setCommands([
+	var nEck2 = new vogo.Func({
+		name: "nEck2",
+		args: {"ne": 36, "sz": 5},
+		viewBox: {x:-30.450, y:-38.312, w:118.892, h:80.500}});
+	nEck2.setCommands([
 		new vogo.Loop("ne", [
 			new vogo.Rotate("360/ne"),
-			new vogo.Move("sz")])
-	])
-	var mnEck = new vogo.Func({name: "mnEck", args: {ne: 25, sz: 7}})
+			new vogo.Move("sz")])]);
+
+	var mnEck = new vogo.Func({
+		name: "mnEck",
+		args: {"ne": 25, "sz": 7},
+		viewBox: {x:-93.922, y:-60.646, w:180.820, h:122.430}});
 	mnEck.setCommands([
 		new vogo.Loop("ne", [
 			new vogo.Rotate("360/ne"),
-			new vogo.FuncCall(nEck, {ne: "ne", sz: "sz"})])
-	])
-	return [nEck, mnEck]
+			new vogo.FuncCall(nEck2, {"ne": "ne", "sz": "sz"})])]);
+	return [nEck2, mnEck]
 })
 
 vogo.examples.push(function() {
 	var circleSector = new vogo.Func({
 		name: "circleSector",
 		args: {"size": 0.12, "angle": 180, "direction": 1},
-		viewBox: {x:-4.056, y:-10.198, w:23.355, h:15.046}});
+		viewBox: {x:-8.253, y:-12.239, w:29.388, h:19.898}});
 	circleSector.setCommands([
 		new vogo.Loop("angle", [
 			new vogo.Move("size"),
@@ -3582,12 +3590,11 @@ vogo.examples.push(function() {
 	var Wave = new vogo.Func({
 		name: "Wave",
 		args: {"n": 7},
-		viewBox: {x:-13.436, y:-25.773, w:94.485, h:60.870}});
+		viewBox: {x:-11.144, y:-25.773, w:89.900, h:60.870}});
 	Wave.setCommands([
 		new vogo.FuncCall(circleSector, {"direction": "n%2*2-1", "size": "0.12*n/7"}),
 		new vogo.Branch("n>1", [
 			new vogo.FuncCall(Wave, {"n": "n-1"})], [])]);
-
 	return [circleSector, Wave]
 })
 
@@ -3646,23 +3653,27 @@ vogo.examples.push(function() {
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "swirlPyramid", args: {a: 40}})
-	f.setCommands([
+	var swirlPyramid = new vogo.Func({
+		name: "swirlPyramid",
+		args: {"a": 40},
+		viewBox: {x:-51.692, y:-35.000, w:103.385, h:70.000}});
+	swirlPyramid.setCommands([
 		new vogo.Loop("a", [
 			new vogo.Move("60*(i+1)/a"),
-			new vogo.Rotate("90+90/a")])
-	])
-	return f
+			new vogo.Rotate("90+90/a")])]);
+	return swirlPyramid
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({name: "swirlPyramidRecursive", args: {step: 20, x: 0.94, r: -94.1}})
-	f.setCommands([
+	var swirlPyramidRecursive = new vogo.Func({
+		name: "swirlPyramidRecursive",
+		args: {"step": 20, "x": 0.94, "r": -94.1},
+		viewBox: {x:-39.540, y:-32.264, w:67.977, h:46.026}});
+	swirlPyramidRecursive.setCommands([
 		new vogo.Move("step"),
 		new vogo.Rotate("r"),
-		new vogo.FuncCall(f, {step: "step*x"})
-	])
-	return f
+		new vogo.FuncCall(swirlPyramidRecursive, {"step": "step*x"})]);
+	return swirlPyramidRecursive
 })
 
 vogo.examples.push(function() {
@@ -3694,33 +3705,31 @@ vogo.examples.push(function() {
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({
+	var roses = new vogo.Func({
 		name: "roses",
-		args: {stepSize: 2, count: 5, order: 3}
-	})
-	f.setCommands([
+		args: {"stepSize": 2, "count": 5, "order": 3},
+		viewBox: {x:-65.403, y:-45.631, w:118.892, h:80.500}});
+	roses.setCommands([
 		new vogo.Loop("360*count", [
 			new vogo.Move("stepSize"),
-			new vogo.Rotate("i + (2 * order - count) / (2 * count)")])
-	])
-	return f
+			new vogo.Rotate("i + (2 * order - count) / (2 * count)")])]);
+	return roses
 })
 
 vogo.examples.push(function() {
-	var f = new vogo.Func({
+	var dahlia = new vogo.Func({
 		name: "dahlia",
-		args: {kind: 3}
-	})
-	f.setCommands([
+		args: {"kind": 3},
+		viewBox: {x:-23.444, y:-23.023, w:59.110, h:40.023}});
+	dahlia.setCommands([
 		new vogo.Loop(8, [
 			new vogo.Rotate(45),
 			new vogo.Loop("kind", [
 				new vogo.Loop(45, [
 					new vogo.Move(0.5),
 					new vogo.Rotate(4)]),
-				new vogo.Rotate(90)])])
-	])
-	return f
+				new vogo.Rotate(90)])])]);
+	return dahlia
 })
 
 // 18
@@ -3776,7 +3785,7 @@ vogo.examples.push(function() {
 	var circleSeg = new vogo.Func({
 		name: "circleSeg",
 		args: {"angle": 29, "step": 0.5},
-		viewBox: {x:-21.162, y:-33.392, w:52.845, h:46.026}});
+		viewBox: {x:-28.728, y:-33.392, w:67.977, h:46.026}});
 	circleSeg.setCommands([
 		new vogo.Loop("angle", [
 			new vogo.Move("step"),
@@ -4004,7 +4013,6 @@ vogo.examples.push(function() {
 			new vogo.FuncCall(wildTree, {"a": "a*0.9", "angle": "angle*0.5"}),
 			new vogo.Rotate("-angle"),
 			new vogo.Move("-a")], [])]);
-
 	return wildTree
 })
 
