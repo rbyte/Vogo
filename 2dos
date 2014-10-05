@@ -16,7 +16,7 @@ community
 small
 	refactor the naming of label, foreignObject, fo, input, inputField, drawLabel and drawIcons ... very confusing
 	drawIcons -> improve in funCall and branch! -> hide labels when not selected (as in move and rotate)
-	put styles into css
+	funcCall args field length is not updated when dragged to larger number
 	allow esc during drag (of line/rotate/loop) to abort and revert to previous parameters
 	ctrl+d = duplicate selected command -> create proxy, instead of copy (ctrl+c) (can be emulated by funcCall)
 		refactor "set scope" first

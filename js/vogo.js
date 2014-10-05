@@ -13,18 +13,8 @@ var vogo = {}
 var version = 0.1
 var urlToSelf = "http://mgrf.de/vogo/js/vogo.js"
 //var urlToSelf = "http://localhost/dev/vogo/js/vogo.js"
-
-var turtleHomeStyle = {fill: "none", stroke: "#d07f00", "stroke-width": .2}
-var turtleStyle = {fill: "#ffba4c", "fill-opacity": 0.6, stroke: "none"}
 // this is used inside every svg <style>. eases the DOM and is compatible with svg export (& Inkscape).
 var lineDefaultStyle = "stroke: #000; stroke-opacity: 0.8; stroke-width: .25; stroke-linecap: round;"
-var arcStyle = {fill: "#000", "fill-opacity": 0.1}
-var arcStyleInScope = {fill: "#500", "fill-opacity": 0.05}
-var clockStyle = {fill: "#fff", "fill-opacity": 0.01 /*for clickability*/, stroke: "#777", "stroke-width": .05}
-var clockHandStyle = {fill: "#000", "fill-opacity": 0.2}
-var fcArgTextStyle = {cursor: "pointer", "font-size": "10px", color: "#666"}
-var fcTextStyle = {cursor: "pointer"}
-var selectionRectStyle = {"stroke-width": 0.05, stroke: "#000", "stroke-opacity": 1, "fill-opacity": 0}
 var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%",
 	top: "10%", left: "10%", border: "1px solid rgba(0,0,0,0.1)"}
 
@@ -276,7 +266,7 @@ function setupUIEventListeners() {
 								y: dragStart[1],
 								width: 0,
 								height: 0})
-							.style(selectionRectStyle)
+							.classed("selectionRect", true)
 					}
 					dragInProgress = true
 					var w = mousePos[0]-dragStart[0]
@@ -1369,7 +1359,7 @@ Expression.prototype.getNewValueFromDrag = function() {
 
 		// is approx in 0.3 (down) - 3.0 (up)
 		var yFactor = Math.pow(10, -mouseDiffY/F_.svgViewboxHeight)
-		
+
 		// the number of digits after the comma influences how much the number changes on drag
 		// 20.01 will only change slightly, whereas 100 will change rapidly
 		// the factors change the FEEL of the drag and are really important: I found those to work well.
@@ -1546,6 +1536,27 @@ Command.prototype.deleteProxyCommand = function() {
 	delete self.scope
 }
 
+function setMarkAndSelect(d3elem, selectOn, markOn) {
+	var elem = d3elem.node()
+	if (selectOn)
+		elem.setAttribute("selected", 1)
+	else
+		elem.removeAttribute("selected")
+
+	if (markOn)
+		elem.setAttribute("mark", 1)
+	else
+		elem.removeAttribute("mark")
+}
+
+function setInScope(d3elem, inScope) {
+	var elem = d3elem.node()
+	if (inScope)
+		elem.setAttribute("inscope", 1) /* chrome 36 css can not select case-sensitive attributes (like "inScope") */
+	else
+		elem.removeAttribute("inscope")
+}
+
 Command.prototype.updateMarkAndSelect = function(force) {
 	var self = this
 	var selectOn = selection.contains(self)
@@ -1561,12 +1572,10 @@ Command.prototype.updateMarkAndSelect = function(force) {
 		console.assert(self.root.proxies !== undefined)
 		self.root.proxies.forEach(function(p) {
 			// from the proxies, only one can be selected
-			var cssClass = p.isSelectedCache ? "selected mark" : (markOn ? "mark" : "")
-			p.updateCssClass(cssClass, selectOn)
+			p.updateMarkAndSelectInner(p.isSelectedCache, markOn)
 		})
 	} else if (selectChanged) {
-		var cssClass = selectOn ? "selected mark" : (markOn ? "mark" : "")
-		self.updateCssClass(cssClass, selectOn)
+		self.updateMarkAndSelectInner(selectOn, markOn)
 	}
 }
 
@@ -1716,7 +1725,7 @@ Command.prototype.createDragBehavior = function(element) {
 					dragInProgress = true
 					mainSVG.svg.style({cursor: "move"})
 					dragStartState = self.savedState.clone()
-					d3.select(this).classed("dragging", true)
+					d3.select(this).attr("dragging", 1)
 				} else {
 					if (!isNotInsideFuncCallOrSelfRecursing) {
 						updateNotification("Functions can only be edited in their own defintion.", 5000)
@@ -1734,7 +1743,7 @@ Command.prototype.createDragBehavior = function(element) {
 			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
 				dragInProgress = false
 				mainSVG.svg.style({cursor: "default"})
-				d3.select(this).classed("dragging", false)
+				d3.select(this).attr("dragging", null)
 			}
 		})
 }
@@ -1869,10 +1878,10 @@ MainSVG.prototype.svgInit = Func.prototype.svgInit = function() {
 	self.paintingG = self.svg.append("g").attr("class", "paintingG")
 	
 	self.turtleHomeCursor = self.svg.append("g").attr("class", "turtleHome")
-	self.turtleHomeCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleHomeStyle)
+	self.turtleHomeCursor.append("path").attr("d", turtleHomeCursorPath)
 	
 	self.turtleCursor = self.svg.append("g").attr("class", "turtle")
-	self.turtleCursor.append("path").attr("d", turtleHomeCursorPath).style(turtleStyle)
+	self.turtleCursor.append("path").attr("d", turtleHomeCursorPath)
 }
 
 MainSVG.prototype.updateTurtle = function() {
@@ -2375,14 +2384,14 @@ Move.prototype.execInner = function(callerF) {
 Move.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
-		self.lineMainSVG.classed("inScope", on)
+		setInScope(self.lineMainSVG, on)
 	})
 }
 
-Move.prototype.updateCssClass = function(cssClass, selectOn) {
+Move.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	var self = this
 	if (self.lineMainSVG !== undefined)
-		self.lineMainSVG.node().setAttribute("class", cssClass)
+		setMarkAndSelect(self.lineMainSVG, selectOn, markOn)
 	if (selectOn) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
@@ -2453,14 +2462,7 @@ Rotate.prototype.execInner = function(callerF) {
 			|| selection.containsAsRoot(self))
 	
 	if (self.arc === undefined && drawIcons) {
-		self.arc = mainSVG.paintingG.append("path").style(arcStyle)
-			.on("mouseenter", function(d, i) {
-				if (!dragInProgress && !manipulation.isCreating(Rotate))
-					self.arc.style("fill", "#f00")
-			})
-			.on("mouseleave", function(d, i) {
-				self.arc.style("fill", arcStyle.fill)
-			})
+		self.arc = mainSVG.paintingG.append("path")
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
 					selection.add(self)
@@ -2470,6 +2472,7 @@ Rotate.prototype.execInner = function(callerF) {
 				}
 			})
 			.call(self.createDragBehavior(self.arc))
+		self.arc.classed("rotate", true)
 		self.title = self.arc.append("title")
 		self.updateMarkAndSelect(true)
 	}
@@ -2533,14 +2536,14 @@ Rotate.prototype.execInner = function(callerF) {
 Rotate.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
-		self.arc.style(on ? arcStyleInScope : arcStyle)
+		setInScope(self.arc, on)
 	})
 }
 
-Rotate.prototype.updateCssClass = function(cssClass, selectOn) {
+Rotate.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	var self = this
 	if (self.arc !== undefined)
-		self.arc.node().setAttribute("class", cssClass)
+		setMarkAndSelect(self.arc, selectOn, markOn)
 	if (selectOn) {
 		if (self.label !== undefined) {
 			self.label.classed("hide", false)
@@ -2666,8 +2669,9 @@ Loop.prototype.execInner = function(callerF) {
 				)
 		}
 
-		iconG.clockHand = iconG.append("path").style(clockHandStyle)
-		iconG.circleF = iconG.append("circle").style(clockStyle)
+		iconG.classed("loop", true)
+		iconG.clockHand = iconG.append("path")
+		iconG.circleF = iconG.append("circle")
 		iconG.on("click", function () {
 			if (!manipulation.isCreating()) {
 				selection.add(self)
@@ -2785,17 +2789,17 @@ Loop.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
 		self.iconGs.forEach(function(e) {
 			if (e !== undefined)
-				e.style({opacity: on ? 0.4 : 1.0})
+				setInScope(e, on)
 		})
 	})
 }
 
-Loop.prototype.updateCssClass = function(cssClass, selectOn) {
+Loop.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	var self = this
 	if (self.iconGs !== undefined)
-		self.iconGs.forEach(function(i) {
-			if (i !== undefined)
-				i.circleF.node().setAttribute("class", cssClass)
+		self.iconGs.forEach(function(e) {
+			if (e !== undefined)
+				setMarkAndSelect(e, selectOn, markOn)
 		})
 }
 
@@ -2862,11 +2866,11 @@ FuncCall.prototype.execInner = function(callerF) {
 
 	if (self.icon === undefined && drawIcons) {
 		self.icon = createForeignObject(mainSVG.paintingG)
+		self.icon.classed("funcCall", true)
 		self.icon.argF = {}
 		self.icon.body = self.icon.append("xhtml:body")
 		self.icon.body.text = self.icon.body.append("xhtml:text")
 			.text("ƒ"+root.f.name)
-			.style(fcTextStyle)
 			.on("click", function() {
 				selection.add(self)
 				run()
@@ -2885,8 +2889,7 @@ FuncCall.prototype.execInner = function(callerF) {
 		console.assert(self.icon.argF[a] !== undefined)
 		console.assert(self.icon.argF[a].text !== undefined)
 		console.assert(self.icon.argF[a].input === undefined)
-		self.icon.argF[a].text
-			.text(a+"←").style({"font-size": "16px"})
+		self.icon.argF[a].text.text(a+"←").style("font-size", "16px")
 		var value = root.customArguments[a] === undefined ? root.f.args[a].get() : root.customArguments[a].get()
 		if (root.customArguments[a] === undefined)
 			root.customArguments[a] = new Expression(value)
@@ -2930,7 +2933,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	
 	function switchInputFieldForArg(a) {
 		if (self.icon.argF[a].input !== undefined) {
-			self.icon.argF[a].text.text(a).style(fcArgTextStyle)
+			self.icon.argF[a].text.text(a).style("font-size", null)
 			self.icon.argF[a].inputDiv.remove() // input is inside inputDiv
 			self.icon.argF[a].input = undefined
 			delete root.customArguments[a]
@@ -2950,7 +2953,7 @@ FuncCall.prototype.execInner = function(callerF) {
 				self.icon.argF[a] = self.icon.argUl.append("xhtml:li").attr("class", "titleRow")
 				self.icon.argF[a].text = self.icon.argF[a].append("xhtml:div")
 					.attr("class", "titleRowCellLast")
-					.text(a).style(fcArgTextStyle)
+					.text(a)
 					// need to closure in "a" because when click is called, "a" changed
 					.on("click", (function(a) {
 						return function() { switchInputFieldForArg(a) }
@@ -2995,14 +2998,14 @@ FuncCall.prototype.execInner = function(callerF) {
 FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
-		self.icon.style({opacity: on ? 0.3 : 1.0})
+		setInScope(self.icon, on)
 	})
 }
 
-FuncCall.prototype.updateCssClass = function(cssClass, selectOn) {
+FuncCall.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	var self = this
 	if (self.icon !== undefined)
-		self.icon.body.text.node().setAttribute("class", cssClass)
+		setMarkAndSelect(self.icon, selectOn, markOn)
 }
 
 FuncCall.prototype.getVisibleElementsFromMainSVG = function() {
@@ -3100,8 +3103,8 @@ Branch.prototype.execInner = function(callerF) {
 		var size = 1/Math.pow(Math.max(1,self.scopeDepth), 0.3)
 		self.iconG.attr("transform", "translate("+(callerF.state.x+1.5*size)+","+(callerF.state.y-1*size)+") scale("+size+")")
 		var takenBranchColor = branchCmds.length === 0 ? /*dead end branch*/ "#b00" : "#0b0"
-		self.iconG.trueL.style({stroke: condEval ? takenBranchColor : "#bbb"})
-		self.iconG.falseL.style({stroke: condEval ? "#bbb" : takenBranchColor})
+		self.iconG.trueL.style("stroke", condEval ? takenBranchColor : "#bbb")
+		self.iconG.falseL.style("stroke", condEval ? "#bbb" : takenBranchColor)
 		self.indicateIfInsideAnySelectedCommandsScope()
 	}
 
@@ -3154,14 +3157,14 @@ Branch.prototype.execInner = function(callerF) {
 Branch.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
-		self.iconG.style({opacity: on ? 0.5 : 1.0})
+		setInScope(self.iconG, on)
 	})
 }
 
-Branch.prototype.updateCssClass = function(cssClass, selectOn) {
+Branch.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	var self = this
 	if (self.iconG !== undefined)
-		self.iconG.baseL.node().setAttribute("class", cssClass)
+		setMarkAndSelect(self.iconG.baseL, selectOn, markOn)
 }
 
 Branch.prototype.getVisibleElementsFromMainSVG = function() {

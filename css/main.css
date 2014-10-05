@@ -77,59 +77,123 @@ a {
 	/*background-color: #fff;*/
     background: url("../images/cardboard_flat_030_200x200.png") repeat scroll 0 0 #fff;
 }
+
+
+
+
+
+.turtle path {
+    fill: #ffba4c;
+    fill-opacity: 0.6;
+    stroke: none;
+}
+.turtleHome path {
+    fill: none;
+    stroke: #d07f00;
+    stroke-width: .2;
+}
 .turtle, .turtleHome {
     pointer-events: none;
 }
-svg line {
+.selectionRect {
+    stroke: #000;
+    stroke-opacity: 1;
+    /*stroke-width: 0.05;*/
+    vector-effect: non-scaling-stroke;
+    fill-opacity: 0;
+}
+
+
+svg line, .rotate {
 	cursor: pointer;
 }
-path.selected, line.selected, circle.selected {
-	stroke: #f00 !important;
-	stroke-opacity: 1;
+.rotate {
+    fill: #000;
+    fill-opacity: 0.1;
 }
-text.selected {
-	color: #f00;
+.rotate:hover {
+    fill: #f00;
 }
-path.selected, path.mark {
+.loop path {
+    fill: #000;
+    fill-opacity: 0.2;
+}
+.loop circle {
+    fill: #fff;
+    fill-opacity: 0.01; /*for clickability*/
+    stroke: #777;
+    stroke-width: .05;
+}
+.funcCall > body > text { /*ƒ..*/
+    cursor: pointer;
+}
+.funcCall > body > ul div { /*arg*/
+    cursor: pointer;
+    font-size: 10px;
+    color: #666;
+}
+.branch line {
+    stroke: #666;
+    stroke-width: .3;
+    stroke-linecap: round;
+}
+
+
+.rotate[selected], line[selected], .loop[selected] circle {
+    stroke: #f00;
+    stroke-opacity: 1;
+}
+.funcCall[selected] > body > text { /*ƒ..*/
+    color: #f00;
+}
+.rotate[selected], .rotate[mark] {
 	/*shape-rendering: crispEdges;*/
 	vector-effect: non-scaling-stroke;
 }
-path.mark:not(.selected), line.mark:not(.selected), circle.mark:not(.selected) {
-	stroke: #00f !important;
+.rotate[mark]:not([selected]), line[mark]:not([selected]), .loop[mark]:not([selected]) circle {
+	stroke: #00f;
 	stroke-opacity: 1;
 }
-
-path.dragging { /*rotate*/
-	fill: #f0f !important;
-	fill-opacity: 1 !important;
+.funcCall[mark]:not([selected]) > body > text {
+    color: #44f;
 }
-line.dragging { /*move line*/
-	stroke: #f0f !important;
-    stroke-opacity: 1 !important;
+.branch[mark]:not([selected]) line {
+    stroke: #00f;
 }
-g.dragging path { /*loop clock*/
-    fill: #f0f !important;
-    fill-opacity: 1 !important;
-}
-line.inScope {
-    stroke: #500;
-    stroke-opacity: 0.4;
+.branch[selected] line {
+    stroke: #f00;
 }
 
-text.mark:not(.selected) {
-	color: #44f;
+
+line[inscope] {
+    stroke-opacity: 0.3 !important;
 }
-.branch line {
-	stroke: #666;
-	stroke-width: .3;
-	stroke-linecap: round;
+.rotate[inscope] {
+    fill-opacity: 0.05 !important;
 }
-.branch.mark:not(.selected) line {
-	stroke: #00f !important;
+.loop[inscope], .funcCall[inscope], .branch[inscope] {
+    opacity: 0.4 !important;
 }
-.branch.selected line {
-	stroke: #f00 !important;
+
+
+.rotate[dragging] {
+	fill: #f0f;
+	fill-opacity: 1;
 }
+line[dragging] {
+	stroke: #f0f;
+    stroke-opacity: 1;
+}
+.loop[dragging] path {
+    fill: #f0f;
+    fill-opacity: 1;
+}
+
+
+
+
+
+
 #functions #ul_f {
 	list-style: none;
 	margin: 7% 7% 3% 7%;
