@@ -13,11 +13,11 @@
 <body>
 <div class="container">
 	<div class="iconBox">
-		<img class="vogoIcon" src="images/vogo.svg">
+		<a href="run.php"><img class="vogoIcon" src="images/vogo.svg"></a>
 		<p class="title">Vogo</p>
 		<p>An experimental <a href="http://en.wikipedia.org/wiki/Direct_manipulation_interface">direct manipulation interface</a> for <a href="http://en.wikipedia.org/wiki/Turtle_graphics">Turtle Graphics</a>.</p>
 		<p><a class="startLink" href="run.php">Try it!</a></p>
-		<p>Master thesis project by Matthias Graf.</p>
+		<p><a href="MA.pdf">Master thesis</a> project by Matthias Graf.</p>
 		<p><a href="https://github.com/rbyte/Vogo">View source.</a></p>
 	</div>
 	<!-- poster="videos/platzhalter.png"  -->
