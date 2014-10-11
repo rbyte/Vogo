@@ -11,33 +11,34 @@
     </style>
 </head>
 <body>
-<svg id="mysvg" xmlns="http://www.w3.org/2000/svg" viewBox="-50 -40 100 50"></svg>
+<svg id="mysvg" viewBox="-50 -30 100 50"></svg>
 <script>
-    var roundabout = new vogo.Func({
-        name: "roundabout",
-        args: {"rotate": 16, "step": 4, "stepF": 0.974, "iterations": 200},
-        viewBox: {x:-14.134, y:-18.269, w:49.428, h:29.831}});
-    roundabout.setCommands([
-        new vogo.Loop("iterations", [
-            new vogo.Move("step*Math.pow(stepF,i+1)"),
-            new vogo.Rotate("rotate")])]);
 
-    var drawing = d3.select("#mysvg").append("g")
-            .call(vogo.draw(roundabout));
+var roundabout = new vogo.Func({
+    name: "roundabout",
+    args: {"rotate": 16, "step": 4, "stepF": 0.974, "iterations": 200},
+    viewBox: {x:-14.134, y:-18.269, w:49.428, h:29.831}});
+roundabout.setCommands([
+    new vogo.Loop("iterations", [
+        new vogo.Move("step*Math.pow(stepF,i+1)"),
+        new vogo.Rotate("rotate")])]);
 
-    (function repeat() {
-        drawing.transition()
-                .duration(250000)
-                .ease("linear")
-                .tween("my", function () {
-                    var i = d3.interpolate(0, 360)
-                    return function (t) {
-                        var stepChange = 1+1-(t-0.5)*(t-0.5)*8
-                        vogo.update({rotate: i(t), step: 20*stepChange})(this)
-                    }
-                })
-                .each("end", repeat)
-    })()
+var drawing = d3.select("#mysvg").append("g")
+        .call(vogo.draw(roundabout));
+
+(function repeat() {
+    drawing.transition()
+        .duration(200000)
+        .ease("linear")
+        .tween("my", function () {
+            var i = d3.interpolate(0, 360)
+            return function (t) {
+                var stepChange = 1+1-(t-0.5)*(t-0.5)*8
+                vogo.update({rotate: i(t), step: 20*stepChange})(this)
+            }
+        })
+        .each("end", repeat)
+})()
 
 </script>
 </body>

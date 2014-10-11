@@ -15,8 +15,8 @@ var urlToSelf = "http://mgrf.de/vogo/js/vogo.js"
 //var urlToSelf = "http://localhost/dev/vogo/js/vogo.js"
 // this is used inside every svg <style>. eases the DOM and is compatible with svg export (& Inkscape).
 var lineDefaultStyle = "stroke: #000; stroke-opacity: 0.8; stroke-width: .25; stroke-linecap: round;"
-var defaultSvgDrawingStyle = {position: "fixed", width: "80%", height: "80%",
-	top: "10%", left: "10%", border: "1px solid rgba(0,0,0,0.1)"}
+var defaultSvgDrawingStyle = {position: "fixed", width: "96%", height: "96%",
+	top: "4%", left: "4%", border: "1px solid rgba(0,0,0,0.1)"}
 
 var zoomFactor = 1.15 // macs tend to have finer grain mouse wheel ticks
 var zoomTransitionDuration = 150
