@@ -1,53 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<meta charset='utf-8'>
-	<title>Vogo Export</title>
-	<script src='http://d3js.org/d3.v3.min.js'></script>
-	<script src='js/vogo.js'></script>
-
+    <meta charset='utf-8'>
+    <title>Vogo Export</title>
+    <script src='http://d3js.org/d3.v3.min.js'></script>
+    <script src='http://mgrf.de/vogo/js/vogo.js'></script>
     <style>
-        #mysvg {
-            position: fixed;
-            width: 80%;
-            height: 80%;
-            top: 10%;
-            left: 10%;
-            border: 1px solid rgba(0,0,0,0.1);
-        }
+        #mysvg { position: fixed; width: 94%; height: 94%; top: 3%; left: 3%; border: 1px solid rgba(0,0,0,0.1); }
+        svg line { stroke: #000; stroke-opacity: 1; stroke-width: .3; stroke-linecap: round; }
     </style>
 </head>
 <body>
-<svg id="mysvg"
-     xmlns="http://www.w3.org/2000/svg"
-     viewBox="-100 -50 200 100">
-    <style>svg line { stroke: #000; stroke-opacity: 0.8; stroke-width: .25; stroke-linecap: round; }</style>
-</svg>
-
+<svg id="mysvg" xmlns="http://www.w3.org/2000/svg" viewBox="-50 -40 100 50"></svg>
 <script>
-var regularPolygon = new vogo.Func({
-    name: "regularPolygon",
-    args: {"n": 5},
-    viewBox: {x:-17, y:-17, w:60, h:52}});
-regularPolygon.setCommands([
-    new vogo.Loop("n", [
-        new vogo.Rotate("360/n"),
-        new vogo.Move("100/n")])]);
+    var roundabout = new vogo.Func({
+        name: "roundabout",
+        args: {"rotate": 16, "step": 4, "stepF": 0.974, "iterations": 200},
+        viewBox: {x:-14.134, y:-18.269, w:49.428, h:29.831}});
+    roundabout.setCommands([
+        new vogo.Loop("iterations", [
+            new vogo.Move("step*Math.pow(stepF,i+1)"),
+            new vogo.Rotate("rotate")])]);
 
-if (true)
-    d3.select("#mysvg").append("g")
-        .call(vogo.draw(regularPolygon, {n: 10}))
-        .call(vogo.update({n: 3}))
+    var drawing = d3.select("#mysvg").append("g")
+            .call(vogo.draw(roundabout));
 
-if (false) {
-    var data = [3, 5, 7]
-    data.forEach(function(e) {
-        new vogo.Drawing(regularPolygon, {
-            arguments: {n: e},
-            container: d3.select("#mysvg").append("g")
-        })
-    })
-}
+    (function repeat() {
+        drawing.transition()
+                .duration(250000)
+                .ease("linear")
+                .tween("my", function () {
+                    var i = d3.interpolate(0, 360)
+                    return function (t) {
+                        var stepChange = 1+1-(t-0.5)*(t-0.5)*8
+                        vogo.update({rotate: i(t), step: 20*stepChange})(this)
+                    }
+                })
+                .each("end", repeat)
+    })()
+
 </script>
 </body>
 </html>
