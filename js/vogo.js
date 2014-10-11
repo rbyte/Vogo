@@ -717,8 +717,10 @@ function addExampleToUI(fs) {
 	// each example may contain one or more functions
 	if (fs instanceof Array)
 		fs.forEach(function(f) { f.addToUI() })
-	else
+	else if (fs.addToUI !== undefined)
 		fs.addToUI()
+	else if (examples[fs] !== undefined)
+		addExampleToUI(examples[fs]())
 }
 
 function benchmark(numberOfRuns) {
@@ -3274,7 +3276,12 @@ vogo.draw = function(f, args) {
 }
 // for d3.call()
 vogo.update = function(args) {
-	return function(elem) { return elem.node().vogo.update(args) }
+	return function(elem) {
+		if (elem.node !== undefined)
+			return elem.node().vogo.update(args)
+		else
+			return elem.vogo.update(args)
+	}
 }
 
 // export
@@ -3288,6 +3295,8 @@ vogo.FuncCall = FuncCall
 vogo.Branch = Branch
 vogo.Drawing = Drawing
 vogo.examples = examples
+// in the browser shell, you can use: vogo.addExampleToUI(32)
+vogo.addExampleToUI = addExampleToUI
 
 // for use in UI
 vogo.pi = Math.PI
@@ -4022,6 +4031,46 @@ vogo.examples.push(function() {
 })
 
 vogo.examples.push(function() {
+	var thread = new vogo.Func({
+		name: "thread",
+		args: {"step": 5, "angle": 30, "reductionFactor": 0.3, "data": "[true,false,false]"},
+		viewBox: {x:-19.175, y:-23.819, w:58.342, h:39.451}});
+	thread.setCommands([
+		new vogo.Loop("data.length", [
+			new vogo.Branch("data[i]", [
+				new vogo.Rotate("angle")], [
+				new vogo.Rotate("-angle")]),
+			new vogo.Move("step*(1-i/data.length*reductionFactor)")]),
+		new vogo.Loop("data.length", [
+			new vogo.Move("-step*(1-(data.length-(i+1))/data.length*reductionFactor)"),
+			new vogo.Branch("data[(data.length-(i+1))]", [
+				new vogo.Rotate("-angle")], [
+				new vogo.Rotate("angle")])])]);
+
+	var notabilia = new vogo.Func({
+		name: "notabilia",
+		args: {"step": 10, "angle": 10, "reductionFactor": 0.9, "data": "[[true,true,true],[false,false,false],[true,false,false]]"},
+		viewBox: {x:-22.721, y:-21.379, w:58.342, h:39.451}});
+	notabilia.setCommands([
+		new vogo.Loop("data.length", [
+			new vogo.FuncCall(thread, {"data": "data[i]", "step": "step", "angle": "angle", "reductionFactor": "reductionFactor"})])]);
+
+	return [thread, notabilia]
+})
+
+vogo.examples.push(function() {
+	var roundabout = new vogo.Func({
+		name: "roundabout",
+		args: {"rotate": 16, "step": 4, "stepF": 0.974, "iterations": 70},
+		viewBox: {x:-14.134, y:-18.269, w:49.428, h:29.831}});
+	roundabout.setCommands([
+		new vogo.Loop("iterations", [
+			new vogo.Move("step*Math.pow(stepF,i+1)"),
+			new vogo.Rotate("rotate")])]);
+	return roundabout
+})
+
+vogo.examples.push(function() {
 	var αGrow = new vogo.Func({
 		name: "αGrow",
 		args: {"a": 8, "b": 50, "aF": 0.611, "bF": 1.03, "aFM": 0.768, "bFM": 0.512},
@@ -4049,6 +4098,10 @@ vogo.examples.push(function() {
 
 	return [αGrow, snowflake]
 })
+
+// 34
+
+
 
 return vogo
 }()
