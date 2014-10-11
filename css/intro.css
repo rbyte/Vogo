@@ -54,3 +54,7 @@ a {
 .videoBox video {
 	width: 100%;
 }
+#examplesCollection {
+    width: 60%;
+    /*opacity: 0.5;*/
+}

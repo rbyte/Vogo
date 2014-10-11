@@ -14,6 +14,7 @@ community
 	show examples
 
 small
+	improve call drag! -> often accidental calls
 	refactor the naming of label, foreignObject, fo, input, inputField, drawLabel and drawIcons ... very confusing
 	drawIcons -> improve in funCall and branch! -> hide labels when not selected (as in move and rotate)
 	funcCall args field length is not updated when dragged to larger number
@@ -82,6 +83,7 @@ new commands
 
 
 bugs
+	branch cutting does not work
 	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)
 	call a func A in B, then while B is focused, rename/remove a parameter of A: old remains in argsList of funcCall
 	deleting a recursing funcCall does not seem to work smoothly

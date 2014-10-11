@@ -27,7 +27,7 @@ var rotationArcRadiusMin = 1
 var scopeDepthLimit = 90 // for endless loops and recursion
 var runDurationLimitMS = 9000
 // this determines the default zoom level
-var defaultSvgViewboxHeight = 70
+var defaultSvgViewboxHeight = 60
 var defaultViewBox = (-defaultSvgViewboxHeight/2)
 	+" "+(-defaultSvgViewboxHeight/2)
 	+" "+defaultSvgViewboxHeight
@@ -1153,6 +1153,13 @@ Expression.prototype.set = function(exp) {
 		self.exp = parseFloat(exp)
 		return
 	}
+
+	// TODO this is a detour. I stringify just to eval() after.
+	// this happens when I import data from the outside (e.g. d3)
+	if (typeof exp !== "string") {
+		console.log("Expression: set: warning: exp is not a string: "+exp)
+		exp = JSON.stringify(exp)
+	}
 	
 	if (typeof exp === "string") {
 		var result
@@ -1166,8 +1173,6 @@ Expression.prototype.set = function(exp) {
 		} catch(e) {
 			// it may depend on arguments, so it cannot be cached
 		}
-	} else {
-		console.log("Expression: set: warning: exp is irregular: "+exp)
 	}
 	self.exp = exp
 }
@@ -2861,6 +2866,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	var drawIcons = callerF === F_ && (
 		self.scopeDepth <= 1
 		|| selection.containsAsRoot(self)
+			// TODO try to create a tree from a spiral -> at some point, no funcCall is shown anymore ... investigate
 		|| root.proxies.getFirst() === self
 	)
 
@@ -3218,7 +3224,6 @@ Branch.prototype.getRootCommandsRef = function() {
 // opt is an object containing optional arguments
 // TODO "new" is not required for invoking
 function Drawing(f, opt) {
-	var self = this
 	if (opt === undefined)
 		opt = {}
 	var fHasViewBox = f.svgViewboxX !== undefined
@@ -3245,9 +3250,9 @@ function Drawing(f, opt) {
 	wrapperF.exec()
 	opt.container.node().vogo = wrapperF
 	wrapperF.update = function(newArgs) {
-		console.assert(self.getRootCommandsRef().length === 1)
+		console.assert(this.getRootCommandsRef().length === 1)
 		// TODO is this right?
-		var fc = self.execCmds[0]
+		var fc = this.execCmds[0]
 		console.assert(fc instanceof FuncCall)
 		if (newArgs !== undefined) {
 			// leave old, just override
@@ -3257,8 +3262,8 @@ function Drawing(f, opt) {
 					: newArgs[a]
 			}
 		}
-		self.state.reset()
-		return self.exec()
+		this.state.reset()
+		return this.exec()
 	}
 	return wrapperF
 }
