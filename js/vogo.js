@@ -69,6 +69,7 @@ var lastRunStartTime
 var enforceRunDurationLimitMS = true
 // a list of functions the return a single or a list of vogo func's that can be integrated into the UI
 var examples = []
+var lastDragEndTime = Date.now()
 
 
 vogo.init = function() {
@@ -220,9 +221,10 @@ function setupUIEventListeners() {
 			manipulation.update()
 		})
 		.on("click", function (d, i) {
-			// prevent click triggered after dragend. Works in Chromium 27 & Firefox 31, BUT NOT IN Chrome 36
-			if (d3.event.defaultPrevented)
+			// TODO prevent click triggered after dragend. Works in Chromium 27 & Firefox 31, BUT NOT IN Chrome 36
+			if (d3.event.defaultPrevented || Date.now()-lastDragEndTime < 20 )
 				return
+//			console.log("fell through"+Date.now())
 			mousePos = d3.mouse(this)
 			if (manipulation.isCreating(Move)) {
 				if (keyPressed.d) {
@@ -249,7 +251,7 @@ function setupUIEventListeners() {
 				// mousePressed.middle press it not yet registered here
 			})
 			.on("drag", function (d) {
-				if (mousePressed.middle) {
+				if (!keyPressed.shift) {
 					if (!dragInProgress)
 						mainSVG.svg.style({cursor: "move"})
 					dragInProgress = true
@@ -668,7 +670,7 @@ function wrapSelectionInCommand(cmdName, doWithCmdList) {
 	var rootScope = selection.e[0].root.scope
 	console.assert(scope !== scope.root || scope instanceof Func)
 	var cmdsRef = scope.getRootCommandsRef()
-	
+
 	console.assert(cmdsRef !== undefined)
 	var idxArr = []
 	for (var i=0; i<selection.e.length; i++) {
@@ -892,7 +894,7 @@ var onKeyDown = {
 				// force redraw; to make progression visible
 				setTimeout(function() {
 					loadExample(i+1)
-				}, 50)
+				}, 100)
 			}
 		}
 		if (keyPressed.ctrl) {
@@ -1088,7 +1090,8 @@ Proxies.prototype.forEach = function(f) {
 	var self = this
 	for (var key in self) {
 		if (self.hasOwnProperty(key) && key !== "nextKey") {
-//			console.log(self[key])
+			// TODO
+//			console.assert(self[key] !== undefined)
 			f(self[key])
 		}
 	}
@@ -1724,6 +1727,7 @@ Command.prototype.createDragBehavior = function(element) {
 			isNotInsideFuncCallOrSelfRecursing = self.isNotInsideFuncCallOrSelfRecursing()
 			// to prevent drag on background (silence other listeners)
 			d3.event.sourceEvent.stopPropagation()
+//			d3.event.sourceEvent.preventDefault()
 		})
 		.on("drag", function (d) {
 			if (firstDragTick) {
@@ -1752,6 +1756,7 @@ Command.prototype.createDragBehavior = function(element) {
 				mainSVG.svg.style({cursor: "default"})
 				d3.select(this).attr("dragging", null)
 			}
+			lastDragEndTime = Date.now()
 		})
 }
 
@@ -2871,6 +2876,9 @@ FuncCall.prototype.execInner = function(callerF) {
 			// TODO try to create a tree from a spiral -> at some point, no funcCall is shown anymore ... investigate
 		|| root.proxies.getFirst() === self
 	)
+
+	// TODO
+//	console.log(root.proxies.getLength()+", d: "+self.scopeDepth)
 
 	if (self.icon === undefined && drawIcons) {
 		self.icon = createForeignObject(mainSVG.paintingG)
