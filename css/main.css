@@ -34,7 +34,7 @@ a {
 	left: 0;
 }
 #borderR {
-	right: 5%; /*coupled*/
+	right: 6%; /*coupled*/
 	padding-left: 7px;
 }
 #borderR div {
@@ -55,7 +55,7 @@ a {
 #toolbar {
 	position: absolute;
 	height: 100%;
-	width: 5%; /*coupled*/
+	width: 6%; /*coupled*/
 	right: 0%;
 	background-color: #D6D6D6;
 	overflow-y: auto;

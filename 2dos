@@ -13,8 +13,10 @@ community
 		clientside share
 	show examples
 
+
 small
 	improve call drag! -> often accidental calls
+	suppress right click context menu
 	refactor the naming of label, foreignObject, fo, input, inputField, drawLabel and drawIcons ... very confusing
 	drawIcons -> improve in funCall and branch! -> hide labels when not selected (as in move and rotate)
 	funcCall args field length is not updated when dragged to larger number
@@ -55,7 +57,9 @@ big
 	bigger click radius, especially for Move
 	variables can reference variables (on global scope)
 	How can the program flow be visualised (stepping through)?
-		Map a parameter to space (show multiple "shadow instances" of it)
+	    3D: z-axis (depth) is passing time (rotate graphic to show time)
+        timeslider: see the turtle move
+	Map a parameter to space (show multiple "shadow instances" of it)
 	selection z-order-handling (ALT selects below)
 		this is actually hard, because event propagation will not work
 		I will need to manually compute which elements a click hit
@@ -71,6 +75,10 @@ big
 	store which expression requires which variables, so I only eval those
 	drag in input field with expressions
 	similar to "a" -> create parameters, new command to encapsulate selection into new function
+	selected function block is more distinctly highlighted
+	show individual parts in context (do not switch between pictures) - zooming in on detail
+	scope highlighting: grey out rest, not the other way around
+
 
 new commands
 	mirror
@@ -78,6 +86,7 @@ new commands
 		edit fill
 	goto, go home, go to point in past
 		go back X states in time
+		idea: a pen stack: function calls may use the pen stack to "go home" after each call
 	Beziers
 	resize, rotate, shear
 

@@ -58,7 +58,7 @@ var functions = []
 var F_
 
 var functionPanelSizePercentOfBodyWidth = 0.15 /* also change in css */
-var toolbarPanelSizePercentOfBodyWidth = 0.05 /* also change in css */
+var toolbarPanelSizePercentOfBodyWidth = 0.06 /* also change in css */
 var lastNotificationUpdateTime
 var dragInProgress = false
 var lastRotateExecuted
@@ -211,7 +211,9 @@ function setupUIEventListeners() {
 	}
 	document.body.onmousedown = function(evt) { switchMouseButton(evt, true) }
 	document.body.onmouseup = function(evt) { switchMouseButton(evt, false) }
-	
+	// suppresses browser context menu
+	document.body.oncontextmenu = function(evt) { return false }
+
 	var dragStart
 	var selectionRect
 	
@@ -222,7 +224,7 @@ function setupUIEventListeners() {
 		})
 		.on("click", function (d, i) {
 			// TODO prevent click triggered after dragend. Works in Chromium 27 & Firefox 31, BUT NOT IN Chrome 36
-			if (d3.event.defaultPrevented || Date.now()-lastDragEndTime < 20 )
+			if (d3.event.defaultPrevented || Date.now()-lastDragEndTime < 20 && !manipulation.isCreating())
 				return
 //			console.log("fell through"+Date.now())
 			mousePos = d3.mouse(this)
