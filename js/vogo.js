@@ -18,7 +18,7 @@ var lineDefaultStyle = "stroke: #000; stroke-opacity: 0.8; stroke-width: .25; st
 var defaultSvgDrawingStyle = {position: "fixed", width: "96%", height: "96%",
 	top: "4%", left: "4%", border: "1px solid rgba(0,0,0,0.1)"}
 
-var zoomFactor = 1.15 // macs tend to have finer grain mouse wheel ticks
+var zoomFactor = 1.10 // macs tend to have finer grain mouse wheel ticks
 var zoomTransitionDuration = 150
 var loopClockRadius = 1.3
 var maximumNumberOfIterationsForLoopClocksToBeDrawn = 50 // performance improvement
@@ -1725,7 +1725,6 @@ Command.prototype.createDragBehavior = function(element) {
 	return d3.behavior.drag()
 		.on("dragstart", function(d) {
 			firstDragTick = true
-			dragInProgress = true
 			isNotInsideFuncCallOrSelfRecursing = self.isNotInsideFuncCallOrSelfRecursing()
 			// to prevent drag on background (silence other listeners)
 			d3.event.sourceEvent.stopPropagation()
@@ -1754,10 +1753,10 @@ Command.prototype.createDragBehavior = function(element) {
 		})
 		.on("dragend", function(d) {
 			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
-				dragInProgress = false
 				mainSVG.svg.style({cursor: "default"})
 				d3.select(this).attr("dragging", null)
 			}
+			dragInProgress = false
 			lastDragEndTime = Date.now()
 		})
 }
