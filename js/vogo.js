@@ -2908,6 +2908,10 @@ FuncCall.prototype.execInner = function(callerF) {
 		console.assert(self.icon.argF[a].input === undefined)
 		self.icon.argF[a].text.text(a+"←").style("font-size", "16px")
 		var value = root.customArguments[a] === undefined ? root.f.args[a].get() : root.customArguments[a].get()
+		var adjustArgFieldSize = function () {
+			self.icon.argF[a].input.attr("size", Math.max(1,
+				self.icon.argF[a].input.property("value").toString().length))
+		}
 		if (root.customArguments[a] === undefined)
 			root.customArguments[a] = new Expression(value)
 		self.icon.argF[a].inputDiv = self.icon.argF[a]
@@ -2928,10 +2932,7 @@ FuncCall.prototype.execInner = function(callerF) {
 					run()
 				}
 			})
-			.on("input", function() {
-				self.icon.argF[a].input.attr("size", Math.max(1,
-					self.icon.argF[a].input.property("value").toString().length))
-			})
+			.on("input", adjustArgFieldSize)
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
 					root.customArguments[a].adjustDragstart()
@@ -2942,6 +2943,7 @@ FuncCall.prototype.execInner = function(callerF) {
 					if (newValue !== undefined) {
 						root.customArguments[a].set(newValue)
 						this.value = newValue
+						adjustArgFieldSize()
 						run()
 					}
 				})
@@ -4068,6 +4070,21 @@ vogo.examples.push(function() {
 })
 
 vogo.examples.push(function() {
+	var shiftedStar = new vogo.Func({
+		name: "shiftedStar",
+		args: {"n": 5, "angle": 292, "size": 23, "x": 1.3},
+		viewBox: {x:-31.780, y:-24.982, w:58.583, h:33.868}});
+	shiftedStar.setCommands([
+		new vogo.Loop("n", [
+			new vogo.Move("size/(1+x)"),
+			new vogo.Rotate("angle/n"),
+			new vogo.Move("-size/((1/x)+1)"),
+			new vogo.Rotate("angle/n*(360/angle-1)")])]);
+
+	return [shiftedStar]
+})
+
+vogo.examples.push(function() {
 	var roundabout = new vogo.Func({
 		name: "roundabout",
 		args: {"rotate": 16, "step": 4, "stepF": 0.974, "iterations": 70},
@@ -4079,6 +4096,7 @@ vogo.examples.push(function() {
 	return roundabout
 })
 
+// 34
 vogo.examples.push(function() {
 	var αGrow = new vogo.Func({
 		name: "αGrow",
@@ -4108,7 +4126,8 @@ vogo.examples.push(function() {
 	return [αGrow, snowflake]
 })
 
-// 34
+
+
 
 
 
