@@ -253,16 +253,8 @@ function setupUIEventListeners() {
 				// mousePressed.middle press it not yet registered here
 			})
 			.on("drag", function (d) {
-				if (!keyPressed.shift) {
-					if (!dragInProgress)
-						mainSVG.svg.style({cursor: "move"})
-					dragInProgress = true
-					F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/mainSVG.svgWidth)
-					F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/mainSVG.svgHeight)
-					F_.updateViewbox()
-					mainSVG.updateViewbox()
-				} else {
-					if (!dragInProgress) {
+				if (!dragInProgress) {
+					if (keyPressed.shift) {
 						manipulation.finish()
 						selectionRect = mainSVG.paintingG.append("rect")
 							.attr({
@@ -271,8 +263,18 @@ function setupUIEventListeners() {
 								width: 0,
 								height: 0})
 							.classed("selectionRect", true)
+					} else {
+						mainSVG.svg.style({cursor: "move"})
 					}
-					dragInProgress = true
+				}
+				dragInProgress = true
+				// note that shift may be pressed and released DURING an ongoing drag
+				if (selectionRect === undefined) {
+					F_.svgViewboxX -= d3.event.dx*(F_.svgViewboxWidth/mainSVG.svgWidth)
+					F_.svgViewboxY -= d3.event.dy*(F_.svgViewboxHeight/mainSVG.svgHeight)
+					F_.updateViewbox()
+					mainSVG.updateViewbox()
+				} else {
 					var w = mousePos[0]-dragStart[0]
 					var h = mousePos[1]-dragStart[1]
 					selectionRect // rect is not displayed if w || h < 0
@@ -294,18 +296,15 @@ function setupUIEventListeners() {
 						var w = parseFloat(selectionRect.attr("width"))
 						var h = parseFloat(selectionRect.attr("height"))
 						var list = resolveSelectionRect(F_, [], x, y, w, h)
-						if (!keyPressed.shift)
+						// If shift is released before the dragend, rect-select discards the current selection.
+						// this is identical to deselecting everything before starting the rect-select
+						if (!keyPressed.shift) {
+							console.log("removing")
 							selection.removeAndDeselectAll()
-						/* Inkscapes Shift-Selection works differently: if the
-						 * rect-selection contains elements already selected,
-						 * those are not deselected, but vogo does so. I think
-						 * this behaviour is more consistent, but may be
-						 * unexpected.
-						 * 
-						 * Also, adding multiple with the same root will let
-						 * the last added proxy be the lucky one.
-						 **/
+						}
 						list.forEach(function(le) {
+							// works like a XOR. inkscape does an OR instead.
+							// adding multiple with the same root will let the last added proxy be the lucky one.
 							selection.addAccumulate(le)
 						})
 						selectionRect.remove()
@@ -319,8 +318,9 @@ function setupUIEventListeners() {
 		)
 	
 	function updateKeyDownAndUp(keyCode, down) {
-		if (document.activeElement.nodeName !== "INPUT") {
-			var key = keyMap[keyCode]
+		var key = keyMap[keyCode]
+		// OR "shift" because chrome selects input fields when shift-dragging over them
+		if (document.activeElement.nodeName !== "INPUT" || key === "shift") {
 			if (key) {
 				var currentDown = keyPressed[key]
 				keyPressed[key] = down
@@ -810,8 +810,9 @@ function commonInputFieldInit(inputField, onChange, onClick) {
 			if (keyMap[d3.event.keyCode] === "enter") {
 				onChange(inputField)
 			}
+			// "esc" is not captured in chrome
 			if (keyMap[d3.event.keyCode] === "esc") {
-				document.activeElement.blur()
+				inputField.node().blur()
 			}
 		})
 }
