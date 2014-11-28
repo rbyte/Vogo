@@ -41,7 +41,7 @@ var turtleHomeCursorPath = "M1,1 L0,-2 L-1,1 Z"
 var keyMap = { 65: "a", 68: "d", 83: "s", 69: "e", 70: "f", 71: "g", 82: "r",
 	107: "+", 109: "-", 80: "p", 46: "del", 27: "esc", 76: "l", 17: "ctrl", 16: "shift",
 	78: "n", 66: "b", 18: "alt", 67: "c", 86: "v", 88: "x", 90: "z", 112: "f1", 113: "f2",
-	114: "f3", 115: "f4", 8: "backspace" }
+	114: "f3", 115: "f4", 8: "backspace", 13: "enter" }
 var mouseMap = { 0: "left", 1: "middle", 2: "right" }
 
 // VARIABLES
@@ -792,6 +792,28 @@ function setLinePosition(line, x1, y1, x2, y2) {
 	ll.setAttribute("y1", y1.toFixed(3))
 	ll.setAttribute("x2", x2.toFixed(3))
 	ll.setAttribute("y2", y2.toFixed(3))
+}
+
+function commonInputFieldInit(inputField, onChange, onClick) {
+	inputField
+		.attr("type", "text")
+		.on("click", function() {
+			if (onClick)
+				onClick(inputField)
+			// selects all text
+			this.select()
+		})
+		.on("blur", function() {
+			onChange(inputField)
+		})
+		.on("keypress", function() {
+			if (keyMap[d3.event.keyCode] === "enter") {
+				onChange(inputField)
+			}
+			if (keyMap[d3.event.keyCode] === "esc") {
+				document.activeElement.blur()
+			}
+		})
 }
 
 // singletons
@@ -1830,16 +1852,11 @@ Func.prototype.initUI = function() {
 	
 	self.nameInput = titleRow.append("div").attr("class", "titleRowCell")
 		.append("input")
+		.call(commonInputFieldInit, function(inputField) {
+			self.setName(inputField.node().value)
+		})
 		.attr("class", "f_name")
 		.property("value", self.name)
-		.attr("type", "text")
-		.on("blur", function() {
-			self.setName(this.value)
-		})
-		.on("keypress", function() {
-			if (d3.event.keyCode === /*enter*/ 13)
-				self.setName(this.value)
-		})
 		.on("input", function() {
 			self.nameInput.classed({"inputInEditState": true})
 			self.checkName(this.value)
@@ -2088,7 +2105,8 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 	console.assert(self.argLi !== undefined)
 	console.assert(self.argLi[argName] === undefined)
 	
-	function onChange(value) {
+	function onChange(inputField) {
+		var value = inputField.node().value
 		if (value === "") {
 			self.removeArgument(argName)
 			return
@@ -2108,22 +2126,11 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 			// TODO restore field
 		}
 	}
-	
+
 	self.argLi[argName] = self.ul_args.append("li")
-	self.argLi[argName].append("input")
+	var blubbb = self.argLi[argName].append("input")
+		.call(commonInputFieldInit, onChange)
 		.attr("class", "f_argument")
-		.attr("type", "text")
-		.on("blur", function() {
-			onChange(this.value)
-		})
-		.on("keypress", function() {
-			if (d3.event.keyCode === /*enter*/ 13) {
-				onChange(this.value)
-			}
-		})
-		.on("input", function() {
-			
-		})
 		.call(d3.behavior.drag()
 			.on("dragstart", function (d) {
 				self.args[argName].adjustDragstart()
@@ -2138,7 +2145,6 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 			})
 		)
 		.property("value", argName+"="+self.args[argName].get())
-//		.node().focus()
 }
 
 Func.prototype.setCommands = function(commands) {
@@ -2348,16 +2354,8 @@ Move.prototype.execInner = function(callerF) {
 		self.labelInput = self.label
 			.append("xhtml:body")
 			.append("xhtml:input")
-			.attr("type", "text")
-			.on("click", function() {
-				this.select() // selects all text
-			})
-			.on("blur", function() {
-				self.updateMainParameter(this.value)
-			})
-			.on("keypress", function() {
-				if (d3.event.keyCode === /*enter*/ 13)
-					self.updateMainParameter(this.value)
+			.call(commonInputFieldInit, function(inputField) {
+				self.updateMainParameter(inputField.node().value)
 			})
 			.on("input", function() {
 				// size updating
@@ -2490,27 +2488,20 @@ Rotate.prototype.execInner = function(callerF) {
 		self.updateMarkAndSelect(true)
 	}
 
-	function editInputField(v) { self.updateMainParameter(self.removeDegreeSymbol(v)) }
-	
 	if (self.label === undefined && drawLabel) {
 		self.label = createForeignObject(mainSVG.paintingG)
 		self.labelInput = self.label
 		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
 			.append("xhtml:body")
 			.append("xhtml:input")
-			.attr("type", "text")
-			.on("click", function() {
-				self.labelInput.property("value", self.removeDegreeSymbol(this.value))
-				this.select() // selects all text
-			})
-			.on("blur", function() {
-				editInputField(this.value)
-			})
-			.on("keypress", function() {
-				if (d3.event.keyCode === /*enter*/ 13) {
-					editInputField(this.value)
+			.call(commonInputFieldInit,
+				function(inputField) {
+					self.updateMainParameter(self.removeDegreeSymbol(inputField.node().value))
+				},
+				function(inputField) {
+					inputField.property("value", self.removeDegreeSymbol(inputField.node().value))
 				}
-			})
+			)
 			.on("input", function() {
 				setTextOfInput(self.labelInput)
 			})
@@ -2656,16 +2647,8 @@ Loop.prototype.execInner = function(callerF) {
 		if (i === 0) {
 			iconG.fo = createForeignObject(iconG)
 			iconG.labelInput = iconG.fo.append("xhtml:body").append("xhtml:input")
-				.attr("type", "text")
-				.on("click", function() {
-					this.select() // selects all text
-				})
-				.on("blur", function() {
-					self.updateMainParameter(this.value)
-				})
-				.on("keypress", function() {
-					if (d3.event.keyCode === /*enter*/ 13)
-						self.updateMainParameter(this.value)
+				.call(commonInputFieldInit, function(inputField) {
+					self.updateMainParameter(inputField.node().value)
 				})
 				.on("input", function() {
 					setTextOfInput(iconG.labelInput)
@@ -2919,19 +2902,12 @@ FuncCall.prototype.execInner = function(callerF) {
 			.attr("class", "titleRowCellLast")
 		self.icon.argF[a].input = self.icon.argF[a].inputDiv
 			.append("xhtml:input")
-			.attr("type", "text")
-			.property("value", value)
-			.attr("size", value.toString().length)
-			.on("blur", function() {
-				root.customArguments[a].set(this.value)
+			.call(commonInputFieldInit, function(inputField) {
+				root.customArguments[a].set(inputField.node().value)
 				run()
 			})
-			.on("keypress", function() {
-				if (d3.event.keyCode === /*enter*/ 13) {
-					root.customArguments[a].set(this.value)
-					run()
-				}
-			})
+			.property("value", value)
+			.attr("size", value.toString().length)
 			.on("input", adjustArgFieldSize)
 			.call(d3.behavior.drag()
 				.on("dragstart", function (d) {
@@ -2948,6 +2924,7 @@ FuncCall.prototype.execInner = function(callerF) {
 					}
 				})
 			)
+		self.icon.argF[a].input.node().select()
 	}
 	
 	function switchInputFieldForArg(a) {
@@ -3135,16 +3112,9 @@ Branch.prototype.execInner = function(callerF) {
 	if (drawInputField && self.iconG.fo === undefined) {
 		self.iconG.fo = createForeignObject(self.iconG)
 		self.iconG.labelInput = self.iconG.fo.append("xhtml:body").append("xhtml:input")
-			.attr("type", "text")
-			.on("blur", function() {
-				self.setMainParameter(this.value)
+			.call(commonInputFieldInit, function(inputField) {
+				self.setMainParameter(inputField.node().value)
 				run()
-			})
-			.on("keypress", function() {
-				if (d3.event.keyCode === /*enter*/ 13) {
-					self.setMainParameter(this.value)
-					run()
-				}
 			})
 			.on("input", function() {
 				setTextOfInput(self.iconG.labelInput)
