@@ -2925,7 +2925,6 @@ FuncCall.prototype.execInner = function(callerF) {
 					}
 				})
 			)
-		self.icon.argF[a].input.node().select()
 	}
 	
 	function switchInputFieldForArg(a) {

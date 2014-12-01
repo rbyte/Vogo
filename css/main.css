@@ -302,24 +302,20 @@ line[dragging] {
 	transition: opacity 200ms ease-in-out;
 }
 .opacity0 { opacity: 0 }
-input {
+svg, input {
 	/*since drag-adjust is supported on all input fields,
 	user-select is only desirable if done via keyboard,
 	which works despite these settings*/
-	-moz-user-select: none;
-	user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    outline: 0;
 }
 .inputInEditState { color: #777 }
 .inputInWrongState { color: #f55 !important }
 .hide { display: none;}
-svg {
-	-webkit-touch-callout: none;
-	-webkit-user-select: none;
-	-khtml-user-select: none;
-	-moz-user-select: none;
-	-ms-user-select: none;
-	user-select: none;
-}
 foreignObject {
 	pointer-events: none;
 }
