@@ -1878,10 +1878,7 @@ Func.prototype.initUI = function() {
 	self.svg = self.svgContainer.append("svg").attr("class", "fSVG")
 		.call(setupSVG)
 		.on("click", function() {
-			// dragstart and click are fired at the same time, so I have to check for myself
-			if (!isDragged) {
-				self.switchTo()
-			}
+			self.switchTo()
 		})
 		.call(d3.behavior.drag()
 			.on("drag", function (d) {
@@ -1890,7 +1887,13 @@ Func.prototype.initUI = function() {
 				isDragged = true
 			})
 			.on("dragend", function (d) {
-				if (isDragged) {
+				var mouse = d3.mouse(domSvg)
+				if (isDragged // and mouse is inside canvas
+				&& mouse[0] > F_.svgViewboxX
+				&& mouse[0] < F_.svgViewboxX + F_.svgViewboxWidth
+				&& mouse[1] > F_.svgViewboxY
+				&& mouse[1] < F_.svgViewboxY + F_.svgViewboxHeight) {
+
 					isDragged = false
 					mainSVG.svg.style({cursor: "default"})
 					insertCmdRespectingSelection(new FuncCall(self))

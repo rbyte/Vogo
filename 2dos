@@ -15,9 +15,8 @@ community
 
 
 small
-	improve call drag! -> often accidental calls
 	refactor the naming of label, foreignObject, fo, input, inputField, drawLabel and drawIcons ... very confusing
-	drawIcons -> improve in funCall and branch! -> hide labels when not selected (as in move and rotate)
+	drawIcons -> improve in funcCall and branch! -> hide labels when not selected (as in move and rotate)
 	allow esc during drag (of line/rotate/loop) to abort and revert to previous parameters
 	ctrl+d = duplicate selected command -> create proxy, instead of copy (ctrl+c) (can be emulated by funcCall)
 		refactor "set scope" first
@@ -30,6 +29,7 @@ small
 	auto-select newly created commands
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
+	make invoke-funcCall-drag better by adding a symbol to the cursor (as it is dragged)
 	handling endless recursion by checking line-length or out of bounds
 	show results of expressions beneath input field "=..."
 	cycle (select) through elements (as in code) with arrow keys
@@ -94,6 +94,7 @@ bugs
 	branch cutting does not work
 	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)
 	call a func A in B, then while B is focused, rename/remove a parameter of A: old remains in argsList of funcCall
+	recursive call: renaming f does not rename funcCall-name (only after switching functions back and forth)
 	deleting a recursing funcCall does not seem to work smoothly
 		reproducable: in the tree example, delete one branch of the recursion -> the other funcCall is hidden then
 	chromium only (chrome works): the input fields inside foreign objects do not update on manual editing
