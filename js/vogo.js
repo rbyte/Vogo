@@ -440,8 +440,8 @@ function openSVG() {
 }
 
 function updateLabelVisibility(self) {
-	if (self.label !== undefined)
-		self.label.classed("hide", !selection.contains(self)
+	if (self.fo !== undefined)
+		self.fo.classed("hide", !selection.contains(self)
 			&& manipulation.insertedCommand !== self.root)
 }
 
@@ -1888,16 +1888,17 @@ Func.prototype.initUI = function() {
 			})
 			.on("dragend", function (d) {
 				var mouse = d3.mouse(domSvg)
-				if (isDragged // and mouse is inside canvas
-				&& mouse[0] > F_.svgViewboxX
-				&& mouse[0] < F_.svgViewboxX + F_.svgViewboxWidth
-				&& mouse[1] > F_.svgViewboxY
-				&& mouse[1] < F_.svgViewboxY + F_.svgViewboxHeight) {
-
+				if (isDragged) {
 					isDragged = false
 					mainSVG.svg.style({cursor: "default"})
-					insertCmdRespectingSelection(new FuncCall(self))
-					run()
+					if (// mouse is inside canvas
+						mouse[0] > F_.svgViewboxX
+						&& mouse[0] < F_.svgViewboxX + F_.svgViewboxWidth
+						&& mouse[1] > F_.svgViewboxY
+						&& mouse[1] < F_.svgViewboxY + F_.svgViewboxHeight) {
+							insertCmdRespectingSelection(new FuncCall(self))
+							run()
+					}
 				}
 			})
 		)
@@ -2132,7 +2133,7 @@ Func.prototype.addExistingArgumentToUI = function(argName) {
 	}
 
 	self.argLi[argName] = self.ul_args.append("li")
-	var blubbb = self.argLi[argName].append("input")
+	self.argLi[argName].append("input")
 		.call(commonInputFieldInit, onChange)
 		.attr("class", "f_argument")
 		.call(d3.behavior.drag()
@@ -2280,7 +2281,8 @@ function Move(lineLength) {
 	self.setMainParameter(lineLength)
 	self.line
 	self.lineMainSVG
-	self.label
+	self.fo
+	self.labelInput
 }
 Move.prototype = new Command(Move)
 
@@ -2325,15 +2327,15 @@ Move.prototype.execInner = function(callerF) {
 	if (self.line === undefined) {
 		self.line = callerF.paintingG.append("line")
 	}
-	var drawOnMainSVG = callerF === F_
-	var drawInputField = drawOnMainSVG
+	var isDrawn = callerF === F_
+	var drawInput = isDrawn
 		// TODO: self.scopeDepth <= 1 this needs to be refactored. this is done so that if a line or rotate is
 		// in the creation, it can have the input field visible, but only inside function scope. input fields
 		// should not be hidden, but always be destoyed -> see updateLabelVisibility
 		&& (self.scopeDepth <= 1 || selection.containsAsRoot(self))
 		&& self.isNotInsideFuncCallOrSelfRecursing()
 
-	if (self.lineMainSVG === undefined && drawOnMainSVG) {
+	if (self.lineMainSVG === undefined && isDrawn) {
 		self.lineMainSVG = mainSVG.paintingG.append("line")
 		self.lineMainSVG
 			.on("click", function(d, i) {
@@ -2353,9 +2355,9 @@ Move.prototype.execInner = function(callerF) {
 		self.updateMarkAndSelect(true)
 	}
 	
-	if (self.label === undefined && drawInputField) {
-		self.label = createForeignObject(mainSVG.paintingG)
-		self.labelInput = self.label
+	if (self.fo === undefined && drawInput) {
+		self.fo = createForeignObject(mainSVG.paintingG)
+		self.labelInput = self.fo
 			.append("xhtml:body")
 			.append("xhtml:input")
 			.call(commonInputFieldInit, function(inputField) {
@@ -2376,20 +2378,20 @@ Move.prototype.execInner = function(callerF) {
 			)
 	}
 	
-	if (self.label !== undefined && !drawInputField) {
-		self.label.remove()
-		self.label = undefined
+	if (self.fo !== undefined && !drawInput) {
+		self.fo.remove()
+		self.fo = undefined
 	}
-	if (drawInputField) {
+	if (drawInput) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r)
 		var x = callerF.state.x + Math.sin(dir) * lineLength * -0.5
 		var y = callerF.state.y - Math.cos(dir) * lineLength * -0.5
-		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
+		self.fo.attr("transform", "translate("+x+","+y+") scale(0.1)")
 		setTextOfInput(self.labelInput, root.mainParameter.get())
 	}
 
-	if (drawOnMainSVG) {
+	if (isDrawn) {
 		self.indicateIfInsideAnySelectedCommandsScope()
 		setLinePosition(self.lineMainSVG, x1, y1, x2, y2)
 	}
@@ -2408,8 +2410,8 @@ Move.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	if (self.lineMainSVG !== undefined)
 		setMarkAndSelect(self.lineMainSVG, selectOn, markOn)
 	if (selectOn) {
-		if (self.label !== undefined) {
-			self.label.classed("hide", false)
+		if (self.fo !== undefined) {
+			self.fo.classed("hide", false)
 			setTextOfInput(self.labelInput)
 		}
 	} else {
@@ -2418,7 +2420,7 @@ Move.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 }
 
 Move.prototype.getVisibleElementsFromMainSVG = function() {
-	return ["lineMainSVG", "label"]
+	return ["lineMainSVG", "fo"]
 }
 
 Move.prototype.getVisibleElements = function() {
@@ -2437,7 +2439,8 @@ function Rotate(angle) {
 	self.commonCommandConstructor()
 	self.setMainParameter(angle)
 	self.arc
-	self.label
+	self.fo
+	self.labelInput
 	self.title
 	self.radiusScaleFactorCalculated
 }
@@ -2465,18 +2468,18 @@ Rotate.prototype.execInner = function(callerF) {
 	var root = self.root
 	var angle = correctRadius(convertToRadian(self.evalMainParameter()))
 
-	var arc = d3.svg.arc()
+	var arcPath = d3.svg.arc()
 		.innerRadius(0)
 		.outerRadius(rotationArcRadiusMax)
 		.startAngle(callerF.state.r)
 		.endAngle(callerF.state.r + angle)
 	callerF.state.addRadius(angle)
-	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
-	var drawLabel = drawIcons
+	var isDrawn = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
+	var drawInput = isDrawn
 		&&  (self.scopeDepth <= 1
 			|| selection.containsAsRoot(self))
 	
-	if (self.arc === undefined && drawIcons) {
+	if (self.arc === undefined && isDrawn) {
 		self.arc = mainSVG.paintingG.append("path")
 			.on("click", function(d, i) {
 				if (!manipulation.isCreating()) {
@@ -2492,9 +2495,9 @@ Rotate.prototype.execInner = function(callerF) {
 		self.updateMarkAndSelect(true)
 	}
 
-	if (self.label === undefined && drawLabel) {
-		self.label = createForeignObject(mainSVG.paintingG)
-		self.labelInput = self.label
+	if (self.fo === undefined && drawInput) {
+		self.fo = createForeignObject(mainSVG.paintingG)
+		self.labelInput = self.fo
 		// the "xhtml:" is important! http://stackoverflow.com/questions/15148481/html-element-inside-svg-not-displayed
 			.append("xhtml:body")
 			.append("xhtml:input")
@@ -2520,19 +2523,19 @@ Rotate.prototype.execInner = function(callerF) {
 			)
 	}
 	
-	if (drawLabel) {
+	if (drawInput) {
 		updateLabelVisibility(self)
 		var dir = correctRadius(callerF.state.r - angle/2)
 		var x = callerF.state.x + Math.sin(dir) * rotationArcRadiusMax * 0.6
 		var y = callerF.state.y - Math.cos(dir) * rotationArcRadiusMax * 0.6 - 1 // vertical alignment
-		self.label.attr("transform", "translate("+x+","+y+") scale(0.1)")
+		self.fo.attr("transform", "translate("+x+","+y+") scale(0.1)")
 		var text = root.mainParameter.isConst()
 			? self.addDegreeSymbol(root.mainParameter.get())
 			: root.mainParameter.get()
 		setTextOfInput(self.labelInput, text)
 	}
-	if (drawIcons) {
-		self.arc.attr("d", arc)
+	if (isDrawn) {
+		self.arc.attr("d", arcPath)
 		self.arc.attr("transform", "translate("+callerF.state.x+","+callerF.state.y+")"
 				+(lastRotateScaleFactorCalculated ? " scale("+lastRotateScaleFactorCalculated+")" : ""))
 		self.title.text(self.addDegreeSymbol(angleToString(angle)))
@@ -2553,8 +2556,8 @@ Rotate.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	if (self.arc !== undefined)
 		setMarkAndSelect(self.arc, selectOn, markOn)
 	if (selectOn) {
-		if (self.label !== undefined) {
-			self.label.classed("hide", false)
+		if (self.fo !== undefined) {
+			self.fo.classed("hide", false)
 			setTextOfInput(self.labelInput)
 		}
 	} else {
@@ -2563,7 +2566,7 @@ Rotate.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 }
 
 Rotate.prototype.getVisibleElementsFromMainSVG = function() {
-	return ["arc", "label"]
+	return ["arc", "fo"]
 }
 
 Rotate.prototype.getVisibleElements = function() {
@@ -2644,7 +2647,7 @@ Loop.prototype.execInner = function(callerF) {
 	var numberOfRepetitions = Math.max(1, Math.floor(self.evalMainParameter()))
 	// shrink inner loops radius
 	var loopClockRadiusUsed = loopClockRadius * Math.pow(0.7, self.refDepthOfSameType+1)
-	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
+	var isDrawn = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
 
 	function createIcon() {
 		var iconG = mainSVG.paintingG.append("g")
@@ -2715,7 +2718,7 @@ Loop.prototype.execInner = function(callerF) {
 		}
 	}
 	
-	if (drawIcons) {
+	if (isDrawn) {
 		if (0 <= numberOfRepetitions && numberOfRepetitions < self.iconGs.length) {
 			// remove dangling
 			for (var k=numberOfRepetitions; k<self.iconGs.length; k++)
@@ -2730,7 +2733,7 @@ Loop.prototype.execInner = function(callerF) {
 	
 	for (var i=0; i<numberOfRepetitions; i++) {
 		self.i = i
-		if (drawIcons) {
+		if (isDrawn) {
 			// TODO consider line-in and -out diretion for angle
 			// place center away from current position in 90° angle to current heading
 			var dir = correctRadius(callerF.state.r + Math.PI/2)
@@ -2838,7 +2841,7 @@ function FuncCall(func, args) {
 				self.customArguments[a] = new Expression(self.customArguments[a])
 	}
 	self.execCmds = []
-	self.icon
+	self.fo
 }
 FuncCall.prototype = new Command(FuncCall)
 
@@ -2858,7 +2861,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	var root = self.root
 	console.assert(root.f !== undefined)
 
-	var drawIcons = callerF === F_ && (
+	var isDrawn = callerF === F_ && (
 		self.scopeDepth <= 1
 		|| selection.containsAsRoot(self)
 			// TODO try to create a tree from a spiral -> at some point, no funcCall is shown anymore ... investigate
@@ -2868,12 +2871,12 @@ FuncCall.prototype.execInner = function(callerF) {
 	// TODO
 //	console.log(root.proxies.getLength()+", d: "+self.scopeDepth)
 
-	if (self.icon === undefined && drawIcons) {
-		self.icon = createForeignObject(mainSVG.paintingG)
-		self.icon.classed("funcCall", true)
-		self.icon.argF = {}
-		self.icon.body = self.icon.append("xhtml:body")
-		self.icon.body.text = self.icon.body.append("xhtml:text")
+	if (self.fo === undefined && isDrawn) {
+		self.fo = createForeignObject(mainSVG.paintingG)
+		self.fo.classed("funcCall", true)
+		self.fo.argF = {}
+		self.fo.body = self.fo.append("xhtml:body")
+		self.fo.body.text = self.fo.body.append("xhtml:text")
 			.text("ƒ"+root.f.name)
 			.on("click", function() {
 				selection.add(self)
@@ -2881,30 +2884,30 @@ FuncCall.prototype.execInner = function(callerF) {
 				d3.event.stopPropagation()
 			})
 		self.updateMarkAndSelect(true)
-		self.icon.argUl = self.icon.body.append("xhtml:ul")
+		self.fo.argUl = self.fo.body.append("xhtml:ul")
 	}
 	
-	if (self.icon !== undefined && !drawIcons) {
-		self.icon.remove()
-		self.icon = undefined
+	if (self.fo !== undefined && !isDrawn) {
+		self.fo.remove()
+		self.fo = undefined
 	}
 	
 	function createInputField(a) {
-		console.assert(self.icon.argF[a] !== undefined)
-		console.assert(self.icon.argF[a].text !== undefined)
-		console.assert(self.icon.argF[a].input === undefined)
-		self.icon.argF[a].text.text(a+"←").style("font-size", "16px")
+		console.assert(self.fo.argF[a] !== undefined)
+		console.assert(self.fo.argF[a].text !== undefined)
+		console.assert(self.fo.argF[a].labelInput === undefined)
+		self.fo.argF[a].text.text(a+"←").style("font-size", "16px")
 		var value = root.customArguments[a] === undefined ? root.f.args[a].get() : root.customArguments[a].get()
 		var adjustArgFieldSize = function () {
-			self.icon.argF[a].input.attr("size", Math.max(1,
-				self.icon.argF[a].input.property("value").toString().length))
+			self.fo.argF[a].labelInput.attr("size", Math.max(1,
+				self.fo.argF[a].labelInput.property("value").toString().length))
 		}
 		if (root.customArguments[a] === undefined)
 			root.customArguments[a] = new Expression(value)
-		self.icon.argF[a].inputDiv = self.icon.argF[a]
+		self.fo.argF[a].inputDiv = self.fo.argF[a]
 			.append("xhtml:div")
 			.attr("class", "titleRowCellLast")
-		self.icon.argF[a].input = self.icon.argF[a].inputDiv
+		self.fo.argF[a].labelInput = self.fo.argF[a].inputDiv
 			.append("xhtml:input")
 			.call(commonInputFieldInit, function(inputField) {
 				root.customArguments[a].set(inputField.node().value)
@@ -2931,10 +2934,10 @@ FuncCall.prototype.execInner = function(callerF) {
 	}
 	
 	function switchInputFieldForArg(a) {
-		if (self.icon.argF[a].input !== undefined) {
-			self.icon.argF[a].text.text(a).style("font-size", null)
-			self.icon.argF[a].inputDiv.remove() // input is inside inputDiv
-			self.icon.argF[a].input = undefined
+		if (self.fo.argF[a].labelInput !== undefined) {
+			self.fo.argF[a].text.text(a).style("font-size", null)
+			self.fo.argF[a].inputDiv.remove() // input is inside inputDiv
+			self.fo.argF[a].labelInput = undefined
 			delete root.customArguments[a]
 			run()
 		} else {
@@ -2942,15 +2945,15 @@ FuncCall.prototype.execInner = function(callerF) {
 		}
 	}
 	
-	if (drawIcons) {
-		self.icon
+	if (isDrawn) {
+		self.fo
 			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
 		self.indicateIfInsideAnySelectedCommandsScope()
 		// TODO select and mark
 		for (var a in root.f.args) {
-			if (self.icon.argF[a] === undefined) {
-				self.icon.argF[a] = self.icon.argUl.append("xhtml:li").attr("class", "titleRow")
-				self.icon.argF[a].text = self.icon.argF[a].append("xhtml:div")
+			if (self.fo.argF[a] === undefined) {
+				self.fo.argF[a] = self.fo.argUl.append("xhtml:li").attr("class", "titleRow")
+				self.fo.argF[a].text = self.fo.argF[a].append("xhtml:div")
 					.attr("class", "titleRowCellLast")
 					.text(a)
 					// need to closure in "a" because when click is called, "a" changed
@@ -2963,9 +2966,9 @@ FuncCall.prototype.execInner = function(callerF) {
 		}
 		for (var a in root.customArguments) {
 			if (root.f.args[a] === undefined) {
-				if (self.icon.argF[a] !== undefined) {
-					self.icon.argF[a].remove()
-					delete self.icon.argF[a]
+				if (self.fo.argF[a] !== undefined) {
+					self.fo.argF[a].remove()
+					delete self.fo.argF[a]
 				}
 				// may mess for loop up :/
 				delete root.customArguments[a]
@@ -2997,18 +3000,18 @@ FuncCall.prototype.execInner = function(callerF) {
 FuncCall.prototype.indicateIfInsideAnySelectedCommandsScope = function() {
 	var self = this
 	self.isInsideAnySelectedCommandsScope(true/*including proxies*/, function(on) {
-		setInScope(self.icon, on)
+		setInScope(self.fo, on)
 	})
 }
 
 FuncCall.prototype.updateMarkAndSelectInner = function(selectOn, markOn) {
 	var self = this
-	if (self.icon !== undefined)
-		setMarkAndSelect(self.icon, selectOn, markOn)
+	if (self.fo !== undefined)
+		setMarkAndSelect(self.fo, selectOn, markOn)
 }
 
 FuncCall.prototype.getVisibleElementsFromMainSVG = function() {
-	return ["icon", "execCmds"]
+	return ["fo", "execCmds"]
 }
 
 FuncCall.prototype.getVisibleElements = function() {
@@ -3074,15 +3077,15 @@ Branch.prototype.execInner = function(callerF) {
 	self.lastCondEvalResult = condEval
 	var branchCmds = condEval ? root.ifTrueCmds : root.ifFalseCmds
 	rebuild |= branchCmds.length !== self.execCmds.length
-	var drawIcons = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
+	var isDrawn = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing()
 	// either the first proxy or the selected command shows the field
-	var drawInputField = drawIcons && (
+	var drawInput = isDrawn && (
 		selection.contains(self)
 		|| (root.proxies.getFirst() === self && !selection.containsAsRoot(self))
 		)
 //	var drawInputField = drawIcons && selection.containsAsRoot(self)
 	
-	if (drawIcons && self.iconG === undefined) {
+	if (isDrawn && self.iconG === undefined) {
 		self.iconG = mainSVG.paintingG.append("g").classed("branch", true)
 			.on("click", function() {
 				if (!manipulation.isCreating()) {
@@ -3098,7 +3101,7 @@ Branch.prototype.execInner = function(callerF) {
 		self.iconG.baseL = self.iconG.append("line").attr({x1: 0, y1: 1, x2: 1, y2: 1})
 	}
 
-	if (drawIcons) {
+	if (isDrawn) {
 		var size = 1/Math.pow(Math.max(1,self.scopeDepth), 0.3)
 		self.iconG.attr("transform", "translate("+(callerF.state.x+1.5*size)+","+(callerF.state.y-1*size)+") scale("+size+")")
 		var takenBranchColor = branchCmds.length === 0 ? /*dead end branch*/ "#b00" : "#0b0"
@@ -3107,12 +3110,12 @@ Branch.prototype.execInner = function(callerF) {
 		self.indicateIfInsideAnySelectedCommandsScope()
 	}
 
-	if (!drawIcons && self.iconG !== undefined) {
+	if (!isDrawn && self.iconG !== undefined) {
 		self.iconG.remove()
 		self.iconG = undefined
 	}
 
-	if (drawInputField && self.iconG.fo === undefined) {
+	if (drawInput && self.iconG.fo === undefined) {
 		self.iconG.fo = createForeignObject(self.iconG)
 		self.iconG.labelInput = self.iconG.fo.append("xhtml:body").append("xhtml:input")
 			.call(commonInputFieldInit, function(inputField) {
@@ -3125,12 +3128,12 @@ Branch.prototype.execInner = function(callerF) {
 		self.iconG.fo.attr("transform", "translate("+2.4+","+0+") scale(0.1)")
 	}
 
-	if (drawInputField) {
+	if (drawInput) {
 		self.iconG.labelInput.property("value", root.mainParameter.get())
 		setTextOfInput(self.iconG.labelInput)
 	}
 
-	if (!drawInputField && self.iconG !== undefined && self.iconG.fo !== undefined) {
+	if (!drawInput && self.iconG !== undefined && self.iconG.fo !== undefined) {
 		self.iconG.fo.remove()
 		self.iconG.fo = undefined
 	}
