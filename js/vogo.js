@@ -1558,6 +1558,9 @@ Command.prototype.deleteProxyCommand = function() {
 	console.assert(self.root !== self)
 	console.assert(self.proxies === undefined) // -> is proxy
 	console.assert(self.proxyKey >= 0)
+	if (self.canContainCommands()) {
+		forEachSelfRemovingDoCall(self.execCmds, "deleteProxyCommand")
+	}
 	self.removeVisible()
 	self.root.proxies.delete(self.proxyKey)
 
@@ -2868,9 +2871,6 @@ FuncCall.prototype.execInner = function(callerF) {
 		|| root.proxies.getFirst() === self
 	)
 
-	// TODO
-//	console.log(root.proxies.getLength()+", d: "+self.scopeDepth)
-
 	if (self.fo === undefined && isDrawn) {
 		self.fo = createForeignObject(mainSVG.paintingG)
 		self.fo.classed("funcCall", true)
@@ -2879,9 +2879,9 @@ FuncCall.prototype.execInner = function(callerF) {
 		self.fo.body.text = self.fo.body.append("xhtml:text")
 			.text("ƒ"+root.f.name)
 			.on("click", function() {
+				d3.event.stopPropagation()
 				selection.add(self)
 				run()
-				d3.event.stopPropagation()
 			})
 		self.updateMarkAndSelect(true)
 		self.fo.argUl = self.fo.body.append("xhtml:ul")

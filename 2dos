@@ -15,18 +15,13 @@ community
 
 
 small
-	refactor the naming of label, foreignObject, fo, input, inputField, drawLabel and drawIcons ... very confusing
 	drawIcons -> improve in funcCall and branch! -> hide labels when not selected (as in move and rotate)
 	allow esc during drag (of line/rotate/loop) to abort and revert to previous parameters
-	ctrl+d = duplicate selected command -> create proxy, instead of copy (ctrl+c) (can be emulated by funcCall)
-		refactor "set scope" first
-		think about how export should handle proxies
 	selection is not undone if commands are added in function scope (see TODO)
 	funcCall: make result of arg visible as text field on hover of arg
 	funcCall: make it visible (at least the "f") when it is a proxy>1
 	funcCall: renaming a parameter in a recursive subpicture does not remove the old name argument from funcCall args
 	more tooltips, more sanity checks
-	auto-select newly created commands
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
 	make invoke-funcCall-drag better by adding a symbol to the cursor (as it is dragged)
@@ -64,6 +59,9 @@ big
 		I will need to manually compute which elements a click hit
 		http://mozilla.6506.n7.nabble.com/Event-Bubbling-through-Layers-td247852.html
 	allow functions as arguments
+	ctrl+d = duplicate selected command -> create proxy, instead of copy (ctrl+c) (can be emulated by funcCall)
+        refactor "set scope" first
+        think about how export should handle proxies
 	undo
 	store session in local browser cache
 	allow much more dragging between elements
