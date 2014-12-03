@@ -1858,6 +1858,7 @@ Func.prototype.initUI = function() {
 		.append("input")
 		.call(commonInputFieldInit, function(inputField) {
 			self.setName(inputField.node().value)
+			run()
 		})
 		.attr("class", "f_name")
 		.property("value", self.name)
@@ -2948,6 +2949,7 @@ FuncCall.prototype.execInner = function(callerF) {
 	if (isDrawn) {
 		var size = .1/Math.pow(Math.max(1,self.scopeDepth), 0.3)
 		self.fo.attr("transform", "translate("+(callerF.state.x+1.5*size)+","+(callerF.state.y-1*size)+") scale("+size+")")
+		self.fo.body.text.text("ƒ"+root.f.name)
 		self.indicateIfInsideAnySelectedCommandsScope()
 		// TODO select and mark
 		if (drawArgs) {
