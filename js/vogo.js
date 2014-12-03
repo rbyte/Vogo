@@ -90,13 +90,13 @@ function run(f) {
 		f = F_
 	lastRunStartTime = Date.now()
 	f.exec()
-	mainSVG.updateTurtle()
-	
+
 	determineDeepFuncDependenciesFor(f, true/*reverse search*/)
 		.forEach(function(g) {
 			if (g !== f)
 				g.exec()
 		})
+	mainSVG.updateTurtle()
 }
 
 function MainSVG() {

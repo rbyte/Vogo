@@ -85,7 +85,6 @@ new commands
 
 
 bugs
-	### recursive call: renaming f does not rename funcCall-name (only after switching functions back and forth)
 	branch cutting does not work
 	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)
 	chromium only (chrome works): the input fields inside foreign objects do not update on manual editing
