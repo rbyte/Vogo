@@ -17,7 +17,6 @@ community
 small
 	selection is not undone if commands are added in function scope (see TODO)
 	funcCall: make result of arg visible as text field on hover of arg
-	funcCall: renaming a parameter in a recursive subpicture does not remove the old name argument from funcCall args
 	more tooltips, more sanity checks
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
@@ -86,12 +85,9 @@ new commands
 
 
 bugs
+	### recursive call: renaming f does not rename funcCall-name (only after switching functions back and forth)
 	branch cutting does not work
 	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)
-	call a func A in B, then while B is focused, rename/remove a parameter of A: old remains in argsList of funcCall
-	recursive call: renaming f does not rename funcCall-name (only after switching functions back and forth)
-	deleting a recursing funcCall does not seem to work smoothly
-		reproducable: in the tree example, delete one branch of the recursion -> the other funcCall is hidden then
 	chromium only (chrome works): the input fields inside foreign objects do not update on manual editing
 
 
