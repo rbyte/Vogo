@@ -15,11 +15,8 @@ community
 
 
 small
-	drawIcons -> improve in funcCall and branch! -> hide labels when not selected (as in move and rotate)
-	allow esc during drag (of line/rotate/loop) to abort and revert to previous parameters
 	selection is not undone if commands are added in function scope (see TODO)
 	funcCall: make result of arg visible as text field on hover of arg
-	funcCall: make it visible (at least the "f") when it is a proxy>1
 	funcCall: renaming a parameter in a recursive subpicture does not remove the old name argument from funcCall args
 	more tooltips, more sanity checks
 	indicateIfInsideAnySelectedCommandsScope on hover

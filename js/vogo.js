@@ -2092,6 +2092,7 @@ Func.prototype.removeArgument = function(argName) {
 		delete self.argLi[argName]
 	}
 	delete self.args[argName]
+	run(self)
 }
 
 Func.prototype.addArgument = function(defaultValue, argName) {
@@ -2947,8 +2948,6 @@ FuncCall.prototype.execInner = function(callerF) {
 	if (isDrawn) {
 		var size = .1/Math.pow(Math.max(1,self.scopeDepth), 0.3)
 		self.fo.attr("transform", "translate("+(callerF.state.x+1.5*size)+","+(callerF.state.y-1*size)+") scale("+size+")")
-//		self.fo
-//			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
 		self.indicateIfInsideAnySelectedCommandsScope()
 		// TODO select and mark
 		if (drawArgs) {
@@ -2966,14 +2965,12 @@ FuncCall.prototype.execInner = function(callerF) {
 						createInputField(a)
 				}
 			}
-			for (var a in root.customArguments) {
+			for (var a in self.fo.argF) {
 				if (root.f.args[a] === undefined) {
-					if (self.fo.argF[a] !== undefined) {
-						self.fo.argF[a].remove()
-						delete self.fo.argF[a]
-					}
-					// may mess for loop up :/
-					delete root.customArguments[a]
+					self.fo.argF[a].remove()
+					delete self.fo.argF[a]
+					if (root.customArguments[a] !== undefined)
+						delete root.customArguments[a]
 				}
 			}
 		}
