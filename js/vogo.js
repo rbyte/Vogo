@@ -2864,13 +2864,12 @@ FuncCall.prototype.execInner = function(callerF) {
 	var root = self.root
 	console.assert(root.f !== undefined)
 
-	var isDrawn = callerF === F_ && (
-		self.scopeDepth <= 1
+	var isDrawn = callerF === F_ && self.isNotInsideFuncCallOrSelfRecursing() && (
+		root.proxies.getFirst() === self
 		|| selection.containsAsRoot(self)
-			// TODO try to create a tree from a spiral -> at some point, no funcCall is shown anymore ... investigate
-		|| root.proxies.getFirst() === self
 	)
-
+	var drawArgs = isDrawn && root.proxies.getFirst() === self
+	
 	if (self.fo === undefined && isDrawn) {
 		self.fo = createForeignObject(mainSVG.paintingG)
 		self.fo.classed("funcCall", true)
@@ -2946,32 +2945,36 @@ FuncCall.prototype.execInner = function(callerF) {
 	}
 	
 	if (isDrawn) {
-		self.fo
-			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
+		var size = .1/Math.pow(Math.max(1,self.scopeDepth), 0.3)
+		self.fo.attr("transform", "translate("+(callerF.state.x+1.5*size)+","+(callerF.state.y-1*size)+") scale("+size+")")
+//		self.fo
+//			.attr("transform", "translate("+(callerF.state.x+1.5)+","+(callerF.state.y-1)+") scale(0.1)")
 		self.indicateIfInsideAnySelectedCommandsScope()
 		// TODO select and mark
-		for (var a in root.f.args) {
-			if (self.fo.argF[a] === undefined) {
-				self.fo.argF[a] = self.fo.argUl.append("xhtml:li").attr("class", "titleRow")
-				self.fo.argF[a].text = self.fo.argF[a].append("xhtml:div")
-					.attr("class", "titleRowCellLast")
-					.text(a)
-					// need to closure in "a" because when click is called, "a" changed
-					.on("click", (function(a) {
-						return function() { switchInputFieldForArg(a) }
-					})(a))
-				if (root.customArguments[a] !== undefined)
-					createInputField(a)
-			}
-		}
-		for (var a in root.customArguments) {
-			if (root.f.args[a] === undefined) {
-				if (self.fo.argF[a] !== undefined) {
-					self.fo.argF[a].remove()
-					delete self.fo.argF[a]
+		if (drawArgs) {
+			for (var a in root.f.args) {
+				if (self.fo.argF[a] === undefined) {
+					self.fo.argF[a] = self.fo.argUl.append("xhtml:li").attr("class", "titleRow")
+					self.fo.argF[a].text = self.fo.argF[a].append("xhtml:div")
+						.attr("class", "titleRowCellLast")
+						.text(a)
+						// need to closure in "a" because when click is called, "a" changed
+						.on("click", (function(a) {
+							return function() { switchInputFieldForArg(a) }
+						})(a))
+					if (root.customArguments[a] !== undefined)
+						createInputField(a)
 				}
-				// may mess for loop up :/
-				delete root.customArguments[a]
+			}
+			for (var a in root.customArguments) {
+				if (root.f.args[a] === undefined) {
+					if (self.fo.argF[a] !== undefined) {
+						self.fo.argF[a].remove()
+						delete self.fo.argF[a]
+					}
+					// may mess for loop up :/
+					delete root.customArguments[a]
+				}
 			}
 		}
 	}
