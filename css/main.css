@@ -302,7 +302,7 @@ line[dragging] {
 	transition: opacity 200ms ease-in-out;
 }
 .opacity0 { opacity: 0 }
-svg, input {
+svg, input, div, img {
 	/*since drag-adjust is supported on all input fields,
 	user-select is only desirable if done via keyboard,
 	which works despite these settings*/

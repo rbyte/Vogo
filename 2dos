@@ -15,29 +15,19 @@ community
 
 
 small
-	selection is not undone if commands are added in function scope (see TODO)
-	funcCall: make result of arg visible as text field on hover of arg
+	show results of expressions beneath input field "=..." (on hover)
 	more tooltips, more sanity checks
 	indicateIfInsideAnySelectedCommandsScope on hover
 	improve function call look -> context menu for args
 	make invoke-funcCall-drag better by adding a symbol to the cursor (as it is dragged)
-	handling endless recursion by checking line-length or out of bounds
-	show results of expressions beneath input field "=..."
-	cycle (select) through elements (as in code) with arrow keys
-	add switch for add before or after selected element
-	manipulation preview has different style (e.g. lower opacity)
-	one selected element can contain another selected element - fix?!
-		is this creating bugs when removeDeselectAndDeleteAllCompletely ?
-	ctrl+a -> select all
-	2 subsequent moves cannot be distinguished
-	if an Expression is set to say Math.random(), it is considered static because it does not depend on arguments
-	rotate/move/loop with 0 is not visible
-	remove loops when empty (e.g. removed last inner command)
+	add switch for "add before or after" selected element
 	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
-	pan home feature
 
 big
-	automatic tests
+	### drag simple parameter
+	### drag constant inside expression
+
+	iconic code view
 	edit Move style (colour, breadth)
 	Collision-Free positioning
 		check same state of commands, then shift y ?
@@ -46,6 +36,7 @@ big
 		snapping/line end handles
 	bigger click radius, especially for Move
 	variables can reference variables (on global scope)
+	handling endless recursion by checking line-length or out of bounds
 	How can the program flow be visualised (stepping through)?
 	    3D: z-axis (depth) is passing time (rotate graphic to show time)
         timeslider: see the turtle move
@@ -61,8 +52,8 @@ big
 	undo
 	store session in local browser cache
 	allow much more dragging between elements
-	code ui view/codemirror
 	Logo output
+	automatic tests
 	asynchronous (endless) recursion progression
 		make recursion depth depend on run execution time
 	store which expression requires which variables, so I only eval those
@@ -86,7 +77,5 @@ new commands
 
 bugs
 	branch cutting does not work
-	call a func A in B, then while B is focused, change a parameter of A: the turtle in B does not update properly (lags behind)
-	chromium only (chrome works): the input fields inside foreign objects do not update on manual editing
-
+	rotate/move/loop with 0 is not visible
 

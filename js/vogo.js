@@ -339,10 +339,15 @@ function setupUIEventListeners() {
 			}
 		}
 	}
-	
+
 	d3.select("body")
 		.on("keydown", function() { updateKeyDownAndUp(d3.event.keyCode, true) })
 		.on("keyup", function() { updateKeyDownAndUp(d3.event.keyCode, false) })
+
+	document.onkeydown = function(event) {
+		if (event.ctrlKey && keyMap[event.keyCode] === "a")
+			return false // disable browser "select all"
+	}
 }
 
 
@@ -879,15 +884,22 @@ var onKeyDown = {
 	esc: function() {
 		manipulation.remove()
 	},
-	a: function() { // abstract
-		if (selection.isEmpty()) {
-			F_.addArgument("1")
-		} else {
-			// TODO if exp isStatic
-			var argName = F_.addArgument(selection.e[0].evalMainParameter())
-			selection.e.forEach(function(el) {
-				el.setMainParameter(argName)
+	a: function() {
+		if (keyPressed.ctrl) {
+			// select all
+			F_.commands.forEach(function(e) {
+				selection.addAccumulate(e.proxies.getFirst())
 			})
+		} else { // abstract
+			if (selection.isEmpty()) {
+				F_.addArgument("1")
+			} else {
+				// TODO if exp isStatic
+				var argName = F_.addArgument(selection.e[0].evalMainParameter())
+				selection.e.forEach(function(el) {
+					el.setMainParameter(argName)
+				})
+			}
 		}
 		run()
 	},
@@ -2399,6 +2411,8 @@ Move.prototype.execInner = function(callerF) {
 	if (isDrawn) {
 		self.indicateIfInsideAnySelectedCommandsScope()
 		setLinePosition(self.lineMainSVG, x1, y1, x2, y2)
+//		if (manipulation.insertedCommand === self.root)
+//			self.lineMainSVG.style(...)
 	}
 	setLinePosition(self.line, x1, y1, x2, y2)
 }
