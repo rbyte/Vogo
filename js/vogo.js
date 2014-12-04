@@ -212,6 +212,8 @@ function setupUIEventListeners() {
 	document.body.onmousedown = function(evt) { switchMouseButton(evt, true) }
 	document.body.onmouseup = function(evt) { switchMouseButton(evt, false) }
 	// suppresses browser context menu
+	// note that in firefox, when shift is pressed, the context menu will pop up anyway. this is intentionally unsuppressable.
+	// https://bugzilla.mozilla.org/show_bug.cgi?id=692139
 	document.body.oncontextmenu = function(evt) { return false }
 
 	var dragStart
@@ -226,25 +228,13 @@ function setupUIEventListeners() {
 			// TODO prevent click triggered after dragend. Works in Chromium 27 & Firefox 31, BUT NOT IN Chrome 36
 			if (d3.event.defaultPrevented || Date.now()-lastDragEndTime < 20 && !manipulation.isCreating())
 				return
-//			console.log("fell through"+Date.now())
 			mousePos = d3.mouse(this)
-			if (manipulation.isCreating(Move)) {
-				if (keyPressed.d) {
-					manipulation.create(Move)
-				} else {
-					manipulation.finish()
-				}
-			} else if (manipulation.isCreating(Rotate)) {
-				if (keyPressed.r) {
-					manipulation.create(Rotate)
-				} else {
-					manipulation.finish()
-				}
-			} else {
-				if (!selection.isEmpty()) {
-					selection.removeAndDeselectAll()
-					run()
-				}
+			if (manipulation.isCreating()) {
+				manipulation.finish()
+			}
+			if (!selection.isEmpty()) {
+				selection.removeAndDeselectAll()
+				run()
 			}
 		})
 		.call(d3.behavior.drag()
@@ -254,7 +244,7 @@ function setupUIEventListeners() {
 			})
 			.on("drag", function (d) {
 				if (!dragInProgress) {
-					if (keyPressed.shift) {
+					if (keyPressed.shift || mousePressed.right) {
 						manipulation.finish()
 						selectionRect = mainSVG.paintingG.append("rect")
 							.attr({
@@ -299,7 +289,6 @@ function setupUIEventListeners() {
 						// If shift is released before the dragend, rect-select discards the current selection.
 						// this is identical to deselecting everything before starting the rect-select
 						if (!keyPressed.shift) {
-							console.log("removing")
 							selection.removeAndDeselectAll()
 						}
 						list.forEach(function(le) {
@@ -803,6 +792,8 @@ function commonInputFieldInit(inputField, onChange, onClick) {
 	inputField
 		.attr("type", "text")
 		.on("click", function() {
+			if (d3.event.defaultPrevented) // do not fire on dragend
+				return
 			if (onClick)
 				onClick(inputField)
 			// selects all text
@@ -1070,7 +1061,6 @@ var manipulation = {
 	},
 	update: function(newMainParameter) {
 		if (this.isCreating()) {
-
 			if (newMainParameter === undefined) {
 				if (this.insertedCommand instanceof Move)
 					newMainParameter = fromMousePosToLineLengthWithoutChangingDirection(mousePos[0], mousePos[1], this.savedState)
@@ -1340,7 +1330,8 @@ Expression.prototype.eval = function(command) {
 		return 1 // be a bit robust
 	}
 	if (!self.isNormalResult(result)) {
-		errorMsg("is not a normal result.")
+		errorMsg("no error thrown, but is not a normal result.")
+		return 1 // be a bit robust
 	}
 	return result
 }
@@ -1419,6 +1410,13 @@ Expression.prototype.getNewValueFromDrag = function() {
 		var newValue = parseFloat((self.originalValue + delta).toFixed(Math.max(0, -self.dragPrecision)))
 		if (self.eval(/*const!*/) !== newValue)
 			return newValue
+	} else {
+		// simple parameter dragging
+		// if is not inside funcCall
+		// TODO
+//		if (typeof self.exp === "string" && F_.args[self.exp] !== undefined) {
+//			console.log(F_.args[self.exp].eval())
+//		}
 	}
 	return undefined
 }

@@ -13,20 +13,17 @@ community
 		clientside share
 	show examples
 
-
 small
+	if eval() does thrown an error, colour the input field red to show that to the user
 	show results of expressions beneath input field "=..." (on hover)
-	more tooltips, more sanity checks
-	indicateIfInsideAnySelectedCommandsScope on hover
-	improve function call look -> context menu for args
 	make invoke-funcCall-drag better by adding a symbol to the cursor (as it is dragged)
 	add switch for "add before or after" selected element
+	indicateIfInsideAnySelectedCommandsScope on hover
 	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
 
 big
 	### drag simple parameter
 	### drag constant inside expression
-
 	iconic code view
 	edit Move style (colour, breadth)
 	Collision-Free positioning
@@ -76,6 +73,6 @@ new commands
 
 
 bugs
-	branch cutting does not work
+	### branch cutting/copying does not work
 	rotate/move/loop with 0 is not visible
 
