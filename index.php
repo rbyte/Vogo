@@ -5,32 +5,51 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<title>Vogo Intro</title>
+	<title>Vogo</title>
 	<link rel="icon" type="image/png" href="images/favicon.png"/>
-	<link rel="stylesheet" type="text/css" href="css/intro.css"/>
+	<link rel="stylesheet" type="text/css" href="css/main.css"/>
+	<script src='js/d3.v3.min.js'></script>
+	<script src='js/vogo.js'></script>
 </head>
 
 <body>
-<div class="container">
-	<div class="iconBox">
-		<a href="run.php"><img class="vogoIcon" src="images/vogo.svg"></a>
-		<p class="title">Vogo</p>
-		<p>An experimental <a href="http://en.wikipedia.org/wiki/Direct_manipulation_interface">direct manipulation interface</a> for <a href="http://en.wikipedia.org/wiki/Turtle_graphics">Turtle Graphics</a>.</p>
-		<p><a class="startLink" href="run.php">Try it!</a></p>
-		<p><img id="examplesCollection" src="images/ExampleCollection3Rows.png"></p>
-		<p><a href="MA.pdf">Master thesis</a> project by Matthias Graf.</p>
-		<p><a href="https://github.com/rbyte/Vogo">View source.</a></p>
+	<noscript>Javascript is required for Vogo to run.</noscript>
+	
+	<div id="functions">
+		<ul id="ul_f"></ul>
+		<div class="centerDiv">
+			<div class="container-box"><div class="aspect-box"><div class="content-box">
+				<img id="f_addNew" class="roundButton" src="images/NewFunction.svg" title="Add new function">
+			</div></div></div>
+		</div>
 	</div>
-	<!-- poster="videos/platzhalter.png"  -->
-
-	<div class="videoBox">
-		<video controls="" preload="auto" poster="videos/placeholder2.png">
-			<!-- <source src="videos/ffmpegOut.webm" type='video/webm; codecs="vp8, vorbis"'> -->
-			<!-- <source src="http://mgrf.de/vogo/videos/ffmpegOut.webm" type='video/webm; codecs="vp8, vorbis"'> -->
-		</video>
-		<p>Not there yet. A demonstration video will follow soon ...</p>
+	<div id="borderL" class="border"><div></div></div>
+	<div id="turtleSVGcontainer">
+		<svg id="turtleSVG"></svg>
+		<p id="notification" class="opacity0"></p>
 	</div>
-
-</div>
+	<div id="borderR" class="border"><div></div></div>
+	<div id="toolbar">
+		<ul id="ul_toolbar">
+			<li key="d" title="Draw straight line"><img src="images/Move.svg"></li>
+			<li key="r" title="Rotate/add angle"><img src="images/Rotate.svg"></li>
+			<li key="l" title="Loop/iterate current selection"><img src="images/Loop.svg"></li>
+			<li key="b" title="Branch/condition current selection"><img src="images/Branch.svg"></li>
+			<li key="a" title="Abstract/create new function parameter"><img src="images/Abstract.svg"></li>
+			<li key="e" title="Export to code"><img src="images/Export.svg"></li>
+			<li key="s" title="SVG output"><img src="images/Svg.svg"></li>
+			<li key="x" title="Load examples"><img src="images/Examples.svg"></li>
+		</ul>
+		<div class="centerDiv">
+			<div class="container-box helpSVGcontainer"><div class="aspect-box"><div class="content-box">
+				<a href=".."><img class="roundButton" src="images/Help.svg" title="Help"></a>
+			</div></div></div>
+		</div>
+	</div>
+	
+	<script>
+		// functions and variables set here can be used inside vogo
+		vogo.init()
+	</script>
 </body>
 </html>

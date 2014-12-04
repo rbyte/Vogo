@@ -10,8 +10,8 @@ var vogo = function() {// spans everything - not indented
 var vogo = {}
 
 // CONSTANTS
-var version = 0.1
-var urlToSelf = "http://mgrf.de/vogo/js/vogo.js"
+var version = 0.2
+var urlToSelf = "http://mgrf.de/vogo/run/js/vogo.js"
 //var urlToSelf = "http://localhost/dev/vogo/js/vogo.js"
 // this is used inside every svg <style>. eases the DOM and is compatible with svg export (& Inkscape).
 var lineDefaultStyle = "stroke: #000; stroke-opacity: 0.8; stroke-width: .25; stroke-linecap: round;"
@@ -334,7 +334,7 @@ function setupUIEventListeners() {
 		.on("keyup", function() { updateKeyDownAndUp(d3.event.keyCode, false) })
 
 	document.onkeydown = function(event) {
-		if (event.ctrlKey && keyMap[event.keyCode] === "a")
+		if (event.ctrlKey && keyMap[event.keyCode] === "a" && document.activeElement.nodeName !== "INPUT")
 			return false // disable browser "select all"
 	}
 }

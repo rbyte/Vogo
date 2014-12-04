@@ -15,9 +15,9 @@
    version="1.1"
    inkscape:version="0.48.4 r9939"
    sodipodi:docname="vogo.svg"
-   inkscape:export-filename="/media/enc/AppProfiles/dev/ma/images/favicon.png"
-   inkscape:export-xdpi="90"
-   inkscape:export-ydpi="90">
+   inkscape:export-filename="/home/matmax/my/ablage/favicon.png"
+   inkscape:export-xdpi="3.5999999"
+   inkscape:export-ydpi="3.5999999">
   <defs
      id="defs4" />
   <sodipodi:namedview
@@ -35,8 +35,8 @@
      showgrid="false"
      inkscape:window-width="925"
      inkscape:window-height="808"
-     inkscape:window-x="1280"
-     inkscape:window-y="27"
+     inkscape:window-x="1648"
+     inkscape:window-y="128"
      inkscape:window-maximized="0"
      fit-margin-top="0"
      fit-margin-left="0"
@@ -65,7 +65,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title />
+        <dc:title></dc:title>
       </cc:Work>
     </rdf:RDF>
   </metadata>
