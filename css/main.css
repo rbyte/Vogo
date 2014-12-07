@@ -8,6 +8,16 @@ body {
 	padding: 0;
 	font-family: "Open Sans", sans-serif;
 }
+noscript {
+    z-index: 5;
+    position: fixed;
+    background-color: red;
+    width: 100%;
+    text-align: center;
+    padding: 5px;
+    text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.4);
+    box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.5);
+}
 a {
 	outline: none;
 	text-decoration: none;
@@ -50,8 +60,8 @@ a {
 	overflow-y: auto;
 }
 #functions, #toolbar {
-	/*background-color: #d6d6d6;*/
-	background: url("../images/ticks_t_200x200.png") repeat scroll 0 0 #d6d6d6;
+	background-color: #d6d6d6;
+	/*background: url("../images/ticks_t_200x200.png") repeat scroll 0 0 #d6d6d6;*/
 }
 #toolbar {
 	position: absolute;
