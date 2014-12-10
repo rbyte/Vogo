@@ -60,8 +60,8 @@ a {
 	overflow-y: auto;
 }
 #functions, #toolbar {
-	background-color: #d6d6d6;
-	/*background: url("../images/ticks_t_200x200.png") repeat scroll 0 0 #d6d6d6;*/
+	/*background-color: #d6d6d6;*/
+	background: url("../images/ticks_t_200x200.png") repeat scroll 0 0 #d6d6d6;
 }
 #toolbar {
 	position: absolute;

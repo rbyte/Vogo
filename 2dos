@@ -22,7 +22,6 @@ small
 	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
 
 big
-	### drag simple parameter
 	### drag constant inside expression
 	iconic code view
 	edit Move style (colour, breadth)

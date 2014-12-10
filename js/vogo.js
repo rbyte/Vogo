@@ -1414,9 +1414,8 @@ Expression.prototype.getNewValueFromDrag = function() {
 		// simple parameter dragging
 		// if is not inside funcCall
 		// TODO
-//		if (typeof self.exp === "string" && F_.args[self.exp] !== undefined) {
-//			console.log(F_.args[self.exp].eval())
-//		}
+
+
 	}
 	return undefined
 }
@@ -1758,10 +1757,13 @@ Command.prototype.createDragBehavior = function(element) {
 	var firstDragTick = true
 	var dragStartState
 	var isNotInsideFuncCallOrSelfRecursing
+	var isSimpleExpression
 	return d3.behavior.drag()
 		.on("dragstart", function(d) {
 			firstDragTick = true
 			isNotInsideFuncCallOrSelfRecursing = self.isNotInsideFuncCallOrSelfRecursing()
+			var exp = self.root.mainParameter.exp
+			isSimpleExpression = typeof exp === "string" && F_.args[exp] !== undefined
 			// to prevent drag on background (silence other listeners)
 			d3.event.sourceEvent.stopPropagation()
 //			d3.event.sourceEvent.preventDefault()
@@ -1769,7 +1771,7 @@ Command.prototype.createDragBehavior = function(element) {
 		.on("drag", function (d) {
 			if (firstDragTick) {
 				// this can not be done in dragstart because a click triggers it
-				if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
+				if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing || isSimpleExpression) {
 					dragInProgress = true
 					mainSVG.svg.style({cursor: "move"})
 					dragStartState = self.savedState.clone()
@@ -1786,9 +1788,13 @@ Command.prototype.createDragBehavior = function(element) {
 			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
 				self.updateMainParameter(self.getNewMainParameterFromDrag(dragStartState, element))
 			}
+			if (isSimpleExpression) {
+				F_.setArgument(self.getNewMainParameterFromDrag(dragStartState, element), self.root.mainParameter.exp)
+				run()
+			}
 		})
 		.on("dragend", function(d) {
-			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing) {
+			if (self.root.mainParameter.isConst() && isNotInsideFuncCallOrSelfRecursing || isSimpleExpression) {
 				mainSVG.svg.style({cursor: "default"})
 				d3.select(this).attr("dragging", null)
 			}
