@@ -3077,7 +3077,6 @@ Branch.prototype = new Command(Branch)
 Branch.prototype.clone = function(scope) {
 	var self = this
 	console.assert(self.root === self)
-	console.assert(scope.root === scope)
 	var ifTrueCmds = []
 	self.ifTrueCmds.forEach(function (e) { ifTrueCmds.push(e.clone()) })
 	var ifFalseCmds = []

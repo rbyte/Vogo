@@ -22,8 +22,9 @@ small
 	function name (& branch cond) input field has no drag event, but selections via mouse is disabled
 
 big
-	### drag constant inside expression
+	drag constant inside expression
 	iconic code view
+		rotate/move/loop with 0 is not visible
 	edit Move style (colour, breadth)
 	Collision-Free positioning
 		check same state of commands, then shift y ?
@@ -70,8 +71,4 @@ new commands
 	Beziers
 	resize, rotate, shear
 
-
-bugs
-	### branch cutting/copying does not work
-	rotate/move/loop with 0 is not visible
 
