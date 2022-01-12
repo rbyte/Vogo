@@ -7,7 +7,4 @@ Vogo
 
 [Walkthrough Video](https://vimeo.com/113843398)
 
-Matthias Graf, 2014
-License: GNU Affero General Public License 3
-
 ![Poster](images/intro_vogo_poster_2.jpg)
