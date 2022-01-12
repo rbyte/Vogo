@@ -1,11 +1,17 @@
 Vogo
 ====
 
-is an experimental, web-based, spatially-oriented, direct manipulation, live programming environment for Logo Turtle Graphics.
+Vogo is a research prototype to try some ideas for the direct manipulation of Logo Turtle Graphics.
 
-http://mgrf.de/vogo/
 http://rbyte.github.io/Vogo/
+http://mgrf.de/vogo/
 
-Vogo is free software.<br />
-License: GNU Affero General Public License 3<br />
-Author: Matthias Graf
+[Master Thesis - Direct Manipulation of Turtle Graphics](Master Thesis - Direct Manipulation of Turtle Graphics.pdf).
+
+[Walkthrough Video](https://vimeo.com/113843398)
+
+License: GNU Affero General Public License 3
+
+Author: Matthias Graf, 2014
+
+![Poster](images/intro_vogo_poster_2.jpg)
