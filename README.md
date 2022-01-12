@@ -6,7 +6,7 @@ Vogo is a research prototype to try some ideas for the direct manipulation of Lo
 http://rbyte.github.io/Vogo/
 http://mgrf.de/vogo/
 
-[Master Thesis - Direct Manipulation of Turtle Graphics]("Master Thesis - Direct Manipulation of Turtle Graphics.pdf").
+[Master Thesis - Direct Manipulation of Turtle Graphics]("./Master Thesis - Direct Manipulation of Turtle Graphics.pdf").
 
 [Walkthrough Video](https://vimeo.com/113843398)
 
