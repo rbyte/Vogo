@@ -1,12 +1,9 @@
 Vogo
 ====
 
-Vogo is a research prototype to try some ideas for the direct manipulation of Logo Turtle Graphics.
+[Master Thesis - Direct Manipulation of Turtle Graphics](Master%20Thesis%20-%20Direct%20Manipulation%20of%20Turtle%20Graphics.pdf).
 
 http://rbyte.github.io/Vogo/
-http://mgrf.de/vogo/
-
-[Master Thesis - Direct Manipulation of Turtle Graphics](Master%20Thesis%20-%20Direct%20Manipulation%20of%20Turtle%20Graphics.pdf).
 
 [Walkthrough Video](https://vimeo.com/113843398)
 
